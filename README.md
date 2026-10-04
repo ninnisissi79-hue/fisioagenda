@@ -1,4 +1,6 @@
-# FisioAgenda — demo
+# FisioAgenda — demo (versione semplice v3)
+
+> **Versione 3 (branch `fisioagenda-semplice-v3`)**: parte dalla prima versione semplice e aggiunge **soltanto** i percorsi *Mano* e *Chirurgia della mano / postoperatorio*, la **categoria di priorità** (U – Urgente, B – Breve, D – Differibile, P – Programmabile, Non indicata) e il **tipo di richiesta** (Prima seduta, Continuazione ciclo). Niente date di prescrizione, scadenze, conteggi dei termini, fisiatri o campi amministrativi.
 
 Gestionale dimostrativo per organizzare l’attività ambulatoriale di un servizio ospedaliero di fisioterapia con 18 fisioterapisti.
 Lo scopo principale è **assegnare rapidamente un paziente** e smaltire la lista d’attesa: inserisci i dati del paziente e vedi subito **chi può prenderlo, in quali giorni e a che ora, da quando**, distinguendo i posti **certi** da quelli solo **probabili**.
@@ -23,7 +25,7 @@ Non serve installare nulla: basta un browser recente (Chrome, Edge, Firefox o Sa
 
 **Per chi usa Node.js** (facoltativo): `npm start` e poi apri http://localhost:8080.
 
-**Per condividerla con un link (Netlify):** il pacchetto pronto è `dist/FisioAgenda-netlify.zip` (contiene `index.html` e `_headers`). Le istruzioni passo passo sono in [ISTRUZIONI-NETLIFY.md](ISTRUZIONI-NETLIFY.md). Rigenerazione: `npm run build:netlify`.
+**Per condividerla con un link (Netlify):** il pacchetto pronto è `dist/FisioAgenda-v3-netlify.zip` (contiene `index.html` e `_headers` nella cartella principale). Il file singolo è `dist/index.html`. Le istruzioni passo passo sono in [ISTRUZIONI-NETLIFY.md](ISTRUZIONI-NETLIFY.md). Rigenerazione: `npm run build:netlify`.
 
 ## 2. Prima prova (5 minuti)
 
@@ -47,6 +49,11 @@ Altre prove utili:
 - **Ferie e malattie**: registra una malattia con **rientro non conosciuto** e guarda gli appuntamenti coinvolti (non vengono cancellati).
 - **Pazienti e cicli → Apri**: cambia la previsione (per esempio *Sospensione*, scegliendo se mantenere o liberare il posto) oppure aggiungi un **rinnovo**.
 - **Previsioni**: posti che si liberano e pazienti in lista compatibili, ordinati per priorità e attesa.
+
+Novità della versione 3:
+- **Trova un posto**: scegli il percorso *Mano* o *Chirurgia della mano / postoperatorio*; in alto i colleghi con competenza specifica, poi gli altri abilitati. Sotto la frequenza trovi il menu **Priorità** e il **Tipo di richiesta**.
+- **Lista d’attesa**: la priorità è in evidenza; filtra con *U / B / D / P / Non indicata* e ordina per priorità o per data di inserimento.
+- **Pazienti e cicli → Apri**: priorità e tipo di richiesta modificabili. Cambiarli non tocca cicli e sedute.
 
 ## 3. Dove vengono salvati i dati
 
@@ -76,7 +83,10 @@ Altre prove utili:
 | Sedute che liberano la data | assenza paziente, annullata dal servizio, da recuperare: lo spazio in quella data diventa utilizzabile (es. per recuperi) | — |
 | Conteggio sedute | contano programmate, effettuate, assenze e da recuperare; una seduta *recuperata* è contata una volta sola tramite il suo recupero; una seduta *annullata dal servizio* non conta e il ciclo mostra “mancano N” | — |
 | Orari proposti | solo orari “naturali” (inizio fascia, subito prima o dopo altri appuntamenti), per evitare decine di alternative quasi identiche | — |
-| Priorità lista d’attesa | Alta / Media / Bassa, **assegnate dall’operatore** (mai dal programma) | Impostazioni → Parametri |
+| Priorità | U – Urgente, B – Breve, D – Differibile, P – Programmabile, Non indicata: **scelta dall’operatore** in base alla richiesta, mai dedotta dalla patologia. Evidenzia la priorità organizzativa; **non** è una verifica dei tempi previsti dalla normativa (nessuna data, scadenza o conteggio) | scheda in lista d’attesa, ricerca, scheda del paziente |
+| Tipo di richiesta | Prima seduta / Continuazione ciclo: solo un’indicazione, non modifica né azzera cicli e sedute | come sopra |
+| Percorsi della mano | *Mano* e *Chirurgia della mano / postoperatorio*, associabili alle competenze dei colleghi | Impostazioni → Categorie cliniche; scheda del collega |
+| Dati salvati con la prima versione | conservati; le vecchie priorità (Alta/Media/Bassa) diventano “Non indicata” con il valore precedente visibile “da riclassificare” (nessuna conversione automatica); categorie Mano equivalenti già presenti vengono riusate | — |
 | Sabato | non lavorativo, ma attivabile per singolo collega | scheda del collega |
 
 ## 5. Regole principali applicate dal motore
@@ -92,8 +102,9 @@ Altre prove utili:
 
 ## 6. Cosa è stato verificato
 
-- **45 test automatici del motore e dei dati demo** (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
-- **Prova completa dell’interfaccia nel browser** (`npm run test:e2e`, Chromium): nuovo paziente → ricerca → calendario del ciclo → conferma → agenda con evidenza → **ricaricamento della pagina con dati conservati** → recupero con conteggio invariato → malattia con rientro non noto → “Trova posto” dalla lista d’attesa → controllo del layout tablet (1024×768) → ripristino degli esempi con conferma. La stessa prova è stata eseguita sia su `index.html` sia sul file unico `dist/FisioAgenda.html`.
+- **54 test automatici** (`npm test`): i 45 della prima versione, invariati e superati, più 9 per la v3 (`tests/v3.test.js`): percorsi Mano senza duplicati e associati alle competenze; ricerca con prima la competenza specifica e poi gli altri abilitati; rifiuto di un collega non abilitato; priorità mai dedotta dal percorso; assenza di scadenze e date; ordinamento per priorità; “Continuazione ciclo” che non modifica cicli né sedute effettuate; aggiornamento dei dati salvati con la prima versione senza perdite; riuso di categorie equivalenti.
+- Test della prima versione (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
+- **Prova completa dell’interfaccia nel browser** (`npm run test:e2e`, Chromium): nuovo paziente → ricerca → calendario del ciclo → conferma → agenda con evidenza → **ricaricamento della pagina con dati conservati** → recupero con conteggio invariato → malattia con rientro non noto → “Trova posto” dalla lista d’attesa → controllo del layout tablet (1024×768) → ripristino degli esempi con conferma. Per la v3 la prova include anche: menu priorità e tipo di richiesta, ricerca e assegnazione Mano, modifica dalla scheda paziente senza effetti sulle sedute, filtro e ordinamento per priorità in lista, assenza di campi su scadenze/prescrizioni/fisiatri, caricamento dei dati salvati con la prima versione. La stessa prova è stata eseguita su `index.html` e sul file unico `dist/index.html`.
 
 ## 7. Cosa manca (possibili passi successivi)
 
@@ -114,9 +125,11 @@ js/demo-data.js       generatore dei dati fittizi (date relative al giorno di pr
 js/app.js             interfaccia (viste, finestre, salvataggio locale)
 tests/engine.test.js  test del motore (node --test)
 tests/demo.test.js    test di coerenza dei dati demo
+tests/v3.test.js      test della versione 3 (Mano, priorità, tipo di richiesta, aggiornamento dati)
+tests/fixtures/       dati salvati con la prima versione, per verificare l'aggiornamento
 tests/e2e.js          prova completa nel browser (Playwright)
 tools/build.js        crea dist/FisioAgenda.html (file unico)
-tools/build-netlify.js crea dist/FisioAgenda-netlify.zip (index.html + _headers) per Netlify
+tools/build-netlify.js crea dist/FisioAgenda-v3-netlify.zip (index.html + _headers) e dist/index.html
 tools/serve.js        server locale facoltativo (npm start)
 ```
 

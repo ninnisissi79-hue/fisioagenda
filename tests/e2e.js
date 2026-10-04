@@ -5,6 +5,8 @@
  */
 'use strict';
 const path = require('path');
+const fs = require('fs');
+const zlib = require('zlib');
 let chromium;
 try { ({ chromium } = require('playwright')); }
 catch (e) { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
@@ -81,7 +83,7 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   const hl = await page.locator('.appt.hl').count();
   ok(hl >= 1, 'il nuovo appuntamento è evidenziato in agenda (' + hl + ' nella settimana)');
   ok(/Prova E2E/.test(await page.locator('.appt.hl').first().innerText()), 'il nome del paziente compare in agenda');
-  ok((await page.locator('.agenda-tools select').inputValue()) !== '', 'agenda settimanale del collega ' + thName);
+  ok((await page.locator('.agenda-tools select[data-act=ag-th]').inputValue()) !== '', 'agenda settimanale del collega ' + thName);
   await shot('e2e-3-agenda');
 
   console.log('5. Persistenza dopo il ricaricamento');
@@ -127,7 +129,7 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
 
   console.log('9. Tablet (1024×768) e sezioni secondarie');
   await page.setViewportSize({ width: 1024, height: 768 });
-  for (const r of ['agenda', 'previsioni', 'fisioterapisti', 'impostazioni']) {
+  for (const r of ['agenda', 'lista', 'previsioni', 'fisioterapisti', 'impostazioni']) {
     await page.goto(URL + '#/' + r); await page.waitForTimeout(150);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     ok(!overflow, 'nessuno scorrimento orizzontale della pagina in ' + r);
@@ -157,6 +159,76 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'confermando, tornano i dati di esempio');
   await page.reload(); await page.waitForSelector('.search-form');
   ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'il ripristino resta dopo il ricaricamento');
+
+  console.log('12. Percorsi Mano, priorità e tipo di richiesta (v3)');
+  await page.goto(URL + '#/trova'); await page.waitForSelector('.search-form');
+  const cats = await page.locator('#sf-cat option').allInnerTexts();
+  ok(cats.filter(c => c === 'Mano').length === 1 && cats.filter(c => c === 'Chirurgia della mano / postoperatorio').length === 1, 'percorsi Mano e Chirurgia della mano selezionabili, senza duplicati');
+  const prioOpts = await page.locator('#sf-prio option').allInnerTexts();
+  ok(JSON.stringify(prioOpts) === JSON.stringify(['U – Urgente', 'B – Breve', 'D – Differibile', 'P – Programmabile', 'Non indicata']), 'un solo menu priorità con U, B, D, P, Non indicata');
+  ok((await page.locator('#sf-prio').inputValue()) === 'NI', 'priorità iniziale "Non indicata" (nessuna deduzione)');
+  await page.selectOption('#sf-cat', 'chir_mano');
+  ok((await page.locator('#sf-prio').inputValue()) === 'NI', 'la scelta del percorso non cambia la priorità');
+  ok(await page.locator('input[name=rt]').count() === 2, 'tipo di richiesta: solo Prima seduta e Continuazione ciclo');
+  const formText = await page.locator('.search-form').innerText();
+  ok(!/scadenz|prescri|fisiatr|ritardo/i.test(formText), 'nessun campo di scadenze, prescrizione o fisiatri');
+  await page.fill('#sf-name', 'Prova Mano V3');
+  await page.selectOption('#sf-prio', 'B');
+  await page.click('label:has(input[name=rt][value=continuazione])');
+  await page.click('label:has(input[name=ses][value="5"])');
+  await page.click('button[type=submit]'); await page.waitForSelector('#results');
+  const kinds = await page.locator('#results tr.group-row td:first-child').allInnerTexts();
+  const firstOther = kinds.findIndex(k => /Altra idoneità/.test(k));
+  ok(kinds.length > 0 && /Competenza specifica/.test(kinds[0]) && (firstOther === -1 || kinds.slice(firstOther).every(k => /Altra idoneità/.test(k))), 'ricerca Mano: prima competenza specifica, poi gli altri abilitati');
+  for (const t of ['.scard.ok', '.scard.fut']) {
+    if (await page.locator('#results tr.group-row button:has-text("✓ Conferma")').count()) break;
+    await page.click(t); await page.waitForTimeout(150);
+  }
+  await page.locator('#results tr button:has-text("✓ Conferma")').first().click();
+  await page.waitForSelector('.modal #bk-name');
+  ok(/B – Breve/.test(await page.locator('.modal').innerText()), 'priorità riportata nella conferma');
+  await page.click('[data-act=book-confirm]'); await page.waitForSelector('.cal');
+  const bp = await page.evaluate(() => { const s = window.FisioApp.state; const pt = s.patients.find(p => p.name === 'Prova Mano V3'); const p = s.paths.find(x => x.patientId === pt.id); return { prio: p.priority, rt: p.requestType, cat: p.categoryId, n: s.sessions.filter(x => x.pathId === p.id).length, id: p.id }; });
+  ok(bp.prio === 'B' && bp.rt === 'continuazione' && bp.cat === 'chir_mano' && bp.n === 5, 'percorso salvato con priorità, tipo di richiesta e 5 sedute (ciclo non modificato)');
+  await page.goto(URL + '#/pazienti/' + bp.id); await page.waitForSelector('select[data-act=path-prio]');
+  const effBefore = await page.evaluate(() => window.FisioApp.state.sessions.filter(s => s.status === 'effettuata').length);
+  await page.selectOption('select[data-act=path-rt]', 'prima'); await page.waitForTimeout(150);
+  await page.selectOption('select[data-act=path-prio]', 'U'); await page.waitForTimeout(150);
+  const after = await page.evaluate(id => { const s = window.FisioApp.state; return { n: s.sessions.filter(x => x.pathId === id).length, eff: s.sessions.filter(x => x.status === 'effettuata').length, p: s.paths.find(x => x.id === id) }; }, bp.id);
+  ok(after.n === 5 && after.eff === effBefore && after.p.priority === 'U' && after.p.requestType === 'prima', 'scheda paziente: cambio di priorità e tipo di richiesta senza toccare le sedute');
+
+  console.log('13. Lista d\'attesa: priorità visibile, filtro e ordinamento');
+  await page.goto(URL + '#/lista'); await page.waitForSelector('input[name=wlPrio]');
+  ok(await page.locator('table.t .tag:has-text("U – Urgente")').count() > 0, 'priorità mostrata chiaramente');
+  const firstPrios = await page.locator('table.t tbody tr td:nth-child(3)').allInnerTexts();
+  const order = ['U – Urgente', 'B – Breve', 'D – Differibile', 'P – Programmabile', 'Non indicata'];
+  const ranks = firstPrios.map(t => order.findIndex(o => t.includes(o)));
+  ok(ranks.every((r, i) => i === 0 || r >= ranks[i - 1]), 'ordinata per priorità U → Non indicata');
+  await page.click('label:has(input[name=wlPrio][value=U])'); await page.waitForTimeout(150);
+  const uRows = await page.locator('table.t tbody tr td:nth-child(3)').allInnerTexts();
+  ok(uRows.length > 0 && uRows.every(t => /U – Urgente/.test(t)), 'filtro per priorità U (' + uRows.length + ')');
+  await page.click('label:has(input[name=wlPrio][value=tutte])');
+  await page.selectOption('select[data-act=wl-sort]', 'inserimento'); await page.waitForTimeout(150);
+  ok(await page.locator('table.t tbody tr').count() > 0, 'ordinamento per data di inserimento disponibile');
+  const listText = await page.locator('.content').innerText();
+  ok(/non è una verifica dei tempi previsti dalla normativa/.test(listText) && !/scadut|scadenza|ritardo/i.test(listText), 'nessuna scadenza o verifica dei termini');
+  await page.locator('button:has-text("Modifica")').first().click(); await page.waitForSelector('.modal');
+  const mt = await page.locator('.modal').innerText();
+  ok(/Tipo di richiesta/i.test(mt) && !/prescri|fisiatr/i.test(mt), 'scheda in lista: priorità e tipo di richiesta, senza campi amministrativi');
+  await page.click('.modal [data-act=close-modal] >> nth=0');
+  await page.goto(URL + '#/fisioterapisti/th02'); await page.waitForTimeout(150);
+  ok(await page.locator('tr:has-text("Chirurgia della mano / postoperatorio") input[value=c]').isChecked(), 'percorso associabile alle competenze del fisioterapista');
+
+  console.log('14. Dati salvati con la prima versione');
+  const v1 = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures', 'stato-v1-demo.json.gz'))).toString();
+  const oldState = JSON.parse(v1);
+  await page.evaluate(t => localStorage.setItem('fisioagenda.v1', t), v1);
+  await page.goto(URL + '#/lista'); await page.reload(); await page.waitForSelector('table.t');
+  const mig = await page.evaluate(() => { const s = window.FisioApp.state; return { sessions: s.sessions.length, paths: s.paths.length, wl: s.waitlist.length, prios: s.waitlist.map(w => w.priority), prev: s.waitlist.filter(w => w.previousPriority).length, cats: s.categories.map(c => c.name) }; });
+  ok(mig.sessions === oldState.sessions.length && mig.paths === oldState.paths.length && mig.wl === oldState.waitlist.length, 'sedute, percorsi e lista conservati');
+  ok(mig.prios.every(p => p === 'NI') && mig.prev === oldState.waitlist.length, 'vecchie priorità non convertite automaticamente, valore precedente visibile');
+  ok(mig.cats.filter(c => c === 'Mano').length === 1, 'percorsi Mano aggiunti una sola volta');
+  ok(await page.locator('text=da riclassificare').count() > 0, 'priorità da riclassificare segnalate in lista');
 
   ok(errors.length === 0, 'nessun errore JavaScript' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();

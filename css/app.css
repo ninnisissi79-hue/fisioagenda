@@ -145,6 +145,7 @@ table.t tr.sub:hover td { background: #f2f6fa; }
 .search-form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px 14px; align-items: end; }
 .sf-name { grid-column: span 3; } .sf-cat { grid-column: span 3; } .sf-dur { grid-column: span 2; } .sf-freq { grid-column: span 4; }
 .sf-ses { grid-column: span 4; } .sf-date { grid-column: span 2; } .sf-pref { grid-column: span 6; } .sf-go { grid-column: 1 / -1; padding-top: 4px; }
+.sf-prio { grid-column: span 3; } .sf-rt { grid-column: span 4; } .sf-prio-note { grid-column: span 5; align-self: center; }
 .pref-box { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pref-box .input { width: 110px; }
 .summary-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -247,6 +248,7 @@ table.t tr.sub:hover td { background: #f2f6fa; }
 @media (max-width: 1200px) {
   .sf-name, .sf-cat { grid-column: span 6; } .sf-dur { grid-column: span 4; } .sf-freq { grid-column: span 8; }
   .sf-ses { grid-column: span 7; } .sf-date { grid-column: span 5; } .sf-pref { grid-column: span 12; }
+  .sf-prio { grid-column: span 5; } .sf-rt { grid-column: span 7; } .sf-prio-note { grid-column: span 12; }
 }
 @media (max-width: 1100px) {
   .public-banner { padding: 8px 12px; }

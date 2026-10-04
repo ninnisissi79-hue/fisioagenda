@@ -1,6 +1,8 @@
-# Pubblicare la demo FisioAgenda su Netlify
+# Pubblicare la demo FisioAgenda v3 (versione semplice) su Netlify
 
-Il pacchetto da caricare è **`dist/FisioAgenda-netlify.zip`**. Contiene solo due file, nella cartella principale:
+> Questa versione va caricata in un **terzo progetto Netlify, nuovo e separato**, con un link proprio. **Non** trascinare questo ZIP nei progetti delle due versioni precedenti: li sovrascriveresti.
+
+Il pacchetto da caricare è **`dist/FisioAgenda-v3-netlify.zip`**. Contiene solo due file, nella cartella principale:
 
 | File | A cosa serve |
 |---|---|
@@ -15,20 +17,20 @@ Non serve nessun altro file. La demo non usa server, database o servizi esterni.
 2. Apri **https://app.netlify.com** e crea un account gratuito, per esempio con la tua email. Non serve GitHub.
 3. Nella pagina principale scegli **“Add new project”** (in alcune versioni si chiama “Add new site”), poi **“Deploy manually”**.
    Se trovi direttamente un riquadro “Drag and drop your project folder here”, puoi usare quello.
-4. **Trascina il file `FisioAgenda-netlify.zip`** nel riquadro tratteggiato. Il caricamento dura pochi secondi.
+4. **Trascina il file `FisioAgenda-v3-netlify.zip`** nel riquadro tratteggiato. Il caricamento dura pochi secondi.
 5. Netlify assegna un nome casuale, per esempio `https://allegro-gelato-123abc.netlify.app`. Per cambiarlo:
-   **Project configuration** (o “Site configuration”) → **Change project name** (o “Change site name”) → scrivi, per esempio, `fisioagenda-demo`.
-   Il link diventa `https://fisioagenda-demo.netlify.app`, se il nome è libero.
+   **Project configuration** (o “Site configuration”) → **Change project name** (o “Change site name”) → scrivi, per esempio, `fisioagenda-semplice-v3`.
+   Il link diventa `https://fisioagenda-semplice-v3.netlify.app`, se il nome è libero.
 6. **Controlla il link** prima di condividerlo. Aprilo in una finestra di navigazione anonima e verifica che compaiano l'avviso giallo e i dati di esempio.
 7. **Condividi il link su WhatsApp.** Testo suggerito:
-   > Ti invio la demo di FisioAgenda: https://fisioagenda-demo.netlify.app
+   > Ti invio la demo di FisioAgenda: https://fisioagenda-semplice-v3.netlify.app
    > Contiene solo dati fittizi: non inserire dati reali. Per un uso migliore aprila da computer o tablet; dal telefono tocca “Apri nel browser”.
 
 Le voci dei menu di Netlify possono cambiare nel tempo: se non trovi una voce, cerca l'equivalente (“Deploys”, “Upload”, “Site settings”).
 
 ## Per aggiornare la demo in futuro
 
-Nel progetto su Netlify apri **Deploys** e trascina il nuovo ZIP nel riquadro in fondo alla pagina (“Drag and drop your project output folder here”). **Il link resta lo stesso.**
+Nel **terzo** progetto su Netlify (quello della v3) apri **Deploys** e trascina il nuovo ZIP nel riquadro in fondo alla pagina (“Drag and drop your project output folder here”). **Il link resta lo stesso.**
 Per rigenerare lo ZIP dal codice: `npm run build:netlify`.
 
 ## Cosa sapere

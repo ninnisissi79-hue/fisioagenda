@@ -127,6 +127,18 @@
     rinuncia: 'Rinuncia'
   };
 
+  /**
+   * Categoria di priorità scelta dall'operatore in base alla richiesta (mai dedotta dalla patologia).
+   * Serve solo a evidenziare la priorità organizzativa: non è una verifica dei tempi previsti dalla normativa.
+   * L'ordine dell'elenco è l'ordine di priorità.
+   */
+  const PRIORITY_CLASSES = { U: 'U – Urgente', B: 'B – Breve', D: 'D – Differibile', P: 'P – Programmabile', NI: 'Non indicata' };
+  const PRIORITY_ORDER = ['U', 'B', 'D', 'P', 'NI'];
+  /** Tipo di richiesta: solo un'etichetta, non modifica né azzera cicli e sedute. */
+  const REQUEST_TYPES = { prima: 'Prima seduta', continuazione: 'Continuazione ciclo' };
+  /** Percorsi della mano (categorie organizzative modificabili). */
+  const HAND_CATEGORIES = [{ id: 'mano', name: 'Mano' }, { id: 'chir_mano', name: 'Chirurgia della mano / postoperatorio' }];
+
   const DEFAULT_SETTINGS = {
     defaultDuration: 30,
     sessionPresets: [5, 10, 20, 30],
@@ -136,7 +148,7 @@
     updateThreshold: 3,
     gapDays: 14,
     warn45: { enabled: true, threshold: 2, profiles: ['reparto7', 'reparto8'] },
-    priorities: ['Alta', 'Media', 'Bassa'],
+    priorities: PRIORITY_ORDER,
     templates: {
       reparto7: { ambEnd: '13:20', extEnd: '13:50' },
       reparto8: { ambEnd: '14:45', extEnd: '15:00' },
@@ -861,6 +873,45 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Aggiornamento dei dati salvati con la versione precedente            */
+  /* ------------------------------------------------------------------ */
+  /**
+   * Completa uno stato salvato in precedenza senza perdere dati. Idempotente.
+   *  - aggiunge i percorsi "Mano" e "Chirurgia della mano / postoperatorio", riusando categorie equivalenti già presenti;
+   *  - priorità: i vecchi valori (es. Alta/Media/Bassa) NON vengono convertiti in U/B/D/P (sarebbe una deduzione):
+   *    diventano "Non indicata" e il valore precedente resta visibile per la riclassificazione.
+   */
+  function upgradeState(st) {
+    const changes = [];
+    st.categories = st.categories || [];
+    const norm = x => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const findChir = () => st.categories.find(c => /chirurgia della mano|mano.*(post.?operat|chirurg)/.test(norm(c.name)));
+    const findMano = () => st.categories.find(c => c !== findChir() && /^(mano|mano e polso|polso e mano|mano \/ polso)$/.test(norm(c.name)));
+    for (const hc of HAND_CATEGORIES) {
+      const ex = hc.id === 'chir_mano' ? findChir() : findMano();
+      if (ex) continue; // categoria equivalente già presente: riusata così com'è
+      let id = hc.id, k = 1;
+      while (st.categories.some(c => c.id === id)) id = hc.id + (++k);
+      st.categories.push({ id, name: hc.name });
+      changes.push('Aggiunto il percorso "' + hc.name + '"');
+    }
+    st.settings = st.settings || {};
+    if (JSON.stringify(st.settings.priorities) !== JSON.stringify(PRIORITY_ORDER)) {
+      st.settings.priorities = PRIORITY_ORDER.slice();
+      changes.push('Priorità della lista d\'attesa: categorie U, B, D, P, Non indicata');
+    }
+    let n = 0;
+    for (const w of st.waitlist || []) {
+      if (!PRIORITY_CLASSES[w.priority]) {
+        if (w.priority) w.previousPriority = w.priority;
+        w.priority = 'NI'; n++;
+      }
+    }
+    if (n) changes.push(n + ' pazienti in lista con priorità "Non indicata" da riclassificare (il valore precedente resta visibile)');
+    return changes;
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Operazioni che modificano lo stato                                   */
   /* (lavorano su una copia e restituiscono il nuovo stato)               */
   /* ------------------------------------------------------------------ */
@@ -898,7 +949,8 @@
       id: pathId, patientId, categoryId: a.categoryId, therapistId: a.therapistId, duration: a.duration,
       weekdays: [...a.weekdays].sort(), startTime: fromMin(toMin(a.startTime)),
       forecast: { state: 'da_valutare', updatedAt: (opts && opts.today) || todayRome() },
-      waitlistId: a.waitlistId || null, createdAt: (opts && opts.today) || todayRome()
+      waitlistId: a.waitlistId || null, createdAt: (opts && opts.today) || todayRome(),
+      priority: PRIORITY_CLASSES[a.priority] ? a.priority : 'NI', requestType: REQUEST_TYPES[a.requestType] ? a.requestType : ''
     });
     const cycleId = uid('cy');
     st.cycles.push({ id: cycleId, pathId, index: 1, plannedSessions: a.sessions, startDate: chk.dates[0], createdAt: (opts && opts.today) || todayRome() });
@@ -1084,6 +1136,7 @@
     weekdaysLabel, easter, italianHolidays, WEEKDAY_SHORT, WEEKDAY_LONG, overlaps,
     // dominio
     BLOCK_TYPES, PROFILES, SESSION_STATUS, OCCUPYING, COUNTED, FORECAST, CLOSED_FORECASTS, WAITLIST_STATUS, DEFAULT_SETTINGS,
+    PRIORITY_CLASSES, PRIORITY_ORDER, REQUEST_TYPES, HAND_CATEGORIES, upgradeState,
     buildDay, buildWeek, validateDay,
     // calcolo
     makeContext, getDay, occupancy, virtualOccupancy, reserveEnd, checkSlot, cycleDates, nextPatternDate, evaluateCycle,

@@ -29,29 +29,31 @@
     { id: 'vest', name: 'Vestibolare' },
     { id: 'linf', name: 'Linfedema' },
     { id: 'pelv', name: 'Pavimento pelvico' },
-    { id: 'resp', name: 'Riabilitazione respiratoria' }
+    { id: 'resp', name: 'Riabilitazione respiratoria' },
+    { id: 'mano', name: 'Mano' },
+    { id: 'chir_mano', name: 'Chirurgia della mano / postoperatorio' }
   ];
 
   // [nome, profilo, competenze specifiche, altre idoneità]
   const STAFF = [
     ['Giulia Ferri', 'reparto7', ['neuro'], ['orto', 'rachide', 'protesi']],
-    ['Marco Conti', 'reparto7', ['spalla'], ['orto', 'protesi', 'rachide']],
-    ['Sara Galli', 'reparto7', ['linf'], ['orto', 'rachide']],
+    ['Marco Conti', 'reparto7', ['spalla', 'mano', 'chir_mano'], ['orto', 'protesi', 'rachide']],
+    ['Sara Galli', 'reparto7', ['linf'], ['orto', 'rachide', 'mano']],
     ['Luca Moretti', 'reparto7', ['rachide'], ['orto', 'protesi', 'spalla']],
     ['Elena Rinaldi', 'reparto7', ['pelv'], ['rachide', 'orto']],
     ['Davide Marini', 'reparto7', ['protesi'], ['orto', 'spalla', 'rachide']],
     ['Chiara Lombardi', 'reparto7', ['resp'], ['neuro', 'orto']],
-    ['Paolo Greco', 'reparto7', ['orto'], ['protesi', 'spalla', 'rachide']],
+    ['Paolo Greco', 'reparto7', ['orto'], ['protesi', 'spalla', 'rachide', 'mano', 'chir_mano']],
     ['Francesca Costa', 'reparto8', ['neuro', 'vest'], ['rachide']],
     ['Andrea Fontana', 'reparto8', ['spalla'], ['orto', 'protesi']],
     ['Valentina Barbieri', 'reparto8', ['rachide'], ['orto', 'pelv']],
     ['Simone Caruso', 'reparto8', ['protesi'], ['orto', 'rachide']],
     ['Martina Gentile', 'reparto8', ['linf'], ['orto', 'resp']],
     ['Matteo Ricci', 'reparto8', ['vest'], ['neuro', 'rachide']],
-    ['Laura De Luca', 'reparto8', ['orto'], ['protesi', 'spalla', 'rachide']],
+    ['Laura De Luca', 'reparto8', ['orto', 'chir_mano'], ['protesi', 'spalla', 'rachide', 'mano']],
     ['Roberto Mancini', 'reparto8', ['resp'], ['neuro']],
     ['Alessia Villa', 'ambulatorio', ['rachide', 'spalla'], ['orto', 'protesi']],
-    ['Federico Serra', 'ambulatorio', ['orto', 'protesi'], ['rachide', 'spalla']]
+    ['Federico Serra', 'ambulatorio', ['orto', 'protesi'], ['rachide', 'spalla', 'mano']]
   ];
 
   const SURNAMES = ['Rossi', 'Russo', 'Ferrari', 'Esposito', 'Bianchi', 'Romano', 'Colombo', 'Bruno', 'Ricci', 'Marino',
@@ -209,7 +211,7 @@
       const th = therapists[3 + k * 7];
       const ptId = 'ptna' + k;
       state.patients.push({ id: ptId, name: newName(), note: 'Valutato, trattamento non avviato', createdAt: E.addDays(today, -10 - k) });
-      state.paths.push({ id: 'pana' + k, patientId: ptId, categoryId: th.competenze[0], therapistId: th.id, duration: 30, weekdays: [1, 3, 5], startTime: '12:40',
+      state.paths.push({ id: 'pana' + k, patientId: ptId, categoryId: th.competenze[0], therapistId: th.id, duration: 30, weekdays: [1, 3, 5], startTime: '12:40', priority: 'NI', requestType: 'prima',
         forecast: { state: 'non_avviato', updatedAt: E.addDays(today, -9), note: 'Dopo la valutazione non è stata indicata presa in carico' }, createdAt: E.addDays(today, -10 - k) });
     }
 
@@ -226,20 +228,22 @@
       earliestDate: E.addDays(base, 7), pref: null, note: '', preaccordo: null
     }, o);
     state.waitlist = [
-      W(1, { name: newName(), daysAgo: 41, priority: 'Alta', categoryId: 'protesi', weekdays: [1, 3, 5], pref: { from: '12:00', to: '15:00', mode: 'flessibile' }, availabilityNote: 'Preferisce fine mattinata' }),
-      W(2, { name: newName(), daysAgo: 37, priority: 'Media', categoryId: 'rachide', weekdays: [2, 4], status: 'contattato' }),
-      W(3, { name: newName(), daysAgo: 33, priority: 'Alta', categoryId: 'neuro', duration: 45, weekdays: [1, 3, 5], availabilityNote: 'Accompagnato dal figlio, solo mattina presto', pref: { from: '07:00', to: '09:00', mode: 'obbligatoria' } }),
-      W(4, { name: newName(), daysAgo: 30, priority: 'Bassa', categoryId: 'spalla', weekdays: [2, 4] }),
-      W(5, { name: newName(), daysAgo: 27, priority: 'Media', categoryId: 'linf', weekdays: [1, 3, 5], duration: 45 }),
-      W(6, { name: newName(), daysAgo: 25, priority: 'Alta', categoryId: 'orto', weekdays: [1, 3, 5], sessions: 10, pref: { from: '12:20', to: '14:45', mode: 'flessibile' } }),
-      W(7, { name: newName(), daysAgo: 22, priority: 'Media', categoryId: 'vest', weekdays: [2, 4], sessions: 5 }),
-      W(8, { name: newName(), daysAgo: 20, priority: 'Bassa', categoryId: 'rachide', weekdays: [1, 3, 5], status: 'rinuncia', note: 'Ha scelto un altro centro' }),
-      W(9, { name: newName(), daysAgo: 16, priority: 'Media', categoryId: 'pelv', weekdays: [2, 4], pref: { from: '12:00', to: '14:30', mode: 'flessibile' } }),
-      W(10, { name: newName(), daysAgo: 12, priority: 'Alta', categoryId: 'resp', weekdays: [2, 4], sessions: 10 }),
-      W(11, { name: newName(), daysAgo: 9, priority: 'Media', categoryId: 'protesi', weekdays: [2, 4], duration: 45 }),
-      W(12, { name: newName(), daysAgo: 6, priority: 'Bassa', categoryId: 'orto', weekdays: [1, 3, 5] }),
-      W(13, { name: newName(), daysAgo: 4, priority: 'Media', categoryId: 'spalla', weekdays: [1, 3, 5], pref: { from: '07:00', to: '09:00', mode: 'flessibile' } }),
-      W(14, { name: newName(), daysAgo: 2, priority: 'Alta', categoryId: 'neuro', weekdays: [2, 4] })
+      W(1, { name: newName(), daysAgo: 41, priority: 'B', requestType: 'prima', categoryId: 'protesi', weekdays: [1, 3, 5], pref: { from: '12:00', to: '15:00', mode: 'flessibile' }, availabilityNote: 'Preferisce fine mattinata' }),
+      W(2, { name: newName(), daysAgo: 37, priority: 'D', requestType: 'prima', categoryId: 'rachide', weekdays: [2, 4], status: 'contattato' }),
+      W(3, { name: newName(), daysAgo: 33, priority: 'B', requestType: 'prima', categoryId: 'neuro', duration: 45, weekdays: [1, 3, 5], availabilityNote: 'Accompagnato dal figlio, solo mattina presto', pref: { from: '07:00', to: '09:00', mode: 'obbligatoria' } }),
+      W(4, { name: newName(), daysAgo: 30, priority: 'P', requestType: 'continuazione', categoryId: 'spalla', weekdays: [2, 4] }),
+      W(5, { name: newName(), daysAgo: 27, priority: 'D', requestType: 'prima', categoryId: 'linf', weekdays: [1, 3, 5], duration: 45 }),
+      W(6, { name: newName(), daysAgo: 25, priority: 'U', requestType: 'prima', categoryId: 'orto', weekdays: [1, 3, 5], sessions: 10, pref: { from: '12:20', to: '14:45', mode: 'flessibile' } }),
+      W(7, { name: newName(), daysAgo: 22, priority: 'NI', requestType: 'prima', categoryId: 'vest', weekdays: [2, 4], sessions: 5 }),
+      W(8, { name: newName(), daysAgo: 20, priority: 'P', requestType: 'prima', categoryId: 'rachide', weekdays: [1, 3, 5], status: 'rinuncia', note: 'Ha scelto un altro centro' }),
+      W(9, { name: newName(), daysAgo: 16, priority: 'D', requestType: 'continuazione', categoryId: 'pelv', weekdays: [2, 4], pref: { from: '12:00', to: '14:30', mode: 'flessibile' } }),
+      W(10, { name: newName(), daysAgo: 12, priority: 'U', requestType: 'prima', categoryId: 'resp', weekdays: [2, 4], sessions: 10 }),
+      W(11, { name: newName(), daysAgo: 9, priority: 'P', requestType: 'prima', categoryId: 'protesi', weekdays: [2, 4], duration: 45 }),
+      W(12, { name: newName(), daysAgo: 6, priority: 'NI', requestType: 'continuazione', categoryId: 'orto', weekdays: [1, 3, 5] }),
+      W(13, { name: newName(), daysAgo: 4, priority: 'D', requestType: 'prima', categoryId: 'spalla', weekdays: [1, 3, 5], pref: { from: '07:00', to: '09:00', mode: 'flessibile' } }),
+      W(14, { name: newName(), daysAgo: 2, priority: 'B', requestType: 'prima', categoryId: 'neuro', weekdays: [2, 4] }),
+      W(15, { name: newName(), daysAgo: 3, priority: 'B', requestType: 'prima', categoryId: 'chir_mano', weekdays: [1, 3, 5], note: 'Esempio fittizio: postoperatorio della mano' }),
+      W(16, { name: newName(), daysAgo: 1, priority: 'NI', requestType: 'continuazione', categoryId: 'mano', weekdays: [2, 4], sessions: 5 })
     ];
     state.log = [];
     E.addLog(state, 'Dati demo generati (tutti fittizi) per il ' + E.fmtIt(today));

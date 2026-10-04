@@ -1,5 +1,6 @@
 /*
- * Crea il pacchetto da caricare su Netlify: dist/FisioAgenda-netlify.zip
+ * Crea il pacchetto da caricare su Netlify: dist/FisioAgenda-v3-netlify.zip
+ * e il file singolo dist/index.html (la stessa demo, apribile con doppio clic)
  * Contenuto (nella cartella principale dello ZIP):
  *   index.html  — la demo completa in un unico file (stile e script incorporati)
  *   _headers    — istruzioni per Netlify: noindex anche come intestazione HTTP
@@ -57,6 +58,7 @@ const cdSize = centrals.reduce((n, b) => n + b.length, 0);
 const end = Buffer.alloc(22);
 end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
 end.writeUInt32LE(cdSize, 12); end.writeUInt32LE(offset, 16);
-const zipPath = path.join(root, 'dist', 'FisioAgenda-netlify.zip');
+const zipPath = path.join(root, 'dist', 'FisioAgenda-v3-netlify.zip');
+fs.copyFileSync(path.join(outDir, 'index.html'), path.join(root, 'dist', 'index.html'));
 fs.writeFileSync(zipPath, Buffer.concat([...locals, ...centrals, end]));
 console.log('Creato ' + path.relative(root, zipPath) + ' (' + Math.round(fs.statSync(zipPath).size / 1024) + ' KB): ' + files.map(f => f.name).join(', '));

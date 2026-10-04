@@ -58,6 +58,15 @@
     in_attesa: () => tag('prob', 'In attesa'), contattato: () => tag('info', 'Contattato'),
     proposta: () => tag('ext', 'Proposta in valutazione'), assegnato: () => tag('ok', '✓ Assegnato'), rinuncia: () => tag('plain', 'Rinuncia')
   };
+  /* Categoria di priorità (scelta dall'operatore, solo organizzativa) e tipo di richiesta */
+  const PRIO_TAG_KIND = { U: 'bad', B: 'prob', D: 'info', P: 'plain', NI: 'plain' };
+  function prioTag(code) {
+    const c = E.PRIORITY_CLASSES[code] ? code : 'NI';
+    return tag(PRIO_TAG_KIND[c], (c === 'NI' ? '○ ' : '') + esc(E.PRIORITY_CLASSES[c]), 'Priorità organizzativa scelta dall\'operatore');
+  }
+  const prioOptions = () => E.PRIORITY_ORDER.map(k => [k, E.PRIORITY_CLASSES[k]]);
+  const reqTypeName = k => E.REQUEST_TYPES[k] || '—';
+  const PRIO_NOTE = 'Categoria scelta dall\'operatore in base alla richiesta: evidenzia la priorità organizzativa e non è una verifica dei tempi previsti dalla normativa.';
   function optionsHtml(list, selected) {
     return list.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(selected) ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
   }
@@ -90,6 +99,7 @@
       catch (e) { this.ok = false; toast('Attenzione: salvataggio nel browser non riuscito. Esporta i dati per non perderli.', 'bad'); return false; }
     }
   };
+  let upgradeNotes = []; // aggiornamenti fatti ai dati salvati con la versione precedente
   let state = Store.load();
   let firstRun = false;
   let migratedAmb = 0;
@@ -99,6 +109,8 @@
     st.settings = Object.assign(E.clone(E.DEFAULT_SETTINGS), st.settings || {});
     ['closures', 'absences', 'patients', 'paths', 'cycles', 'sessions', 'waitlist', 'log', 'categories'].forEach(k => { st[k] = st[k] || []; });
     st.meta = st.meta || {};
+    const up = E.upgradeState(st);
+    if (up.length) { up.forEach(c => E.addLog(st, 'Aggiornamento dati: ' + c)); upgradeNotes = upgradeNotes.concat(up); }
     // aggiornamento: orari reali dei colleghi solo ambulatoriali (prima erano esempi)
     if (!st.settings.templates.ambulatorio) {
       st.settings.templates.ambulatorio = E.clone(E.DEFAULT_SETTINGS.templates.ambulatorio);
@@ -133,12 +145,14 @@
     return {
       name: '', categoryId: (state.categories[0] || {}).id || '', duration: state.settings.defaultDuration || 30,
       freq: 'lmv', weekdays: [1, 3, 5], sessionsMode: '10', sessionsCustom: 20, earliestDate: nextWorkingDay(today()),
-      prefOn: false, prefFrom: '12:00', prefTo: '14:45', prefMode: 'flessibile', waitlistId: null
+      prefOn: false, prefFrom: '12:00', prefTo: '14:45', prefMode: 'flessibile', waitlistId: null,
+      priority: 'NI', requestType: 'prima'
     };
   }
   const ui = {
     search: defaultSearch(), results: null, gaps: null, tab: 'disponibile', expanded: {}, sort: 'competenza',
     agenda: { mode: 'giorno', date: null, group: 'tutti', therapistId: null, highlightPath: null },
+    wlPrio: 'tutte', wlSort: 'priorita',
     modal: null, wlFilter: 'attivi', pathFilter: '', pathState: 'attivi', thDraft: null, absForm: null, settingsTab: 'parametri'
   };
   let modalCallbacks = {};
@@ -294,7 +308,7 @@
     }
     if (wl) {
       h += '<div class="notice warn">Dati caricati dalla <b>lista d\'attesa</b>: <b>' + esc(wl.name) + '</b> · inserito il ' + E.fmtIt(wl.insertedAt) +
-        ' (' + E.diffDays(wl.insertedAt, today()) + ' giorni di attesa) · priorità ' + esc(wl.priority) + (wl.availabilityNote ? ' · ' + esc(wl.availabilityNote) : '') +
+        ' (' + E.diffDays(wl.insertedAt, today()) + ' giorni di attesa) · priorità ' + prioTag(wl.priority) + ' · ' + esc(reqTypeName(wl.requestType)) + (wl.availabilityNote ? ' · ' + esc(wl.availabilityNote) : '') +
         ' <button class="btn link" data-act="search-reset">Scollega e svuota</button></div>';
     }
     h += '<section class="panel"><div class="panel-head"><h2>Trova un posto</h2><span class="muted small">Stesso fisioterapista e stesso orario per tutto il ciclo</span></div>' +
@@ -316,6 +330,9 @@
       (s.prefOn ? '<span>dalle</span><select class="input" data-bind="search.prefFrom" aria-label="dalle">' + timeOptions(s.prefFrom, '07:00', '15:00', 15) + '</select><span>alle</span><select class="input" data-bind="search.prefTo" aria-label="alle">' + timeOptions(s.prefTo, '07:15', '15:15', 15) + '</select>' +
         '<div class="seg">' + [['flessibile', 'Preferenza flessibile'], ['obbligatoria', 'Vincolo obbligatorio']].map(([v, l]) => '<label><input type="radio" name="pm" value="' + v + '" data-bind="search.prefMode"' + (s.prefMode === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>'
         : '<span class="muted small">Nessuna preferenza: tutti gli orari ambulatoriali</span>') + '</div></div>' +
+      '<div class="field sf-prio"><label class="lbl" for="sf-prio">Priorità</label><select id="sf-prio" class="input" data-bind="search.priority">' + optionsHtml(prioOptions(), s.priority) + '</select></div>' +
+      '<div class="field sf-rt"><span class="lbl">Tipo di richiesta</span><div class="seg">' + Object.entries(E.REQUEST_TYPES).map(([v, l]) => '<label><input type="radio" name="rt" value="' + v + '" data-bind="search.requestType"' + (s.requestType === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div></div>' +
+      '<div class="field sf-prio-note field-help">' + PRIO_NOTE + '</div>' +
       '<div class="field sf-go btn-row"><button type="submit" class="btn primary big">🔎 Cerca disponibilità</button>' +
       '<button type="button" class="btn" data-act="search-to-waitlist">＋ Salva in lista d\'attesa</button><button type="button" class="btn" data-act="search-reset">Nuova ricerca</button>' +
       '<span class="muted small">Le disponibilità sono calcolate in minuti da fasce, appuntamenti, assenze, chiusure e previsioni.</span></div>' +
@@ -506,22 +523,29 @@
   /* VISTA: Lista d'attesa                                                */
   /* ================================================================== */
   VIEWS.lista = function () {
-    const prio = state.settings.priorities;
+    const prio = E.PRIORITY_ORDER;
     let list = state.waitlist.slice();
     const f = ui.wlFilter;
     if (f === 'attivi') list = list.filter(w => ['in_attesa', 'contattato', 'proposta'].includes(w.status));
     else if (f !== 'tutti') list = list.filter(w => w.status === f);
-    list.sort((a, b) => (prio.indexOf(a.priority) - prio.indexOf(b.priority)) || (a.insertedAt < b.insertedAt ? -1 : 1));
+    const base = list;
+    if (ui.wlPrio !== 'tutte') list = list.filter(w => w.priority === ui.wlPrio);
+    const byDate = (a, b) => (a.insertedAt < b.insertedAt ? -1 : a.insertedAt > b.insertedAt ? 1 : 0);
+    if (ui.wlSort === 'priorita') list.sort((a, b) => (prio.indexOf(a.priority) - prio.indexOf(b.priority)) || byDate(a, b));
+    else list.sort(byDate);
     let h = '<section class="panel"><div class="panel-head"><h2>Lista d\'attesa</h2><button class="btn primary" data-act="wl-new">＋ Nuovo paziente in lista</button></div>' +
       '<div class="btn-row" style="margin-bottom:10px"><div class="seg">' + [['attivi', 'Da sistemare'], ['tutti', 'Tutti'], ['assegnato', 'Assegnati'], ['rinuncia', 'Rinunce']].map(([v, l]) => '<label><input type="radio" name="wlf" value="' + v + '" data-act="wl-filter"' + (f === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>' +
-      '<span class="muted small">Ordinata per priorità (assegnata dal servizio) e poi per data di inserimento.</span></div>';
+      '<label class="small">Ordina: <select class="input" style="width:auto;display:inline-block" data-act="wl-sort">' + optionsHtml([['priorita', 'Priorità (U → Non indicata), poi inserimento'], ['inserimento', 'Data di inserimento']], ui.wlSort) + '</select></label></div>' +
+      '<div class="btn-row" style="margin-bottom:6px"><span class="lbl" style="margin:0">Priorità</span><div class="seg">' + [['tutte', 'Tutte']].concat(prio.map(k => [k, k === 'NI' ? 'Non indicata' : k])).map(([v, l]) => '<label><input type="radio" name="wlPrio" value="' + v + '" data-act="wl-prio"' + (ui.wlPrio === v ? ' checked' : '') + '><span>' + l + (v === 'tutte' ? '' : ' <small>(' + base.filter(w => w.priority === v).length + ')</small>') + '</span></label>').join('') + '</div></div>' +
+      '<p class="muted small" style="margin-top:0">' + PRIO_NOTE + '</p>';
     if (!list.length) return h + '<div class="empty">Nessun paziente in questo elenco.</div></section>';
-    h += '<div class="table-wrap"><table class="t"><thead><tr><th>Paziente</th><th>Inserito</th><th>Priorità</th><th>Percorso</th><th>Durata</th><th>Frequenza</th><th>Sedute</th><th>Disponibilità oraria</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>';
+    h += '<div class="table-wrap"><table class="t"><thead><tr><th>Paziente</th><th>Inserito</th><th>Priorità</th><th>Richiesta</th><th>Percorso</th><th>Durata</th><th>Frequenza</th><th>Sedute</th><th>Disponibilità oraria</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>';
     list.forEach(w => {
       const days = E.diffDays(w.insertedAt, today());
       h += '<tr><td class="who">' + esc(w.name) + (w.note ? '<div class="muted small">' + esc(w.note) + '</div>' : '') + '</td>' +
         '<td class="nowrap">' + E.fmtIt(w.insertedAt) + '<div class="muted small">' + days + ' giorni</div></td>' +
-        '<td>' + tag(w.priority === prio[0] ? 'bad' : w.priority === prio[prio.length - 1] ? 'plain' : 'prob', esc(w.priority)) + '</td>' +
+        '<td>' + prioTag(w.priority) + (w.previousPriority ? '<div class="muted small">prima: ' + esc(w.previousPriority) + ' (da riclassificare)</div>' : '') + '</td>' +
+        '<td class="small">' + esc(reqTypeName(w.requestType)) + '</td>' +
         '<td>' + esc(catName(w.categoryId)) + '</td><td>' + w.duration + ' min</td><td class="nowrap">' + E.weekdaysLabel(w.weekdays) + '</td><td>' + w.sessions + '</td>' +
         '<td>' + (w.pref && w.pref.from ? w.pref.from + '–' + w.pref.to + ' <span class="muted small">(' + w.pref.mode + ')</span>' : '<span class="muted">qualsiasi</span>') + (w.availabilityNote ? '<div class="muted small">' + esc(w.availabilityNote) + '</div>' : '') +
         '<div class="muted small">dal ' + E.fmtIt(w.earliestDate) + '</div></td>' +
@@ -542,7 +566,7 @@
       sessionsMode: (state.settings.sessionPresets || []).map(String).includes(String(w.sessions)) ? String(w.sessions) : 'altro', sessionsCustom: w.sessions,
       earliestDate: w.earliestDate && w.earliestDate > today() ? w.earliestDate : nextWorkingDay(today()),
       prefOn: !!(w.pref && w.pref.from), prefFrom: w.pref ? w.pref.from : '12:00', prefTo: w.pref ? w.pref.to : '14:45', prefMode: w.pref ? w.pref.mode : 'flessibile',
-      waitlistId: w.id
+      waitlistId: w.id, priority: E.PRIORITY_CLASSES[w.priority] ? w.priority : 'NI', requestType: w.requestType || 'prima'
     });
     return s;
   }
@@ -570,7 +594,7 @@
     h += '<div class="table-wrap"><table class="t"><thead><tr><th>Paziente</th><th>Percorso</th><th>Fisioterapista</th><th>Giorni e orario</th><th>Cicli</th><th>Sedute effettuate</th><th>Ultima seduta</th><th>Previsione</th><th></th></tr></thead><tbody>';
     rows.forEach(r => {
       const pct = r.pc.planned ? Math.round(100 * r.pc.done / r.pc.planned) : 0;
-      h += '<tr><td class="who">' + esc(r.pt.name) + '</td><td>' + esc(catName(r.p.categoryId)) + '<div class="muted small">' + r.p.duration + ' min</div></td><td>' + esc(thName(r.p.therapistId)) + '</td>' +
+      h += '<tr><td class="who">' + esc(r.pt.name) + '<div style="margin-top:2px">' + prioTag(r.p.priority) + '</div></td><td>' + esc(catName(r.p.categoryId)) + '<div class="muted small">' + r.p.duration + ' min</div></td><td>' + esc(thName(r.p.therapistId)) + '</td>' +
         '<td class="nowrap">' + E.weekdaysLabel(r.p.weekdays) + ' ' + r.p.startTime + '</td><td>' + r.pc.cycles.length + '</td>' +
         '<td><div class="small">' + r.pc.done + ' / ' + r.pc.planned + '</div><div class="progress"><div style="width:' + pct + '%"></div></div></td>' +
         '<td class="nowrap">' + (r.pc.lastDate ? dShort(r.pc.lastDate) : '—') + '</td><td>' + FORECAST_TAG[r.p.forecast.state]() + '</td>' +
@@ -593,7 +617,9 @@
       '<dt>Giorni e orario</dt><dd>' + E.weekdaysLabel(p.weekdays) + ' · ' + p.startTime + '–' + hm(E.toMin(p.startTime) + p.duration) + ' (' + p.duration + ' min)</dd>' +
       '<dt>Cicli</dt><dd>' + pc.cycles.length + ' (' + pc.planned + ' sedute previste in totale, ' + pc.done + ' effettuate)</dd>' +
       '<dt>Ultima seduta in calendario</dt><dd>' + dLabel(pc.lastDate) + '</dd>' +
-      '<dt>Effetto sul posto</dt><dd>' + (ov ? slotTag(ov.slot) : '—') + '</dd></dl>' +
+      '<dt>Effetto sul posto</dt><dd>' + (ov ? slotTag(ov.slot) : '—') + '</dd>' +
+      '<dt>Priorità</dt><dd><select class="input" style="width:auto" data-act="path-prio" data-id="' + p.id + '" aria-label="Priorità">' + optionsHtml(prioOptions(), E.PRIORITY_CLASSES[p.priority] ? p.priority : 'NI') + '</select></dd>' +
+      '<dt>Tipo di richiesta</dt><dd><select class="input" style="width:auto" data-act="path-rt" data-id="' + p.id + '" aria-label="Tipo di richiesta">' + optionsHtml([['', '—']].concat(Object.entries(E.REQUEST_TYPES)), p.requestType || '') + '</select><div class="field-help">Solo un\'indicazione: non modifica cicli e sedute.</div></dd></dl>' +
       (ov && ov.alerts.length ? '<div class="notice warn">' + ov.alerts.map(a => '• ' + esc(a.text)).join('<br>') + '</div>' : '') + '</section>';
     // previsione
     const fs = ui.fcDraft && ui.fcDraft.pathId === p.id ? ui.fcDraft : { pathId: p.id, state: f.state, date: f.date || '', reviewDate: f.reviewDate || '', keepSlots: f.keepSlots === false ? 'no' : f.keepSlots === true ? 'si' : '', note: f.note || '', reserveUntil: f.reserveUntil || '' };
@@ -822,7 +848,7 @@
         '<div class="field"><label class="chk"><input type="checkbox" data-setting="warn45.enabled"' + (S.warn45.enabled ? ' checked' : '') + '> Avviso attivo</label></div>' +
         num('warn45.threshold', 'Avvisa oltre N sedute da 45 al giorno', '', 0, 10) +
         '<div class="field"><span class="lbl">Applica ai profili</span>' + Object.entries(E.PROFILES).map(([k, l]) => '<label class="chk"><input type="checkbox" data-act="warn45-profile" value="' + k + '"' + (S.warn45.profiles.includes(k) ? ' checked' : '') + '> ' + esc(l) + '</label>').join('<br>') + '</div></div></section>' +
-        '<section class="panel"><h3>Priorità della lista d\'attesa</h3><div class="field"><label class="lbl">Valori dalla più alta alla più bassa, separati da virgola</label><input class="input" data-setting="priorities" value="' + esc(S.priorities.join(', ')) + '"></div></section>';
+        '<section class="panel"><h3>Priorità della lista d\'attesa</h3><div class="chips">' + E.PRIORITY_ORDER.map(prioTag).join('') + '</div><p class="muted small">' + PRIO_NOTE + ' Non prevede date, conteggi o scadenze.</p></section>';
     }
     if (tab === 'turni') {
       const t7 = S.templates.reparto7, t8 = S.templates.reparto8, ta = S.templates.ambulatorio;
@@ -905,7 +931,8 @@
       body: '<div class="grid g2"><div class="field"><label class="lbl" for="bk-name">Paziente (nome o identificativo) *</label><input id="bk-name" class="input" value="' + esc(ui.search.name) + '" autofocus></div><div></div></div>' +
         '<dl class="kv" style="margin-top:10px"><dt>Fisioterapista</dt><dd>' + esc(g.therapist.name) + ' · ' + (g.kind === 'specifica' ? 'competenza specifica' : 'altra idoneità') + '</dd>' +
         '<dt>Percorso</dt><dd>' + esc(catName(req.categoryId)) + ' · ' + req.duration + ' min</dd><dt>Giorni e orario</dt><dd><b>' + E.weekdaysLabel(req.weekdays) + ' ' + hm(o.start) + '–' + hm(o.end) + '</b></dd>' +
-        '<dt>Ciclo</dt><dd>' + req.sessions + ' sedute, dal <b>' + dLabel(o.startDate) + '</b> al <b>' + dLabel(o.endDate) + '</b></dd></dl>' +
+        '<dt>Ciclo</dt><dd>' + req.sessions + ' sedute, dal <b>' + dLabel(o.startDate) + '</b> al <b>' + dLabel(o.endDate) + '</b></dd>' +
+        '<dt>Priorità · richiesta</dt><dd>' + prioTag(ui.search.priority) + ' · ' + esc(reqTypeName(ui.search.requestType)) + '</dd></dl>' +
         (o.status === 'ext' ? '<div class="notice warn"><b>Attenzione: la proposta usa la fascia di estensione</b> in ' + o.extDates.length + ' date. ' + esc(o.extDates[0].info.text) + '.<br><label class="chk" style="margin-top:6px"><input type="checkbox" id="bk-ext"> Ho verificato con il collega l\'estensione della fascia e il tempo per le cartelle</label></div>' : '') +
         (o.warnings.length ? '<div class="notice warn">' + o.warnings.map(w => E.fmtItShort(w.date) + ': ' + esc(w.text)).join('<br>') + '</div>' : '') +
         '<p class="small muted">Prima di salvare il programma ricontrolla tutte le date con i dati aggiornati.</p>' + cycleDatesHtml({ perDate: o.dates.map(d => ({ date: d, r: { status: o.extDates.some(x => x.date === d) ? 'ext' : 'ok', extInfo: (o.extDates.find(x => x.date === d) || {}).info } })) }, o.skipped, o.start, req.duration),
@@ -1002,7 +1029,8 @@
       body: '<div class="grid g3">' +
         '<div class="field"><label class="lbl">Nome / identificativo *</label><input class="input" data-bind="modal.draft.name" value="' + esc(w.name) + '" autofocus></div>' +
         '<div class="field"><label class="lbl">Data di inserimento</label><input type="date" class="input" data-bind="modal.draft.insertedAt" value="' + esc(w.insertedAt) + '"></div>' +
-        '<div class="field"><label class="lbl">Priorità (assegnata dal servizio)</label><select class="input" data-bind="modal.draft.priority">' + optionsHtml(state.settings.priorities.map(p => [p, p]), w.priority) + '</select></div>' +
+        '<div class="field"><label class="lbl">Priorità</label><select class="input" data-bind="modal.draft.priority">' + optionsHtml(prioOptions(), E.PRIORITY_CLASSES[w.priority] ? w.priority : 'NI') + '</select><div class="field-help">Scelta dall\'operatore, mai dedotta dalla patologia.</div></div>' +
+        '<div class="field"><label class="lbl">Tipo di richiesta</label><select class="input" data-bind="modal.draft.requestType">' + optionsHtml([['', '—']].concat(Object.entries(E.REQUEST_TYPES)), w.requestType || '') + '</select></div>' +
         '<div class="field"><label class="lbl">Patologia / percorso</label><select class="input" data-bind="modal.draft.categoryId">' + optionsHtml(state.categories.map(c => [c.id, c.name]), w.categoryId) + '</select></div>' +
         '<div class="field"><label class="lbl">Durata</label><select class="input" data-bind="modal.draft.duration" data-type="num">' + optionsHtml([[30, '30 min'], [45, '45 min']], w.duration) + '</select></div>' +
         '<div class="field"><label class="lbl">Sedute</label><input type="number" min="1" max="60" class="input" data-bind="modal.draft.sessions" data-type="num" value="' + esc(w.sessions) + '"></div>' +
@@ -1026,7 +1054,7 @@
       title: 'Pazienti in lista compatibili con il posto di ' + esc(ptName(p.id)), wide: true,
       body: '<p>' + esc(thName(p.therapistId)) + ' · ' + E.weekdaysLabel(p.weekdays) + ' ' + p.startTime + ' · ' + slotTag(ov.slot) + '</p><p class="small muted">Ordinati per priorità e poi per tempo di attesa. La verifica controlla tutte le date del ciclo del paziente in lista.</p>' +
         '<table class="t"><thead><tr><th>Paziente</th><th>Priorità</th><th>Attesa</th><th>Percorso</th><th>Ciclo</th><th>Verifica</th><th></th></tr></thead><tbody>' +
-        list.map(x => '<tr><td class="who">' + esc(x.entry.name) + '</td><td>' + esc(x.entry.priority) + '</td><td>' + E.diffDays(x.entry.insertedAt, today()) + ' gg</td><td>' + esc(catName(x.entry.categoryId)) + ' · ' + x.entry.duration + ' min</td><td>' + E.weekdaysLabel(x.entry.weekdays) + ' · ' + x.entry.sessions + ' dal ' + E.fmtItShort(x.startDate) + '</td><td>' +
+        list.map(x => '<tr><td class="who">' + esc(x.entry.name) + '</td><td>' + prioTag(x.entry.priority) + '</td><td>' + E.diffDays(x.entry.insertedAt, today()) + ' gg</td><td>' + esc(catName(x.entry.categoryId)) + ' · ' + x.entry.duration + ' min</td><td>' + E.weekdaysLabel(x.entry.weekdays) + ' · ' + x.entry.sessions + ' dal ' + E.fmtItShort(x.startDate) + '</td><td>' +
           (x.ev.status === 'ok' ? TAG.ok('certo') : x.ev.status === 'ext' ? TAG.ext('estensione') : x.ev.status === 'prob' ? TAG.prob('probabile') : TAG.bad(esc(x.ev.firstFail.r.reason) + ' (' + E.fmtItShort(x.ev.firstFail.date) + ')')) + '</td><td><button class="btn sm primary" data-act="wl-find" data-id="' + x.entry.id + '">Trova posto</button></td></tr>').join('') + '</tbody></table>',
       foot: '<button class="btn" data-act="close-modal">Chiudi</button>'
     };
@@ -1097,7 +1125,8 @@
     const r = safe(() => E.bookCycle(state, {
       patientName: name, categoryId: m.req.categoryId, therapistId: m.g.therapist.id, duration: m.req.duration,
       weekdays: m.req.weekdays, startTime: hm(m.o.start), startDate: m.o.startDate, sessions: m.req.sessions,
-      acceptExtension: m.o.status === 'ext', waitlistId: ui.search.waitlistId || null
+      acceptExtension: m.o.status === 'ext', waitlistId: ui.search.waitlistId || null,
+      priority: ui.search.priority, requestType: ui.search.requestType
     }));
     if (!r) { closeModal(); runSearch(); return; }
     closeModal();
@@ -1128,7 +1157,7 @@
   function newWaitlistFromSearch(name) {
     const req = buildRequest();
     return {
-      id: E.uid('wl'), name, insertedAt: today(), priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: req.categoryId,
+      id: E.uid('wl'), name, insertedAt: today(), priority: ui.search.priority || 'NI', requestType: ui.search.requestType || 'prima', categoryId: req.categoryId,
       duration: req.duration, weekdays: req.weekdays, sessions: req.sessions, earliestDate: req.earliestDate, pref: req.pref, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null
     };
   }
@@ -1184,6 +1213,8 @@
   };
   // --- lista d'attesa
   ACT['wl-filter'] = el => { ui.wlFilter = el.value; render(); };
+  ACT['wl-prio'] = el => { ui.wlPrio = el.value; render(); };
+  ACT['wl-sort'] = el => { ui.wlSort = el.value; render(); };
   ACT['wl-find'] = el => {
     const w = state.waitlist.find(x => x.id === el.dataset.id);
     ui.search = waitlistToSearch(w);
@@ -1199,7 +1230,7 @@
     commit(st, 'Stato aggiornato.');
   };
   ACT['wl-new'] = () => {
-    openModal({ type: 'waitlist', isNew: true, draft: { id: E.uid('wl'), name: '', insertedAt: today(), priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: state.categories[0].id, duration: 30, weekdays: [1, 3, 5], sessions: 10, earliestDate: nextWorkingDay(today()), pref: null, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null } });
+    openModal({ type: 'waitlist', isNew: true, draft: { id: E.uid('wl'), name: '', insertedAt: today(), priority: 'NI', requestType: 'prima', categoryId: state.categories[0].id, duration: 30, weekdays: [1, 3, 5], sessions: 10, earliestDate: nextWorkingDay(today()), pref: null, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null } });
   };
   ACT['wl-edit'] = el => { openModal({ type: 'waitlist', draft: E.clone(state.waitlist.find(x => x.id === el.dataset.id)) }); };
   ACT['wl-freq'] = el => {
@@ -1219,11 +1250,13 @@
       d.pref = from && to ? { from, to, mode } : null;
     }
     delete d.prefFrom; delete d.prefTo; delete d.prefMode; delete d.freqMode;
+    if (!E.PRIORITY_CLASSES[d.priority]) d.priority = 'NI';
+    if (d.previousPriority && d.priority !== 'NI') delete d.previousPriority; // riclassificata dall'operatore
     d.name = d.name.trim();
     const st = E.clone(fresh());
     const i = st.waitlist.findIndex(x => x.id === d.id);
     if (i >= 0) st.waitlist[i] = d; else st.waitlist.push(d);
-    E.addLog(st, (i >= 0 ? 'Modificato in lista d\'attesa: ' : 'Inserito in lista d\'attesa: ') + d.name + ' (' + catName(d.categoryId) + ', priorità ' + d.priority + ')');
+    E.addLog(st, (i >= 0 ? 'Modificato in lista d\'attesa: ' : 'Inserito in lista d\'attesa: ') + d.name + ' (' + catName(d.categoryId) + ', priorità ' + E.PRIORITY_CLASSES[d.priority] + (d.requestType ? ', ' + reqTypeName(d.requestType) : '') + ')');
     if (m.isNew && parseHash()[0] === 'trova') ui.search.waitlistId = d.id;
     closeModal();
     commit(st, 'Lista d\'attesa aggiornata.');
@@ -1236,6 +1269,8 @@
   };
   // --- percorsi
   ACT['path-filter'] = () => { };
+  ACT['path-prio'] = el => { const st = E.clone(fresh()); const p = st.paths.find(x => x.id === el.dataset.id); p.priority = el.value; E.addLog(st, 'Priorità di ' + ptName(p.id) + ': ' + E.PRIORITY_CLASSES[el.value]); commit(st, 'Priorità salvata.'); };
+  ACT['path-rt'] = el => { const st = E.clone(fresh()); const p = st.paths.find(x => x.id === el.dataset.id); p.requestType = el.value; E.addLog(st, 'Tipo di richiesta di ' + ptName(p.id) + ': ' + reqTypeName(el.value)); commit(st, 'Tipo di richiesta salvato (cicli e sedute invariati).'); };
   ACT['path-state'] = el => { ui.pathState = el.value; render(); };
   ACT['session-status'] = el => {
     const r = safe(() => E.setSessionStatus(fresh(), el.dataset.id, el.value));
@@ -1418,7 +1453,7 @@
     const el = ev.target.closest('[data-act]');
     if (!el) return;
     const act = el.dataset.act;
-    if (['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'import', 'sort', 'ag-group', 'ag-th', 'ag-date', 'wl-status', 'session-status', 'cat-rename', 'path-filter'].includes(act)) return; // gestiti su "change"
+    if (['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'import', 'sort', 'ag-group', 'ag-th', 'ag-date', 'wl-status', 'session-status', 'cat-rename', 'path-filter', 'wl-prio', 'wl-sort', 'path-prio', 'path-rt'].includes(act)) return; // gestiti su "change"
     if (act === 'close-modal-nav') { ACT[act](el, ev); return; }
     if (ACT[act]) { if (el.tagName === 'A' && el.getAttribute('href') === '#') ev.preventDefault(); if (el.tagName === 'BUTTON') ev.preventDefault(); ACT[act](el, ev); }
   });
@@ -1463,7 +1498,7 @@
       commit(st, key.startsWith('templates.') ? 'Salvato. Premi "Applica ai colleghi del gruppo" per aggiornare le schede.' : 'Impostazione salvata.');
       return;
     }
-    if (act && ACT[act] && ['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'sort', 'wl-status', 'session-status'].includes(act)) { ACT[act](el, ev); return; }
+    if (act && ACT[act] && ['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'sort', 'wl-status', 'session-status', 'wl-prio', 'wl-sort', 'path-prio', 'path-rt'].includes(act)) { ACT[act](el, ev); return; }
     if (el.dataset.bind) { bindValue(el); if (el.dataset.rerender) { if (el.dataset.bind.startsWith('modal.')) renderModal(); else render(); } }
   });
   document.addEventListener('input', ev => {
@@ -1517,6 +1552,11 @@
   }
 
   render();
+  if (upgradeNotes.length && !firstRun) {
+    Store.save(state);
+    toast('Dati salvati aggiornati alla nuova versione, senza perdite: ' + upgradeNotes.join('; ') + '.');
+    upgradeNotes = [];
+  }
   if (migratedAmb) {
     Store.save(state);
     toast('Aggiornati gli orari reali dei colleghi solo ambulatoriali. Gli appuntamenti demo creati con i vecchi orari possono risultare in conflitto: per dati coerenti usa Impostazioni → Dati e salvataggio → Ripristina i dati di esempio.');
