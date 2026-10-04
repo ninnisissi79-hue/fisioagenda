@@ -23,6 +23,8 @@ Non serve installare nulla: basta un browser recente (Chrome, Edge, Firefox o Sa
 
 **Per chi usa Node.js** (facoltativo): `npm start` e poi apri http://localhost:8080.
 
+**Per condividerla con un link (Netlify):** il pacchetto pronto è `dist/FisioAgenda-netlify.zip` (contiene `index.html` e `_headers`). Le istruzioni passo passo sono in [ISTRUZIONI-NETLIFY.md](ISTRUZIONI-NETLIFY.md). Rigenerazione: `npm run build:netlify`.
+
 ## 2. Prima prova (5 minuti)
 
 1. Si apre **Trova un posto**. Scrivi un nome di fantasia, ad esempio “Prova A.”.
@@ -114,8 +116,9 @@ tests/engine.test.js  test del motore (node --test)
 tests/demo.test.js    test di coerenza dei dati demo
 tests/e2e.js          prova completa nel browser (Playwright)
 tools/build.js        crea dist/FisioAgenda.html (file unico)
+tools/build-netlify.js crea dist/FisioAgenda-netlify.zip (index.html + _headers) per Netlify
 tools/serve.js        server locale facoltativo (npm start)
 ```
 
-Comandi: `npm test` · `npm run test:e2e` (richiede Playwright) · `npm run build` (da rieseguire dopo ogni modifica, per aggiornare `dist/FisioAgenda.html`) · `npm start`.
+Comandi: `npm test` · `npm run test:e2e` (richiede Playwright; `E2E_URL=http://…` per provare un indirizzo web) · `npm run build:netlify` (pacchetto ZIP per Netlify) · `npm run build` (da rieseguire dopo ogni modifica, per aggiornare `dist/FisioAgenda.html`) · `npm start`.
 Nessuna dipendenza esterna: niente librerie da scaricare, funziona anche senza connessione a Internet.

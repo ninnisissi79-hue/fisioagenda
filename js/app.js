@@ -215,9 +215,12 @@
       '<div class="app">' +
       '<aside class="sidebar"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Ambulatorio di fisioterapia</div></div></div>' +
       '<nav class="nav">' + ROUTES.map(r => '<a href="#/' + r[0] + '" class="' + (route === r[0] ? 'active ' : '') + (r[0] === 'trova' ? 'primary-link' : '') + '"><span>' + r[2] + ' ' + r[1] + '</span>' + (counts[r[0]] || '') + '</a>').join('') + '</nav>' +
-      '<div class="side-note"><b>Demo con dati fittizi.</b><br>Salvataggio locale in questo browser, non condiviso con altri computer.' + (Store.ok ? '' : '<br><b style="color:#f97066">Salvataggio non disponibile!</b>') + '</div></aside>' +
+      '<div class="side-note"><b>Demo con dati fittizi.</b><br>Ogni visitatore lavora sulla propria copia, salvata solo in questo browser e non condivisa.' + (Store.ok ? '' : '<br><b style="color:#f97066">Salvataggio non disponibile!</b>') + '</div></aside>' +
       '<div class="main"><header class="topbar"><div class="btn-row"><button class="btn sm menu-btn" data-act="menu" aria-label="Menu">☰</button><span class="title">' + esc(title) + '</span></div>' +
       '<div class="btn-row"><span class="demo-pill" title="Nomi e pazienti inventati">DEMO · dati fittizi</span><span class="muted small nowrap">Oggi: ' + dLabel(today()) + '</span></div></header>' +
+      '<div class="public-banner" role="note"><span><b>⚠ Demo con dati fittizi: non inserire dati reali.</b> ' +
+      'Ogni visitatore modifica soltanto la propria copia, salvata in questo browser: le modifiche non sono visibili ad altri e nessun dato viene inviato.</span>' +
+      '<button class="btn sm" data-act="reset-demo">↺ Ripristina esempi</button></div>' +
       '<main class="content">' + body + '</main></div></div>';
     if (sameRoute && !routeChanged) {
       window.scrollTo(0, scrollY);
@@ -1402,7 +1405,7 @@
   ACT['cl-del'] = el => { const st = E.clone(fresh()); const c = st.closures.find(x => x.date === el.dataset.date); st.closures = st.closures.filter(x => x.date !== el.dataset.date); E.addLog(st, 'Rimossa chiusura ' + E.fmtIt(c.date) + ': ' + c.label); commit(st, 'Chiusura rimossa.'); };
   ACT.export = () => { download('fisioagenda-dati-' + today() + '.json', JSON.stringify(state, null, 2)); toast('File esportato.', 'ok'); };
   ACT['reset-demo'] = () => {
-    confirmBox('Ripristinare i dati di esempio?', '<p>Tutte le modifiche fatte in questo browser verranno <b>sostituite</b> con nuovi dati di esempio. Se vuoi conservarle, esporta prima i dati.</p>', 'Sì, ripristina', () => {
+    confirmBox('Ripristinare i dati di esempio?', '<p>Tutte le modifiche fatte <b>in questo browser</b> verranno <b>sostituite</b> con i dati di esempio iniziali. Le copie degli altri visitatori non cambiano.</p><p>Se vuoi conservare le tue prove, prima usa Impostazioni → Dati e salvataggio → Esporta.</p>', 'Sì, ripristina', () => {
       state = D.generateDemo(); Store.save(state); ui.results = null; ui.search = defaultSearch(); ui.thDraft = null; firstRun = true;
       toast('Dati di esempio ripristinati.', 'ok'); go('#/trova');
     }, { danger: true });

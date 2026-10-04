@@ -1,0 +1,8 @@
+# Regole lette da Netlify (questo file non è visibile ai visitatori).
+# X-Robots-Tag: noindex chiede ai motori di ricerca di non indicizzare il sito.
+# Attenzione: NON rende il sito privato. Chiunque abbia il link può aprirlo.
+/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Cache-Control: no-cache

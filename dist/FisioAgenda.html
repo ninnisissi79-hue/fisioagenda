@@ -3,8 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>FisioAgenda</title>
-  <meta name="description" content="FisioAgenda — demo di gestionale per l'ambulatorio di fisioterapia (dati fittizi)">
+  <title>FisioAgenda · Demo</title>
+  <meta name="description" content="Demo interattiva di FisioAgenda: trova in pochi passaggi chi può prendere un paziente, a che ora e da quando. Solo dati fittizi, da provare nel browser.">
+  <!-- noindex chiede ai motori di ricerca di non mostrare la pagina nei risultati: NON rende il sito privato -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="it_IT">
+  <meta property="og:site_name" content="FisioAgenda">
+  <meta property="og:title" content="FisioAgenda · Demo">
+  <meta property="og:description" content="Gestionale dimostrativo per l'ambulatorio di fisioterapia: trova un posto, agenda, lista d'attesa e previsioni. Solo dati fittizi.">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#13283f">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f7fd1'/%3E%3Ctext x='16' y='23' font-family='Arial' font-size='20' font-weight='700' text-anchor='middle' fill='white'%3EF%3C/text%3E%3C/svg%3E">
   <style>
 /* FisioAgenda — stile dell'interfaccia */
 :root {
@@ -74,6 +84,8 @@ h4 { font-size: 1rem; }
 .topbar .title { font-weight: 600; font-size: 1.05rem; }
 .demo-pill { background: var(--prob-bg); color: var(--prob); border: 1px solid var(--prob-line); border-radius: 20px; padding: 2px 10px; font-size: .8rem; font-weight: 600; }
 .content { padding: 18px 22px 60px; max-width: 1500px; }
+.public-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding: 9px 22px; background: var(--prob-bg); color: #5c3a00; border-bottom: 1px solid var(--prob-line); font-size: .9rem; }
+.public-banner .btn { background: #fff; }
 .menu-btn { display: none; }
 
 /* ---------- pannelli e controlli ---------- */
@@ -255,6 +267,7 @@ table.t tr.sub:hover td { background: #f2f6fa; }
   .sf-ses { grid-column: span 7; } .sf-date { grid-column: span 5; } .sf-pref { grid-column: span 12; }
 }
 @media (max-width: 1100px) {
+  .public-banner { padding: 8px 12px; }
   .app { grid-template-columns: 1fr; }
   .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 250px; z-index: 50; transform: translateX(-100%); transition: transform .2s; }
   .app.menu-open .sidebar { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.4); }
@@ -1851,9 +1864,12 @@ table.t tr.sub:hover td { background: #f2f6fa; }
       '<div class="app">' +
       '<aside class="sidebar"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Ambulatorio di fisioterapia</div></div></div>' +
       '<nav class="nav">' + ROUTES.map(r => '<a href="#/' + r[0] + '" class="' + (route === r[0] ? 'active ' : '') + (r[0] === 'trova' ? 'primary-link' : '') + '"><span>' + r[2] + ' ' + r[1] + '</span>' + (counts[r[0]] || '') + '</a>').join('') + '</nav>' +
-      '<div class="side-note"><b>Demo con dati fittizi.</b><br>Salvataggio locale in questo browser, non condiviso con altri computer.' + (Store.ok ? '' : '<br><b style="color:#f97066">Salvataggio non disponibile!</b>') + '</div></aside>' +
+      '<div class="side-note"><b>Demo con dati fittizi.</b><br>Ogni visitatore lavora sulla propria copia, salvata solo in questo browser e non condivisa.' + (Store.ok ? '' : '<br><b style="color:#f97066">Salvataggio non disponibile!</b>') + '</div></aside>' +
       '<div class="main"><header class="topbar"><div class="btn-row"><button class="btn sm menu-btn" data-act="menu" aria-label="Menu">☰</button><span class="title">' + esc(title) + '</span></div>' +
       '<div class="btn-row"><span class="demo-pill" title="Nomi e pazienti inventati">DEMO · dati fittizi</span><span class="muted small nowrap">Oggi: ' + dLabel(today()) + '</span></div></header>' +
+      '<div class="public-banner" role="note"><span><b>⚠ Demo con dati fittizi: non inserire dati reali.</b> ' +
+      'Ogni visitatore modifica soltanto la propria copia, salvata in questo browser: le modifiche non sono visibili ad altri e nessun dato viene inviato.</span>' +
+      '<button class="btn sm" data-act="reset-demo">↺ Ripristina esempi</button></div>' +
       '<main class="content">' + body + '</main></div></div>';
     if (sameRoute && !routeChanged) {
       window.scrollTo(0, scrollY);
@@ -3038,7 +3054,7 @@ table.t tr.sub:hover td { background: #f2f6fa; }
   ACT['cl-del'] = el => { const st = E.clone(fresh()); const c = st.closures.find(x => x.date === el.dataset.date); st.closures = st.closures.filter(x => x.date !== el.dataset.date); E.addLog(st, 'Rimossa chiusura ' + E.fmtIt(c.date) + ': ' + c.label); commit(st, 'Chiusura rimossa.'); };
   ACT.export = () => { download('fisioagenda-dati-' + today() + '.json', JSON.stringify(state, null, 2)); toast('File esportato.', 'ok'); };
   ACT['reset-demo'] = () => {
-    confirmBox('Ripristinare i dati di esempio?', '<p>Tutte le modifiche fatte in questo browser verranno <b>sostituite</b> con nuovi dati di esempio. Se vuoi conservarle, esporta prima i dati.</p>', 'Sì, ripristina', () => {
+    confirmBox('Ripristinare i dati di esempio?', '<p>Tutte le modifiche fatte <b>in questo browser</b> verranno <b>sostituite</b> con i dati di esempio iniziali. Le copie degli altri visitatori non cambiano.</p><p>Se vuoi conservare le tue prove, prima usa Impostazioni → Dati e salvataggio → Esporta.</p>', 'Sì, ripristina', () => {
       state = D.generateDemo(); Store.save(state); ui.results = null; ui.search = defaultSearch(); ui.thDraft = null; firstRun = true;
       toast('Dati di esempio ripristinati.', 'ok'); go('#/trova');
     }, { danger: true });

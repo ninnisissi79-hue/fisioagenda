@@ -9,7 +9,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); }
 catch (e) { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
 
-const URL = 'file://' + path.resolve(__dirname, '..', process.env.E2E_FILE || 'index.html');
+const URL = process.env.E2E_URL || ('file://' + path.resolve(__dirname, '..', process.env.E2E_FILE || 'index.html'));
 const SHOTS = process.env.SHOTS_DIR || null;
 let failures = 0;
 function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!cond) failures++; }
@@ -29,6 +29,14 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   await page.reload();
   await page.waitForSelector('.search-form');
   ok(await page.locator('.demo-pill').isVisible(), 'etichetta DEMO visibile');
+  const banner = await page.locator('.public-banner').innerText();
+  ok(/Demo con dati fittizi: non inserire dati reali/.test(banner), 'avviso "Demo con dati fittizi: non inserire dati reali" visibile');
+  ok(/propria copia/.test(banner), 'indicazione che ogni visitatore modifica solo la propria copia');
+  ok(await page.locator('.public-banner button:has-text("Ripristina esempi")').isVisible(), 'pulsante "Ripristina esempi" nell\'avviso');
+  ok(await page.locator('input[type=password]').count() === 0, 'nessuna password nella pagina');
+  const meta = await page.evaluate(() => ({ robots: document.querySelector('meta[name=robots]')?.content, og: document.querySelector('meta[property="og:title"]')?.content, desc: document.querySelector('meta[property="og:description"]')?.content, title: document.title }));
+  ok(/noindex/.test(meta.robots || ''), 'direttiva noindex presente');
+  ok(meta.og && meta.desc && meta.title, 'titolo e descrizione per la condivisione presenti');
   const nTh = await page.evaluate(() => window.FisioApp.state.therapists.length);
   ok(nTh === 18, '18 fisioterapisti nei dati demo');
 
@@ -135,6 +143,20 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   await page.waitForSelector('.search-form');
   const still = await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Prova E2E'));
   ok(!still, 'dati di esempio ripristinati');
+
+  console.log('11. Ripristino dall\'avviso in alto, con conferma (e annullamento)');
+  await page.fill('#sf-name', 'Da non perdere');
+  await page.evaluate(() => { const s = window.FisioApp.state; s.patients.push({ id: 'ptx', name: 'Marcatore', note: '' }); window.FisioApp.Store.save(s); });
+  await page.click('.public-banner button:has-text("Ripristina esempi")');
+  ok(await page.locator('.modal:has-text("Ripristinare")').isVisible(), 'il pulsante chiede conferma');
+  await page.click('.modal button:has-text("Annulla")');
+  ok(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore')), 'annullando, i dati restano invariati');
+  await page.click('.public-banner button:has-text("Ripristina esempi")');
+  await page.click('[data-act=modal-ok]');
+  await page.waitForTimeout(300);
+  ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'confermando, tornano i dati di esempio');
+  await page.reload(); await page.waitForSelector('.search-form');
+  ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'il ripristino resta dopo il ricaricamento');
 
   ok(errors.length === 0, 'nessun errore JavaScript' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();
