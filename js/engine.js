@@ -139,7 +139,8 @@
     priorities: ['Alta', 'Media', 'Bassa'],
     templates: {
       reparto7: { ambEnd: '13:20', extEnd: '13:50' },
-      reparto8: { ambEnd: '14:45', extEnd: '15:00' }
+      reparto8: { ambEnd: '14:45', extEnd: '15:00' },
+      ambulatorio: { ambEnd: '14:40', extEnd: '14:45' }
     }
   };
 
@@ -148,7 +149,7 @@
   /* ------------------------------------------------------------------ */
   function b(type, start, end, extra) { return Object.assign({ type, start, end }, extra || {}); }
   /** Settimana tipo generata da uno schema; ogni giorno resta poi modificabile. */
-  function buildDay(profile, settings, variant) {
+  function buildDay(profile, settings) {
     const t = (settings && settings.templates) || DEFAULT_SETTINGS.templates;
     if (profile === 'reparto7') {
       const p = t.reparto7 || DEFAULT_SETTINGS.templates.reparto7;
@@ -178,25 +179,23 @@
         ]
       };
     }
-    if (profile === 'ambulatorio' && variant === 'B') {
-      return {
-        in: '08:00', out: '15:12', blocks: [
-          b('cartelle', '08:00', '08:15'), b('amb', '08:15', '12:40'), b('pausa', '12:40', '13:00'),
-          b('amb', '13:00', '14:40'), b('cartelle', '14:40', '15:12')
-        ]
-      };
-    }
-    // ambulatorio, variante A (default)
+    // solo ambulatorio (orari indicati dal servizio): ingresso 8:00, pazienti 8:15–14:40/14:45,
+    // pausa 12:20–12:40, uscita 15:12
+    const p = t.ambulatorio || DEFAULT_SETTINGS.templates.ambulatorio;
     return {
-      in: '07:30', out: '14:42', blocks: [
-        b('cartelle', '07:30', '07:45'), b('amb', '07:45', '12:00'), b('pausa', '12:00', '12:20'),
-        b('amb', '12:20', '14:00'), b('cartelle', '14:00', '14:42')
+      in: '08:00', out: '15:12', blocks: [
+        b('cartelle', '08:00', '08:15', { note: 'Preparazione' }),
+        b('amb', '08:15', '12:20'),
+        b('pausa', '12:20', '12:40'),
+        b('amb', '12:40', p.ambEnd),
+        ...(toMin(p.extEnd) > toMin(p.ambEnd) ? [b('est', p.ambEnd, p.extEnd)] : []),
+        b('cartelle', p.extEnd, '15:12')
       ]
     };
   }
-  function buildWeek(profile, settings, variant) {
+  function buildWeek(profile, settings) {
     const w = {};
-    for (let d = 1; d <= 5; d++) w[d] = buildDay(profile, settings, variant);
+    for (let d = 1; d <= 5; d++) w[d] = buildDay(profile, settings);
     w[6] = null; w[7] = null;
     return w;
   }

@@ -76,12 +76,11 @@
     closures.sort((a, b) => a.date < b.date ? -1 : 1);
 
     const therapists = STAFF.map((s, i) => {
-      const variant = s[1] === 'ambulatorio' ? (i === 16 ? 'A' : 'B') : undefined;
       const t = {
         id: 'th' + String(i + 1).padStart(2, '0'), name: s[0], profile: s[1], competenze: s[2], idoneita: s[3],
-        week: E.buildWeek(s[1], settings, variant), exceptions: [],
+        week: E.buildWeek(s[1], settings), exceptions: [],
         maxPatientsDay: s[1] === 'ambulatorio' ? 8 : null,
-        note: s[1] === 'ambulatorio' ? 'Orari di esempio (non ancora forniti): da modificare.' : ''
+        note: s[1] === 'ambulatorio' ? 'Solo ambulatorio: pazienti 8:15–14:40 (fino alle 14:45 con estensione), 6–8 pazienti al giorno.' : ''
       };
       return t;
     });

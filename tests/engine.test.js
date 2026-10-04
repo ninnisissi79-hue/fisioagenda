@@ -59,7 +59,7 @@ test('nessuna sovrapposizione con reparto, pausa o cartelle', () => {
   assert.equal(check(st, 'T7', '2026-10-12', '10:00', 30).code, 'protetto', 'reparto');
   assert.equal(check(st, 'T7', '2026-10-12', '12:00', 30).code, 'protetto', 'pausa 12:00–12:20');
   assert.equal(check(st, 'T7', '2026-10-12', '12:20', 30).status, 'ok', 'ripresa 12:20');
-  assert.equal(check(st, 'TA', '2026-10-12', '14:00', 30).code, 'protetto', 'cartelle a fine turno');
+  assert.equal(check(st, 'TA', '2026-10-12', '12:30', 30).code, 'protetto', 'pausa 12:20–12:40 dei solo ambulatoriali');
   assert.equal(check(st, 'T7', '2026-10-12', '13:55', 30).status, 'fail', 'oltre la fine turno 14:12');
   assert.equal(check(st, 'T7', '2026-10-12', '07:00', 30).code, 'protetto', 'primo paziente alle 7:15');
   assert.equal(check(st, 'T7', '2026-10-12', '07:15', 30).status, 'ok');
@@ -176,9 +176,9 @@ test('avviso sedute da 45: configurabile, non è un divieto e non si applica ai 
   const r45 = check(st, 'T8', '2026-10-12', '08:15', 45);
   assert.equal(r45.status, 'ok'); assert.equal(r45.warnings.length, 1);
   let sa = baseState();
-  sa = single(sa, 'TA', '2026-10-12', '08:00', 45);
-  sa = single(sa, 'TA', '2026-10-12', '08:45', 45);
-  assert.equal(check(sa, 'TA', '2026-10-12', '09:30', 45).warnings.length, 0);
+  sa = single(sa, 'TA', '2026-10-12', '08:15', 45);
+  sa = single(sa, 'TA', '2026-10-12', '09:00', 45);
+  assert.equal(check(sa, 'TA', '2026-10-12', '09:45', 45).warnings.length, 0);
   st.settings.warn45.enabled = false;
   assert.equal(check(st, 'T8', '2026-10-12', '08:15', 45).warnings.length, 0);
 });
@@ -459,7 +459,7 @@ test('sostituzione esplicita: solo colleghi idonei e liberi', () => {
 test('validazione della settimana tipo', () => {
   assert.equal(E.validateDay(E.buildDay('reparto7')).length, 0);
   assert.equal(E.validateDay(E.buildDay('reparto8')).length, 0);
-  assert.equal(E.validateDay(E.buildDay('ambulatorio', null, 'B')).length, 0);
+  assert.equal(E.validateDay(E.buildDay('ambulatorio')).length, 0);
   const bad = { in: '08:00', out: '15:12', blocks: [{ type: 'amb', start: '08:15', end: '09:30' }, { type: 'reparto', start: '09:00', end: '12:00' }] };
   assert.ok(E.validateDay(bad).some(e => /sovrappongono/.test(e)));
 });
@@ -483,4 +483,26 @@ test('se la scheda del collega cambia, gli appuntamenti fuori fascia sono segnal
   assert.equal(conf.length, 2);
   assert.equal(conf[0].issue.code, 'fuori_fascia');
   assert.ok(st.sessions.every(s => s.start === '14:10' && s.status === 'programmata'));
+});
+
+test('colleghi solo ambulatoriali: 8:00–15:12, pazienti 8:15–14:40 (14:45 con estensione), pausa 12:20–12:40', () => {
+  const d = E.buildDay('ambulatorio');
+  assert.equal(d.in + '-' + d.out, '08:00-15:12');
+  let st = baseState();
+  assert.equal(check(st, 'TA', '2026-10-12', '08:00', 30).code, 'protetto', 'nessun paziente prima delle 8:15');
+  assert.equal(check(st, 'TA', '2026-10-12', '08:15', 30).status, 'ok');
+  assert.equal(check(st, 'TA', '2026-10-12', '11:50', 30).status, 'ok', 'termina alle 12:20');
+  assert.equal(check(st, 'TA', '2026-10-12', '12:00', 30).code, 'protetto', 'pausa 12:20–12:40');
+  assert.equal(check(st, 'TA', '2026-10-12', '12:40', 45).status, 'ok');
+  assert.equal(check(st, 'TA', '2026-10-12', '14:10', 30).status, 'ok', 'termina alle 14:40');
+  const e = check(st, 'TA', '2026-10-12', '14:15', 30);
+  assert.equal(e.status, 'ext', '14:15–14:45 solo con estensione da confermare');
+  assert.equal(check(st, 'TA', '2026-10-12', '14:20', 30).status, 'fail', 'oltre le 14:45 sono cartelle');
+  // un paziente alla volta e massimo 8 al giorno
+  st.therapists.find(t => t.id === 'TA').maxPatientsDay = 8;
+  st = single(st, 'TA', '2026-10-12', '08:15');
+  assert.equal(check(st, 'TA', '2026-10-12', '08:30', 30).code, 'occupato');
+  ['08:45', '09:15', '09:45', '10:15', '10:45', '11:15', '11:45'].forEach(t => { st = single(st, 'TA', '2026-10-12', t); });
+  const r = check(st, 'TA', '2026-10-12', '12:40', 30);
+  assert.equal(r.code, 'limite_giorno');
 });

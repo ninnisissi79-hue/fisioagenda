@@ -59,10 +59,10 @@ Altre prove utili:
 
 | Tema | Assunzione nella demo | Dove si modifica |
 |---|---|---|
-| Pazienti contemporanei | **Un paziente alla volta per fisioterapista** (da verificare) | regola del motore |
+| Pazienti contemporanei | **Un paziente alla volta per fisioterapista** (confermato dal servizio) | regola del motore |
 | Gruppo ingresso 7:00 (7:00–14:12) | preparazione 7:00–7:15 · ambulatorio 7:15–9:00 · reparto 9:00–12:00 · pausa 12:00–12:20 · ambulatorio 12:20–**13:20** · *estensione da confermare* 13:20–**13:50** · cartelle fino alle 14:12 | Impostazioni → Schemi di turno; scheda del collega |
 | Gruppo ingresso 8:00 (8:00–15:12) | preparazione 8:00–8:15 · **un solo paziente** 8:15–9:00 · reparto 9:00–12:20 · pausa 12:20–12:40 · ambulatorio 12:40–**14:45** · *estensione* 14:45–**15:00** · cartelle fino alle 15:12 | come sopra |
-| Due colleghi solo ambulatoriali | **orari di esempio** (non forniti): A 7:30–14:42 con pausa 12:00–12:20; B 8:00–15:12 con pausa 12:40–13:00; massimo 8 pazienti al giorno | scheda del collega |
+| Due colleghi solo ambulatoriali | **orari reali**: ingresso 8:00, uscita 15:12; pazienti dalle 8:15 alle **14:40** (fino alle **14:45** come estensione da confermare); pausa 12:20–12:40; sedute da 30 o 45 min; da 6 a 8 pazienti al giorno (limite impostato: 8) | Impostazioni → Schemi di turno; scheda del collega |
 | Estensione | prenotabile solo con **conferma esplicita**; mai oltre fine turno né sopra reparto, pausa o cartelle | scheda / schemi |
 | Riserva provvisoria | per “da valutare” e “prosecuzione prevista” senza rinnovo: **4 settimane** dopo l’ultima seduta, visibile in agenda; poi il posto diventa *probabile*, mai certo | Impostazioni → Parametri; data per singolo percorso |
 | Avviso aggiornamento previsione | quando mancano **3** sedute | Impostazioni → Parametri |
@@ -90,7 +90,7 @@ Altre prove utili:
 
 ## 6. Cosa è stato verificato
 
-- **44 test automatici del motore e dei dati demo** (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
+- **45 test automatici del motore e dei dati demo** (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
 - **Prova completa dell’interfaccia nel browser** (`npm run test:e2e`, Chromium): nuovo paziente → ricerca → calendario del ciclo → conferma → agenda con evidenza → **ricaricamento della pagina con dati conservati** → recupero con conteggio invariato → malattia con rientro non noto → “Trova posto” dalla lista d’attesa → controllo del layout tablet (1024×768) → ripristino degli esempi con conferma. La stessa prova è stata eseguita sia su `index.html` sia sul file unico `dist/FisioAgenda.html`.
 
 ## 7. Cosa manca (possibili passi successivi)
@@ -100,7 +100,7 @@ Altre prove utili:
 - Ricerca di cicli con orari diversi nei vari giorni (per esempio lunedì 8:15 e mercoledì 12:40) o con cambio di collega a metà ciclo: oggi la ricerca ordinaria cerca lo stesso orario e lo stesso collega, mentre recuperi e sostituzioni sono espliciti e confermati.
 - Opzione per allungare automaticamente un ciclo saltando le ferie note del collega.
 - Stampa ed esportazione dell’agenda (PDF/Excel) e notifiche ai colleghi.
-- Verifica dei valori reali: orari dei colleghi solo ambulatoriali, limiti dell’ambulatorio pomeridiano, tempo per le cartelle, regola “un paziente alla volta”, soglia delle sedute da 45, durata della riserva provvisoria, festività locali.
+- Verifica dei valori reali ancora da confermare: limiti dell’ambulatorio pomeridiano dei gruppi con reparto, tempo per le cartelle, soglia delle sedute da 45, durata della riserva provvisoria, festività locali.
 
 ## 8. Per chi sviluppa
 
