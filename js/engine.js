@@ -127,7 +127,74 @@
     rinuncia: 'Rinuncia'
   };
 
+  /* ------------------------------------------------------------------ */
+  /* Richieste: classe di priorità prescritta, termini, percorso Mano     */
+  /* ------------------------------------------------------------------ */
+  /** Classe riportata sulla prescrizione: dato originale, mai modificato dal programma. */
+  const PRIORITY_CLASSES = { U: 'U', B: 'B', D: 'D', P: 'P', NI: 'Non indicata' };
+  const PRIORITY_LONG = { U: 'U – urgente', B: 'B – breve', D: 'D – differibile', P: 'P – programmata', NI: 'Non indicata sulla prescrizione' };
+  const RULE_VALIDATION = {
+    regionale: 'Riferimento regionale informativo',
+    demo: 'Configurazione demo da validare dal servizio',
+    validata: 'Validata dal servizio'
+  };
+  /** Eventi da cui può decorrere un termine (nessuno è presunto: lo indica la regola). */
+  const TERM_EVENTS = {
+    prescrizione: 'data della prescrizione',
+    richiesta: 'data della richiesta di prenotazione / presa in carico',
+    inserimento_lista: 'data di inserimento nella lista del servizio'
+  };
+  const EVENT_FIELDS = { prescrizione: ['prescriptionDate', 'prescriptionTime'], richiesta: ['requestDate', 'requestTime'], inserimento_lista: ['listDate', 'listTime'] };
+  const START_TERM_SOURCES = { prescrittore: 'Indicazione del prescrittore', protocollo: 'Protocollo del servizio', demo: 'Obiettivo organizzativo della demo' };
+  const LIGURIA_URL = 'https://www.regione.liguria.it/homepage-salute/cosa-cerchi/liste-attesa.html';
+  /** Voci organizzative configurabili: coprono i casi della demo, non sono un elenco ufficiale. */
+  const DEFAULT_REQUEST_OPTIONS = {
+    accessTypes: [{ id: 'primo', name: 'Primo accesso' }, { id: 'controllo', name: 'Controllo' }, { id: 'prosecuzione', name: 'Prosecuzione / rinnovo' }],
+    services: [{ id: 'visita_fisiatrica', name: 'Visita fisiatrica' }, { id: 'valutazione_fisio', name: 'Valutazione fisioterapica' },
+      { id: 'ciclo', name: 'Ciclo di trattamento' }, { id: 'accertamento', name: 'Accertamento diagnostico (esempio)' }, { id: 'altro', name: 'Altro' }],
+    origins: [{ id: 'mmg', name: 'MMG / PLS' }, { id: 'specialista', name: 'Specialista' }, { id: 'reparto', name: 'Reparto / dimissione ospedaliera' },
+      { id: 'chir_mano', name: 'Chirurgia della mano' }, { id: 'altro', name: 'Altro' }]
+  };
+  const REGIONAL_SOURCE = 'Regione Liguria, pagina "Liste d\'attesa" (riferimento informativo)';
+  const REGIONAL_NOTE = 'Durata riportata dalla pagina regionale. L\'evento di decorrenza è impostato nella demo e va verificato con il servizio.';
+  const DEMO_SOURCE = 'Configurazione demo da validare dal servizio';
+  function rule(id, priorityClass, service, accessType, amount, unit, from, validation, source, note) {
+    return { id, priorityClass, service, accessType, amount, unit, from, validation, source, note: note || '', active: true };
+  }
+  const DEFAULT_DEADLINE_RULES = [
+    rule('reg-u-vis', 'U', 'visita_fisiatrica', 'primo', 72, 'ore', 'richiesta', 'regionale', REGIONAL_SOURCE, REGIONAL_NOTE),
+    rule('reg-b-vis', 'B', 'visita_fisiatrica', 'primo', 10, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, REGIONAL_NOTE),
+    rule('reg-d-vis', 'D', 'visita_fisiatrica', 'primo', 30, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, 'D: 30 giorni per le visite. ' + REGIONAL_NOTE),
+    rule('reg-p-vis', 'P', 'visita_fisiatrica', 'primo', 120, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, 'P: di norma entro 120 giorni, oppure oltre secondo indicazione del prescrittore. ' + REGIONAL_NOTE),
+    rule('reg-u-acc', 'U', 'accertamento', 'primo', 72, 'ore', 'richiesta', 'regionale', REGIONAL_SOURCE, REGIONAL_NOTE),
+    rule('reg-b-acc', 'B', 'accertamento', 'primo', 10, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, REGIONAL_NOTE),
+    rule('reg-d-acc', 'D', 'accertamento', 'primo', 60, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, 'D: 60 giorni per gli accertamenti diagnostici. ' + REGIONAL_NOTE),
+    rule('reg-p-acc', 'P', 'accertamento', 'primo', 120, 'giorni', 'richiesta', 'regionale', REGIONAL_SOURCE, 'P: di norma entro 120 giorni, oppure oltre secondo indicazione del prescrittore. ' + REGIONAL_NOTE),
+    // regole fittizie per mostrare il funzionamento sui cicli: NON sono termini ufficiali
+    rule('demo-u-ciclo', 'U', 'ciclo', 'primo', 72, 'ore', 'richiesta', 'demo', DEMO_SOURCE, 'Esempio fittizio per la demo: il termine dei cicli non deriva automaticamente da quello delle visite.'),
+    rule('demo-b-ciclo', 'B', 'ciclo', 'primo', 10, 'giorni', 'inserimento_lista', 'demo', DEMO_SOURCE, 'Esempio fittizio per la demo, con decorrenza diversa (inserimento in lista) per mostrare che l\'evento è configurabile.')
+  ];
+  /** Sottocategorie organizzative di esempio del percorso Mano: non sono protocolli terapeutici. */
+  const HAND_SUBCATEGORIES = [
+    { id: 'postop', name: 'Postoperatorio della mano' }, { id: 'tendini', name: 'Lesioni tendinee' }, { id: 'nervi', name: 'Lesioni nervose' },
+    { id: 'fratture', name: 'Fratture e traumi mano/polso' }, { id: 'rigidita', name: 'Rigidità delle dita' }, { id: 'artrosi', name: 'Condizioni degenerative / artrosi' },
+    { id: 'ortesi', name: 'Valutazione e confezionamento ortesi' }, { id: 'altro', name: 'Altro' }
+  ];
+  const DEFAULT_HAND_SKILLS = [
+    { id: 'ortesi', name: 'Ortesi (valutazione e confezionamento)' },
+    { id: 'postop', name: 'Postoperatorio della mano' },
+    { id: 'tendini', name: 'Lesioni tendinee e nervose' }
+  ];
+  const HAND_SIDES = { destro: 'Destro', sinistro: 'Sinistro', bilaterale: 'Bilaterale' };
+
   const DEFAULT_SETTINGS = {
+    requestOptions: DEFAULT_REQUEST_OPTIONS,
+    deadlineRules: DEFAULT_DEADLINE_RULES,
+    /** Gestione della priorità non indicata: 'P' (riferimento regionale) oppure '' (nessuna regola). Il dato originale resta "Non indicata". */
+    unspecifiedAs: 'P',
+    /** Soglie per "vicino alla scadenza" */
+    deadlineWarn: { hours: 24, days: 3 },
+    handSkills: DEFAULT_HAND_SKILLS,
     defaultDuration: 30,
     sessionPresets: [5, 10, 20, 30],
     searchHorizonWeeks: 16,
@@ -552,6 +619,10 @@
     for (const th of state.therapists) {
       const kind = eligibility(th, req.categoryId);
       if (!kind) { excluded.push({ therapist: th, reason: 'Non indicato come idoneo per ' + (cat ? cat.name : 'questo percorso') }); continue; }
+      if (req.requiredSkill && !(th.handSkills || []).includes(req.requiredSkill)) {
+        excluded.push({ therapist: th, kind, reason: 'Idoneo per il percorso, ma senza la competenza richiesta: ' + optName(S.handSkills, req.requiredSkill) });
+        continue;
+      }
       // Rientro non noto: le disponibilità successive non possono essere certe
       const openAbs = (ctx.absencesByTh.get(th.id) || []).find(a => absenceUnknownReturn(a) && a.startDate <= horizonEnd);
       const cycleSpanDays = Math.ceil(req.sessions / Math.max(1, req.weekdays.length)) * 7 + 21;
@@ -662,6 +733,7 @@
     const th = ctx.therapists.get(option.therapistId);
     if (!th) return { ok: false, reason: 'Collega non trovato' };
     if (!eligibility(th, req.categoryId)) return { ok: false, reason: 'Il collega non risulta più idoneo per questo percorso' };
+    if (req.requiredSkill && !(th.handSkills || []).includes(req.requiredSkill)) return { ok: false, reason: 'Il collega non ha la competenza richiesta' };
     const { dates, skipped } = cycleDates(ctx, option.startDate, req.weekdays, req.sessions);
     const ev = evaluateCycle(ctx, th, dates, option.start, req.duration, { full: true });
     return { ok: ev.status === 'ok' || ev.status === 'ext', ev, dates, skipped };
@@ -861,6 +933,226 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Termini di inizio: calcolo e confronto                               */
+  /* ------------------------------------------------------------------ */
+  /** Data e ora correnti nel fuso Europe/Rome. */
+  function nowRome(now) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(now || new Date());
+    const get = t => parts.find(p => p.type === t).value;
+    return { date: get('year') + '-' + get('month') + '-' + get('day'), min: Number(get('hour')) * 60 + Number(get('minute')) };
+  }
+  /** Minuti di calendario sull'orario locale (nessuna conversione di fuso: 72 ore = 72 ore di orologio). */
+  function dtMin(date, min) { return Math.round(parseDate(date) / 60000) + (min || 0); }
+  function fromDtMin(m) { const d = Math.floor(m / 1440); return { date: fmtDate(d * DAY_MS), min: m - d * 1440 }; }
+  function fmtDuration(min) {
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h < 48) return h + (h === 1 ? ' ora' : ' ore') + (m ? ' e ' + m + ' min' : '');
+    const d = Math.floor(h / 24), hh = h % 24;
+    return d + ' giorni' + (hh ? ' e ' + hh + (hh === 1 ? ' ora' : ' ore') : '');
+  }
+  function fmtDue(due) { return due ? fmtIt(due.date) + (due.min != null ? ' ore ' + fromMin(due.min) : '') : '—'; }
+  function emptyRequest(extra) {
+    return Object.assign({
+      priorityClass: '', prescriptionDate: '', prescriptionTime: '', requestDate: '', requestTime: '', listDate: '', listTime: '',
+      accessType: '', service: '', origin: '', prescriberIndication: '', diagnosis: '',
+      startTerm: { date: '', time: '', notBefore: '', source: '', note: '' }
+    }, extra || {});
+  }
+  function emptyHand(extra) {
+    return Object.assign({ subcategory: '', side: '', eventType: '', eventDate: '', sendingFacility: '', prescriberNotes: '', startWindow: '', requiredSkill: '' }, extra || {});
+  }
+  function optName(list, id) { const x = (list || []).find(o => o.id === id); return x ? x.name : (id ? id : ''); }
+
+  /** Prima regola attiva che corrisponde a classe, prestazione e tipo di accesso (vuoto = qualsiasi). */
+  function matchRule(settings, cls, service, accessType) {
+    return (settings.deadlineRules || []).find(r => r.active !== false && r.priorityClass === cls &&
+      (!r.service || r.service === service) && (!r.accessType || r.accessType === accessType)) || null;
+  }
+  function dueKey(due) { return due.min == null ? dtMin(due.date, 1440) - 1 : dtMin(due.date, due.min); }
+
+  /**
+   * Termine per l'inizio della prestazione o del trattamento.
+   * Non inventa nulla: se mancano la regola applicabile o i dati di decorrenza lo stato è "da_verificare".
+   * Il valore prescritto (original) non viene mai modificato; l'eventuale regola di gestione è separata (effective).
+   */
+  function computeDeadline(state, r, opts) {
+    opts = opts || {};
+    const S = Object.assign({}, DEFAULT_SETTINGS, (state && state.settings) || {});
+    r = r || {};
+    const st = r.startTerm || {};
+    const out = {
+      original: r.priorityClass || '', effective: null, classNote: '', kind: null, rule: null, status: 'da_verificare',
+      missing: [], reasons: [], due: null, from: null, notBefore: st.notBefore || null, closureOnDue: null,
+      conflictNotBefore: false, validation: null, originLabel: '', official: false
+    };
+    if (out.original === 'NI') {
+      if (S.unspecifiedAs) { out.effective = S.unspecifiedAs; out.classNote = 'Non indicata sulla prescrizione: gestita come ' + S.unspecifiedAs + ' (regola di gestione, il dato originale resta "Non indicata")'; }
+      else out.classNote = 'Non indicata sulla prescrizione: nessuna regola di gestione impostata';
+    } else if (PRIORITY_CLASSES[out.original]) out.effective = out.original;
+    if (st.date) {
+      // indicazione esplicita per questo paziente: prevale sulle regole generali
+      out.kind = 'indicazione';
+      out.due = { date: st.date, min: st.time ? toMin(st.time) : null };
+      out.validation = st.source || '';
+      out.originLabel = 'Termine per iniziare il trattamento: ' + (START_TERM_SOURCES[st.source] || 'origine non indicata');
+      out.official = st.source === 'prescrittore' || st.source === 'protocollo';
+      if (!st.source) out.missing.push('origine dell\'indicazione del termine');
+      out.status = 'ok';
+    } else {
+      if (!out.original) out.missing.push('classe di priorità riportata sulla prescrizione');
+      if (!r.service) out.missing.push('prestazione richiesta');
+      if (!r.accessType) out.missing.push('tipo di accesso');
+      if (out.original && !out.effective) out.reasons.push(out.classNote);
+      if (out.effective && r.service && r.accessType) {
+        const rl = matchRule(S, out.effective, r.service, r.accessType);
+        if (!rl) {
+          out.reasons.push('Nessuna regola configurata per classe ' + out.effective + (out.original === 'NI' ? ' (Non indicata, gestita come ' + out.effective + ')' : '') + ', ' + (optName(S.requestOptions.services, r.service) || 'prestazione') + ', ' + (optName(S.requestOptions.accessTypes, r.accessType) || 'accesso').toLowerCase());
+        } else {
+          out.kind = 'regola'; out.rule = rl; out.validation = rl.validation;
+          out.official = rl.validation === 'validata';
+          out.originLabel = (RULE_VALIDATION[rl.validation] || rl.validation) + ' · ' + (rl.source || '');
+          const [fd, ft] = EVENT_FIELDS[rl.from] || [];
+          const date = fd ? r[fd] : '', time = ft ? r[ft] : '';
+          if (!date) out.missing.push(TERM_EVENTS[rl.from] || 'evento di decorrenza');
+          else if (rl.unit === 'ore' && !time) out.missing.push('ora della ' + (TERM_EVENTS[rl.from] || 'decorrenza').replace(/^data della /, '') + ' (il termine di ' + rl.amount + ' ore si calcola in ore, non in giorni)');
+          else {
+            out.from = { event: rl.from, date, min: time ? toMin(time) : null };
+            if (rl.unit === 'ore') out.due = fromDtMin(dtMin(date, toMin(time)) + rl.amount * 60);
+            else out.due = { date: addDays(date, rl.amount), min: null };
+            out.status = 'ok';
+          }
+        }
+      }
+    }
+    if (out.due) {
+      const cl = ((state && state.closures) || []).find(c => c.date === out.due.date);
+      if (cl) out.closureOnDue = cl; // segnalata, ma il termine NON viene spostato
+      if (out.notBefore && out.notBefore > out.due.date) out.conflictNotBefore = true;
+    }
+    return out;
+  }
+
+  /** Stato rispetto a "adesso": entro termine, vicino alla scadenza, scaduto, da verificare. */
+  function deadlineStatus(dl, now, settings) {
+    const W = Object.assign({}, DEFAULT_SETTINGS.deadlineWarn, (settings && settings.deadlineWarn) || {});
+    if (!dl || dl.status !== 'ok') {
+      const why = dl ? (dl.missing.length ? 'manca: ' + dl.missing.join(', ') : dl.reasons.join('; ')) : '';
+      return { code: 'da_verificare', label: 'Da verificare', text: 'Scadenza da verificare' + (why ? ' (' + why + ')' : '') };
+    }
+    now = now || nowRome();
+    if (dl.due.min != null) {
+      const left = dueKey(dl.due) - dtMin(now.date, now.min);
+      if (left < 0) return { code: 'scaduto', label: 'Scaduto', text: 'Scaduto da ' + fmtDuration(-left), minutes: left };
+      if (left <= W.hours * 60) return { code: 'vicino', label: 'Vicino alla scadenza', text: 'Restano ' + fmtDuration(left), minutes: left };
+      return { code: 'entro', label: 'Entro il termine', text: 'Restano ' + fmtDuration(left), minutes: left };
+    }
+    const d = diffDays(now.date, dl.due.date);
+    if (d < 0) return { code: 'scaduto', label: 'Scaduto', text: 'Scaduto da ' + (-d) + (d === -1 ? ' giorno' : ' giorni'), days: d };
+    const txt = d === 0 ? 'Scade oggi' : 'Restano ' + d + (d === 1 ? ' giorno' : ' giorni');
+    if (d <= W.days) return { code: 'vicino', label: 'Vicino alla scadenza', text: txt, days: d };
+    return { code: 'entro', label: 'Entro il termine', text: txt, days: d };
+  }
+
+  /** Confronta una data/ora di inizio (prima seduta) con il termine di inizio. */
+  function compareStart(dl, date, min) {
+    if (!dl || dl.status !== 'ok' || !date) return { code: 'nd', text: 'Termine da verificare' };
+    if (dl.notBefore && date < dl.notBefore) return { code: 'prima_minimo', text: 'Prima della data minima di inizio (' + fmtIt(dl.notBefore) + ')' };
+    const s = dtMin(date, min || 0), d = dueKey(dl.due);
+    if (s <= d) return { code: 'entro', text: 'Entro il termine (' + fmtDue(dl.due) + ')' };
+    const late = s - d;
+    if (dl.due.min != null) {
+      const hours = Math.ceil(late / 60);
+      return { code: 'oltre', delayMin: late, delayDays: Math.ceil(late / 1440), text: 'Oltre il termine: ritardo di ' + fmtDuration(hours * 60) };
+    }
+    const days = diffDays(dl.due.date, date);
+    return { code: 'oltre', delayMin: late, delayDays: days, text: 'Oltre il termine: ritardo di ' + days + (days === 1 ? ' giorno' : ' giorni') };
+  }
+
+  /**
+   * Lettura dei risultati di una ricerca rispetto al termine di inizio.
+   * Solo i posti prenotabili (confermati) contano come richiesta soddisfatta; i probabili restano separati.
+   * Non modifica nulla: priorità, termini e appuntamenti altrui restano invariati.
+   */
+  function deadlineAnalysis(res, dl) {
+    const out = { applicable: !!(dl && dl.status === 'ok'), within: [], probWithin: [], alternatives: [], noneWithin: false, specialistLate: false, firstSpecific: null, bestOtherWithin: null };
+    if (!out.applicable) return out;
+    const all = [];
+    res.groups.forEach(g => g.options.forEach(o => all.push({ g, o, cmp: compareStart(dl, o.startDate, o.start) })));
+    const byStart = (a, c) => (a.o.startDate < c.o.startDate ? -1 : a.o.startDate > c.o.startDate ? 1 : a.o.start - c.o.start);
+    const confirmed = all.filter(x => x.o.bookable).sort(byStart);
+    out.within = confirmed.filter(x => x.cmp.code === 'entro');
+    out.probWithin = all.filter(x => !x.o.bookable && x.cmp.code === 'entro').sort(byStart);
+    out.noneWithin = out.within.length === 0;
+    const seen = new Set();
+    out.alternatives = confirmed.filter(x => x.cmp.code === 'oltre').filter(x => !seen.has(x.g.therapist.id) && seen.add(x.g.therapist.id)).slice(0, 3);
+    out.firstSpecific = confirmed.find(x => x.g.kind === 'specifica') || null;
+    const specWithin = out.within.some(x => x.g.kind === 'specifica');
+    out.bestOtherWithin = out.within.find(x => x.g.kind !== 'specifica') || null;
+    out.specialistLate = !specWithin && !!out.bestOtherWithin;
+    return out;
+  }
+
+  /** Termine di un percorso già assegnato, confrontato con la sua prima seduta. */
+  function pathDeadline(state, pathId, opts) {
+    const p = state.paths.find(x => x.id === pathId);
+    if (!p) return null;
+    const dl = computeDeadline(state, p.request, opts);
+    const first = state.sessions.filter(s => s.pathId === pathId && s.status !== 'annullata')
+      .sort((a, c) => a.date < c.date ? -1 : a.date > c.date ? 1 : toMin(a.start) - toMin(c.start))[0] || null;
+    const occ = state.sessions.filter(s => s.pathId === pathId && OCCUPYING.has(s.status)).sort((a, c) => a.date < c.date ? -1 : 1);
+    return { dl, first, cmp: first ? compareStart(dl, first.date, toMin(first.start)) : { code: 'nd', text: 'Nessuna seduta' }, cycleEnd: occ.length ? occ[occ.length - 1].date : null };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Aggiornamento dei dati salvati con versioni precedenti               */
+  /* ------------------------------------------------------------------ */
+  /**
+   * Porta uno stato salvato alla versione corrente SENZA perdere dati:
+   * aggiunge solo i campi nuovi; non attribuisce classi di priorità; riusa una categoria "Mano" esistente.
+   * Restituisce l'elenco delle modifiche fatte (vuoto se già aggiornato). Idempotente.
+   */
+  function migrateState(st) {
+    const changes = [];
+    st.settings = st.settings || {};
+    const S = st.settings;
+    if (!S.requestOptions) { S.requestOptions = clone(DEFAULT_REQUEST_OPTIONS); changes.push('Aggiunte le voci organizzative della richiesta (tipo di accesso, prestazione, provenienza)'); }
+    else ['accessTypes', 'services', 'origins'].forEach(k => { if (!Array.isArray(S.requestOptions[k])) S.requestOptions[k] = clone(DEFAULT_REQUEST_OPTIONS[k]); });
+    if (!Array.isArray(S.deadlineRules)) { S.deadlineRules = clone(DEFAULT_DEADLINE_RULES); changes.push('Aggiunte le regole dei termini (riferimenti regionali e configurazione demo da validare)'); }
+    if (S.unspecifiedAs === undefined) S.unspecifiedAs = DEFAULT_SETTINGS.unspecifiedAs;
+    if (!S.deadlineWarn) S.deadlineWarn = clone(DEFAULT_SETTINGS.deadlineWarn);
+    if (!Array.isArray(S.handSkills)) S.handSkills = clone(DEFAULT_HAND_SKILLS);
+    st.categories = st.categories || [];
+    let hand = st.categories.find(c => c.hand);
+    if (!hand) {
+      hand = st.categories.find(c => /(^|[^a-zà-ù])mano([^a-zà-ù]|$)/i.test(c.name));
+      if (hand) {
+        const old = hand.name;
+        hand.hand = true;
+        if (!/chirurgia della mano/i.test(hand.name)) hand.name = 'Mano / Chirurgia della mano';
+        changes.push('Categoria esistente "' + old + '" riusata come percorso Mano / Chirurgia della mano (stesso codice, assegnazioni conservate)');
+      } else {
+        let id = 'mano', k = 1;
+        while (st.categories.some(c => c.id === id)) id = 'mano' + (++k);
+        hand = { id, name: 'Mano / Chirurgia della mano', hand: true };
+        st.categories.push(hand);
+        changes.push('Aggiunto il percorso Mano / Chirurgia della mano');
+      }
+    }
+    if (!Array.isArray(hand.subcategories)) hand.subcategories = clone(HAND_SUBCATEGORIES);
+    (st.therapists || []).forEach(t => { if (!Array.isArray(t.handSkills)) t.handSkills = []; });
+    let n = 0;
+    (st.waitlist || []).forEach(w => {
+      if (!w.request) { w.request = emptyRequest({ listDate: w.insertedAt || '' }); w.request.migrated = true; n++; }
+      else if (!w.request.startTerm) w.request.startTerm = emptyRequest().startTerm;
+    });
+    if (n) changes.push(n + ' pazienti in lista: aggiunti i campi della richiesta, da completare (nessuna classe di priorità attribuita automaticamente)');
+    if ((st.version || 1) < 2) st.version = 2;
+    return changes;
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Operazioni che modificano lo stato                                   */
   /* (lavorano su una copia e restituiscono il nuovo stato)               */
   /* ------------------------------------------------------------------ */
@@ -880,7 +1172,7 @@
    */
   function bookCycle(state, a, opts) {
     const st = clone(state);
-    const req = { categoryId: a.categoryId, duration: a.duration, weekdays: a.weekdays, sessions: a.sessions };
+    const req = { categoryId: a.categoryId, duration: a.duration, weekdays: a.weekdays, sessions: a.sessions, requiredSkill: (a.hand && a.hand.requiredSkill) || '' };
     const chk = recheckOption(st, { therapistId: a.therapistId, startDate: a.startDate, start: toMin(a.startTime) }, req, opts);
     if (!chk.ok) {
       if (chk.ev && chk.ev.status === 'prob') throw new EngineError('Posto solo probabile: non prenotabile in modo definitivo. Registra eventualmente un preaccordo.', chk);
@@ -894,7 +1186,12 @@
       st.patients.push({ id: patientId, name: a.patientName.trim(), note: a.patientNote || '', createdAt: (opts && opts.today) || todayRome() });
     }
     const pathId = uid('pa');
+    const wl0 = a.waitlistId ? st.waitlist.find(x => x.id === a.waitlistId) : null;
+    // dati della richiesta e del percorso Mano: copiati così come sono, senza modificare la classe prescritta
+    const request = a.request ? clone(a.request) : wl0 && wl0.request ? clone(wl0.request) : undefined;
+    const hand = a.hand ? clone(a.hand) : wl0 && wl0.hand ? clone(wl0.hand) : undefined;
     st.paths.push({
+      request, hand,
       id: pathId, patientId, categoryId: a.categoryId, therapistId: a.therapistId, duration: a.duration,
       weekdays: [...a.weekdays].sort(), startTime: fromMin(toMin(a.startTime)),
       forecast: { state: 'da_valutare', updatedAt: (opts && opts.today) || todayRome() },
@@ -1084,6 +1381,11 @@
     weekdaysLabel, easter, italianHolidays, WEEKDAY_SHORT, WEEKDAY_LONG, overlaps,
     // dominio
     BLOCK_TYPES, PROFILES, SESSION_STATUS, OCCUPYING, COUNTED, FORECAST, CLOSED_FORECASTS, WAITLIST_STATUS, DEFAULT_SETTINGS,
+    PRIORITY_CLASSES, PRIORITY_LONG, RULE_VALIDATION, TERM_EVENTS, EVENT_FIELDS, START_TERM_SOURCES, LIGURIA_URL, DEFAULT_REQUEST_OPTIONS,
+    DEFAULT_DEADLINE_RULES, HAND_SUBCATEGORIES, DEFAULT_HAND_SKILLS, HAND_SIDES,
+    // richieste e termini
+    nowRome, dtMin, fromDtMin, fmtDuration, fmtDue, emptyRequest, emptyHand, optName, matchRule, computeDeadline, deadlineStatus,
+    compareStart, deadlineAnalysis, pathDeadline, migrateState,
     buildDay, buildWeek, validateDay,
     // calcolo
     makeContext, getDay, occupancy, virtualOccupancy, reserveEnd, checkSlot, cycleDates, nextPatternDate, evaluateCycle,

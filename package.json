@@ -5,7 +5,7 @@
   "description": "FisioAgenda — demo di gestionale per l'ambulatorio di fisioterapia (dati fittizi)",
   "scripts": {
     "start": "node tools/serve.js",
-    "test": "node --test tests/engine.test.js tests/demo.test.js",
+    "test": "node --test tests/engine.test.js tests/demo.test.js tests/priority.test.js",
     "test:e2e": "node tests/e2e.js",
     "build": "node tools/build.js",
     "build:netlify": "node tools/build-netlify.js"

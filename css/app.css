@@ -270,3 +270,34 @@ table.t tr.sub:hover td { background: #f2f6fa; }
   .sidebar, .topbar, .btn, .agenda-tools { display: none !important; }
   .app { display: block; }
 }
+
+/* ---------- richiesta, priorità e termini ---------- */
+.sf-req { grid-column: 1 / -1; }
+.req-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; background: #fbfcfe; }
+.req-box > summary { cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
+.req-box[open] > summary { margin-bottom: 10px; }
+.term-box { border: 1px dashed var(--line-2); border-radius: 8px; padding: 8px 12px 10px; margin: 12px 0 0; min-width: 0; }
+.term-box legend { font-weight: 600; font-size: .9rem; padding: 0 4px; }
+.hand-box { border-color: #b5d0ee; background: #f7fbff; }
+.dt-pair { display: flex; gap: 6px; }
+.dt-pair .input { min-width: 0; }
+.dt-pair input[type=time] { width: 110px; flex: none; }
+.dl-preview { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #fff; border: 1px solid var(--line); }
+.dl-box { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; background: #fbfcfe; }
+.dl-alert { border-width: 2px; font-size: .95rem; }
+.filter-rows { display: flex; gap: 10px 18px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+.filter-rows .seg span { padding: 6px 10px; min-height: 34px; }
+.filter-rows small { font-weight: 400; opacity: .8; }
+table.t tr.due-scaduto > td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+table.t tr.due-vicino > td:first-child { box-shadow: inset 4px 0 0 var(--prob-line); }
+table.t.rules .input { min-height: 34px; padding: 4px 6px; font-size: .86rem; }
+.appt.pw { box-shadow: 0 0 0 2px var(--primary); }
+.appt.dim { opacity: .45; }
+@media (max-width: 1100px) { .dl-box { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .dl-box { grid-template-columns: 1fr; } .dt-pair { flex-wrap: wrap; } }
+table.t.rules td select.input { min-width: 120px; }
+table.t.rules td:nth-child(2) select.input, table.t.rules td:nth-child(6) select.input { min-width: 72px; }
+table.t.rules td input[data-field=source] { min-width: 220px; }
+table.t.wl-table td:nth-child(3) { min-width: 150px; }
+table.t.wl-table td:nth-child(4) { min-width: 210px; }
+table.t.wl-table td:nth-child(1) { min-width: 120px; }

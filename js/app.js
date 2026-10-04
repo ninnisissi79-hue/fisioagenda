@@ -58,6 +58,108 @@
     in_attesa: () => tag('prob', 'In attesa'), contattato: () => tag('info', 'Contattato'),
     proposta: () => tag('ext', 'Proposta in valutazione'), assegnato: () => tag('ok', '✓ Assegnato'), rinuncia: () => tag('plain', 'Rinuncia')
   };
+  /* ---- richiesta, termini e percorso Mano ---- */
+  const RO = () => state.settings.requestOptions;
+  const handCat = () => state.categories.find(c => c.hand) || null;
+  const isHand = id => { const c = state.categories.find(x => x.id === id); return !!(c && c.hand); };
+  const nowR = () => E.nowRome();
+  const optName = (list, id) => E.optName(list, id);
+  const subcatName = id => { const h = handCat(); return h ? optName(h.subcategories, id) : id; };
+  const skillName = id => optName(state.settings.handSkills, id);
+  function classTag(cls) {
+    if (!cls) return tag('plain', '… Da inserire', 'Classe non ancora registrata');
+    if (cls === 'NI') return tag('plain', '○ Non indicata', 'Priorità non indicata sulla prescrizione');
+    const kind = { U: 'bad', B: 'prob', D: 'info', P: 'plain' }[cls];
+    return tag(kind, 'Classe ' + cls, E.PRIORITY_LONG[cls]);
+  }
+  function dlStatusTag(st) {
+    return ({
+      entro: () => tag('ok', '✓ Entro il termine'), vicino: () => tag('prob', '◔ Vicino alla scadenza'),
+      scaduto: () => tag('bad', '⚠ Scaduto'), da_verificare: () => tag('plain', '? Scadenza da verificare')
+    })[st.code]();
+  }
+  function validationTag(dl) {
+    if (!dl || !dl.kind) return '';
+    const v = dl.validation;
+    if (v === 'regionale') return tag('info', 'Riferimento regionale (informativo)');
+    if (v === 'demo') return tag('ext', '◇ Configurazione demo da validare dal servizio');
+    if (v === 'validata') return tag('ok', '✓ Regola validata dal servizio');
+    if (v === 'prescrittore') return tag('info', 'Indicazione del prescrittore');
+    if (v === 'protocollo') return tag('info', 'Protocollo del servizio');
+    return tag('plain', 'Origine non indicata');
+  }
+  /** Descrizione breve del termine applicato e della sua origine. */
+  function termHtml(dl, opts) {
+    opts = opts || {};
+    if (!dl || dl.status !== 'ok') {
+      const why = dl ? dl.missing.map(x => 'manca: ' + x).concat(dl.reasons) : [];
+      return '<b>Scadenza da verificare</b>' + (why.length ? '<div class="small muted">' + why.map(esc).join('<br>') + '</div>' : '') + (dl && dl.rule ? '<div class="small">' + validationTag(dl) + '</div>' : '');
+    }
+    let h = '<b>' + E.fmtDue(dl.due) + '</b>';
+    if (dl.kind === 'regola') h += '<div class="small">' + dl.rule.amount + ' ' + dl.rule.unit + ' dalla ' + esc(E.TERM_EVENTS[dl.rule.from]) + ' (' + E.fmtDue({ date: dl.from.date, min: dl.from.min }) + ')</div>';
+    else h += '<div class="small">Termine per iniziare il trattamento' + (dl.due.min == null ? ' (entro la giornata)' : '') + '</div>';
+    h += '<div class="small" style="margin-top:2px">' + validationTag(dl) + '</div>';
+    if (dl.notBefore) h += '<div class="small">Non prima del ' + E.fmtIt(dl.notBefore) + '</div>';
+    if (dl.conflictNotBefore) h += '<div class="small">' + TAG.bad('Conflitto: data minima successiva alla scadenza') + '</div>';
+    if (dl.closureOnDue && !opts.short) h += '<div class="small muted">Il termine cade in un giorno di chiusura (' + esc(dl.closureOnDue.label) + '): non viene spostato.</div>';
+    return h;
+  }
+  /** Compatibilità della prima seduta con il termine di inizio. */
+  function cmpTag(cmp, bookable) {
+    if (!cmp || cmp.code === 'nd') return '<span class="muted small">termine da verificare</span>';
+    if (cmp.code === 'prima_minimo') return TAG.bad(esc(cmp.text));
+    if (!bookable) return cmp.code === 'entro' ? tag('prob', '? Entro il termine solo se confermato', 'Posto probabile: non conta come prenotazione') : TAG.bad('Oltre il termine · ' + esc(cmp.text.replace(/^Oltre il termine: /, '')));
+    return cmp.code === 'entro' ? TAG.ok('Entro il termine') : TAG.bad(esc(cmp.text.replace(/^Oltre il termine: r/, 'R')));
+  }
+  function requestFieldsHtml(prefix, r, rr) {
+    const b = (k, extra) => 'data-bind="' + prefix + '.' + k + '"' + (rr ? ' data-rerender="1"' : '') + (extra || '');
+    const sel = (k, list, v, empty) => '<select class="input" ' + b(k) + '>' + optionsHtml([['', empty || '— da indicare —']].concat(list), v) + '</select>';
+    const o = RO();
+    const st = r.startTerm || {};
+    const dateTime = (label, dk, tk, help) => '<div class="field"><label class="lbl">' + label + '</label><div class="dt-pair"><input type="date" class="input" ' + b(dk) + ' value="' + esc(r[dk]) + '"><input type="time" class="input" ' + b(tk) + ' value="' + esc(r[tk]) + '" aria-label="Ora (facoltativa)"></div>' + (help ? '<div class="field-help">' + help + '</div>' : '') + '</div>';
+    return '<div class="grid g4">' +
+      '<div class="field"><label class="lbl">Classe sulla prescrizione</label>' + sel('priorityClass', Object.keys(E.PRIORITY_CLASSES).map(k => [k, E.PRIORITY_LONG[k]]), r.priorityClass, '— da inserire —') + '<div class="field-help">Dato originale: non viene mai modificato dal programma.</div></div>' +
+      '<div class="field"><label class="lbl">Prestazione richiesta</label>' + sel('service', o.services.map(x => [x.id, x.name]), r.service) + '</div>' +
+      '<div class="field"><label class="lbl">Tipo di accesso</label>' + sel('accessType', o.accessTypes.map(x => [x.id, x.name]), r.accessType) + '</div>' +
+      '<div class="field"><label class="lbl">Provenienza</label>' + sel('origin', o.origins.map(x => [x.id, x.name]), r.origin) + '<div class="field-help">Distinta dalla priorità: non la modifica.</div></div>' +
+      dateTime('Data (e ora) della prescrizione', 'prescriptionDate', 'prescriptionTime') +
+      dateTime('Richiesta di prenotazione / presa in carico', 'requestDate', 'requestTime', 'L\'ora serve per i termini in ore (es. U: 72 ore).') +
+      dateTime('Inserimento nella lista del servizio', 'listDate', 'listTime') +
+      '<div class="field"><label class="lbl">Diagnosi / quesito (testo libero)</label><input class="input" ' + b('diagnosis') + ' value="' + esc(r.diagnosis) + '"><div class="field-help">Non determina priorità né tempi.</div></div>' +
+      '<div class="field" style="grid-column:1/-1"><label class="lbl">Indicazione del prescrittore sulla data o finestra di inizio (testo)</label><input class="input" ' + b('prescriberIndication') + ' value="' + esc(r.prescriberIndication) + '" placeholder="es. iniziare dopo la rimozione del gesso, entro fine mese"></div>' +
+      '</div><fieldset class="term-box"><legend>Termine per iniziare il trattamento <span class="muted small">(facoltativo, distinto dalla classe di priorità)</span></legend><div class="grid g4">' +
+      '<div class="field"><label class="lbl">Entro il (data ed eventuale ora)</label><div class="dt-pair"><input type="date" class="input" ' + b('startTerm.date') + ' value="' + esc(st.date) + '"><input type="time" class="input" ' + b('startTerm.time') + ' value="' + esc(st.time) + '" aria-label="Ora del termine"></div></div>' +
+      '<div class="field"><label class="lbl">Non prima del</label><input type="date" class="input" ' + b('startTerm.notBefore') + ' value="' + esc(st.notBefore) + '"></div>' +
+      '<div class="field"><label class="lbl">Origine dell\'indicazione</label>' + sel('startTerm.source', Object.entries(E.START_TERM_SOURCES), st.source) + '</div>' +
+      '<div class="field"><label class="lbl">Nota esplicativa</label><input class="input" ' + b('startTerm.note') + ' value="' + esc(st.note) + '"></div>' +
+      '</div><div class="field-help">Se indicato, prevale sulle regole generali. Per i cicli il termine delle visite o degli esami non viene applicato in automatico.</div></fieldset>';
+  }
+  function handFieldsHtml(prefix, h, rr) {
+    const hc = handCat();
+    const b = k => 'data-bind="' + prefix + '.' + k + '"' + (rr ? ' data-rerender="1"' : '');
+    const sel = (k, list, v, empty) => '<select class="input" ' + b(k) + '>' + optionsHtml([['', empty || '—']].concat(list), v) + '</select>';
+    return '<fieldset class="term-box hand-box"><legend>✋ Percorso Mano / Chirurgia della mano <span class="muted small">(campi facoltativi)</span></legend><div class="grid g4">' +
+      '<div class="field"><label class="lbl">Sottocategoria organizzativa</label>' + sel('subcategory', (hc ? hc.subcategories : []).map(x => [x.id, x.name]), h.subcategory, '— non indicata —') + '</div>' +
+      '<div class="field"><label class="lbl">Lato</label>' + sel('side', Object.entries(E.HAND_SIDES), h.side) + '</div>' +
+      '<div class="field"><label class="lbl">Intervento o trauma</label><div class="dt-pair">' + sel('eventType', [['intervento', 'Intervento'], ['trauma', 'Trauma']], h.eventType) + '<input type="date" class="input" ' + b('eventDate') + ' value="' + esc(h.eventDate) + '" aria-label="Data dell\'intervento o del trauma"></div></div>' +
+      '<div class="field"><label class="lbl">Competenza specifica richiesta</label>' + sel('requiredSkill', state.settings.handSkills.map(x => [x.id, x.name]), h.requiredSkill, 'nessuna in particolare') + '<div class="field-help">Se indicata, sono proposti solo i colleghi che la hanno.</div></div>' +
+      '<div class="field"><label class="lbl">Struttura inviante</label><input class="input" ' + b('sendingFacility') + ' value="' + esc(h.sendingFacility) + '"></div>' +
+      '<div class="field"><label class="lbl">Finestra di inizio indicata</label><input class="input" ' + b('startWindow') + ' value="' + esc(h.startWindow) + '" placeholder="come riportata dal prescrittore"></div>' +
+      '<div class="field" style="grid-column:span 2"><label class="lbl">Note del prescrittore</label><input class="input" ' + b('prescriberNotes') + ' value="' + esc(h.prescriberNotes) + '"></div>' +
+      '</div><div class="field-help">Sottocategorie organizzative di esempio, non protocolli terapeutici. Il programma <b>non deduce</b> quando iniziare la riabilitazione dopo un intervento: per il calcolo usa il "Termine per iniziare il trattamento".</div></fieldset>';
+  }
+  function handSummary(h) {
+    if (!h) return '';
+    const parts = [h.subcategory ? subcatName(h.subcategory) : '', h.side ? E.HAND_SIDES[h.side] : '', h.eventType && h.eventDate ? h.eventType + ' ' + E.fmtItShort(h.eventDate) : '', h.requiredSkill ? 'richiede: ' + skillName(h.requiredSkill) : ''].filter(Boolean);
+    return parts.length ? '<div class="small muted">' + esc(parts.join(' · ')) + '</div>' : '';
+  }
+  function requestSummary(r) {
+    if (!r) return '<span class="muted small">Dati della richiesta non registrati</span>';
+    const o = RO();
+    const parts = [optName(o.services, r.service), optName(o.accessTypes, r.accessType), r.origin ? 'da ' + optName(o.origins, r.origin) : ''].filter(Boolean);
+    const dates = [r.prescriptionDate ? 'prescr. ' + E.fmtItShort(r.prescriptionDate) : '', r.requestDate ? 'rich. ' + E.fmtItShort(r.requestDate) + (r.requestTime ? ' ' + r.requestTime : '') : ''].filter(Boolean);
+    return (parts.length ? esc(parts.join(' · ')) : '<span class="muted small">prestazione, accesso e provenienza da indicare</span>') + (dates.length ? '<div class="small muted">' + dates.join(' · ') + '</div>' : '') + (r.migrated ? '<div class="small">' + tag('plain', 'Da completare (dati inseriti prima dell\'aggiornamento)') + '</div>' : '');
+  }
   function optionsHtml(list, selected) {
     return list.map(([v, l]) => '<option value="' + esc(v) + '"' + (String(v) === String(selected) ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
   }
@@ -90,12 +192,16 @@
       catch (e) { this.ok = false; toast('Attenzione: salvataggio nel browser non riuscito. Esporta i dati per non perderli.', 'bad'); return false; }
     }
   };
+  let migrationNotes = []; // modifiche fatte aggiornando dati salvati con versioni precedenti
   let state = Store.load();
   let firstRun = false;
   let migratedAmb = 0;
   if (!state || !state.therapists) { state = D.generateDemo(); Store.save(state); firstRun = true; }
   normalizeState(state);
   function normalizeState(st) {
+    // aggiornamento: priorità, termini e percorso Mano (aggiunge solo campi, non modifica i dati esistenti)
+    const ch = E.migrateState(st);
+    if (ch.length) { ch.forEach(c => E.addLog(st, 'Aggiornamento dati: ' + c)); migrationNotes = migrationNotes.concat(ch); }
     st.settings = Object.assign(E.clone(E.DEFAULT_SETTINGS), st.settings || {});
     ['closures', 'absences', 'patients', 'paths', 'cycles', 'sessions', 'waitlist', 'log', 'categories'].forEach(k => { st[k] = st[k] || []; });
     st.meta = st.meta || {};
@@ -133,12 +239,14 @@
     return {
       name: '', categoryId: (state.categories[0] || {}).id || '', duration: state.settings.defaultDuration || 30,
       freq: 'lmv', weekdays: [1, 3, 5], sessionsMode: '10', sessionsCustom: 20, earliestDate: nextWorkingDay(today()),
-      prefOn: false, prefFrom: '12:00', prefTo: '14:45', prefMode: 'flessibile', waitlistId: null
+      prefOn: false, prefFrom: '12:00', prefTo: '14:45', prefMode: 'flessibile', waitlistId: null,
+      request: E.emptyRequest(), hand: E.emptyHand()
     };
   }
   const ui = {
     search: defaultSearch(), results: null, gaps: null, tab: 'disponibile', expanded: {}, sort: 'competenza',
-    agenda: { mode: 'giorno', date: null, group: 'tutti', therapistId: null, highlightPath: null },
+    agenda: { mode: 'giorno', date: null, group: 'tutti', therapistId: null, highlightPath: null, pathway: '' },
+    wlPrio: 'tutte', wlDue: 'tutte', wlCat: '', wlSort: 'scadenza', thCat: '', reqOpen: true,
     modal: null, wlFilter: 'attivi', pathFilter: '', pathState: 'attivi', thDraft: null, absForm: null, settingsTab: 'parametri'
   };
   let modalCallbacks = {};
@@ -241,9 +349,11 @@
   function buildRequest() {
     const s = ui.search;
     const sessions = s.sessionsMode === 'altro' ? Number(s.sessionsCustom) : Number(s.sessionsMode);
+    const nb = s.request && s.request.startTerm && s.request.startTerm.notBefore;
     return {
       categoryId: s.categoryId, duration: Number(s.duration), weekdays: s.weekdays.slice().sort(), sessions,
-      earliestDate: s.earliestDate, sort: ui.sort,
+      earliestDate: nb && nb > s.earliestDate ? nb : s.earliestDate, sort: ui.sort,
+      requiredSkill: isHand(s.categoryId) ? (s.hand.requiredSkill || '') : '',
       pref: s.prefOn ? { from: s.prefFrom, to: s.prefTo, mode: s.prefMode } : null
     };
   }
@@ -262,6 +372,8 @@
     if (errs.length) { toast(errs.join(' '), 'bad'); return; }
     const t0 = performance.now();
     ui.results = E.search(state, req);
+    ui.results.dl = E.computeDeadline(state, ui.search.request);
+    ui.results.analysis = E.deadlineAnalysis(ui.results, ui.results.dl);
     ui.gaps = E.findGaps(state, { categoryId: req.categoryId, duration: req.duration, fromDate: req.earliestDate });
     ui.results.ms = Math.round(performance.now() - t0);
     ui.expanded = {};
@@ -294,13 +406,14 @@
     }
     if (wl) {
       h += '<div class="notice warn">Dati caricati dalla <b>lista d\'attesa</b>: <b>' + esc(wl.name) + '</b> · inserito il ' + E.fmtIt(wl.insertedAt) +
-        ' (' + E.diffDays(wl.insertedAt, today()) + ' giorni di attesa) · priorità ' + esc(wl.priority) + (wl.availabilityNote ? ' · ' + esc(wl.availabilityNote) : '') +
+        ' (' + E.diffDays(wl.insertedAt, today()) + ' giorni di attesa) · ' + classTag((wl.request || {}).priorityClass) + ' · priorità interna ' + esc(wl.priority) + (wl.availabilityNote ? ' · ' + esc(wl.availabilityNote) : '') +
         ' <button class="btn link" data-act="search-reset">Scollega e svuota</button></div>';
     }
     h += '<section class="panel"><div class="panel-head"><h2>Trova un posto</h2><span class="muted small">Stesso fisioterapista e stesso orario per tutto il ciclo</span></div>' +
       '<form class="search-form" data-form="search" autocomplete="off">' +
       '<div class="field sf-name"><label class="lbl" for="sf-name">Paziente (nome o identificativo)</label><input id="sf-name" class="input" data-bind="search.name" value="' + esc(s.name) + '" placeholder="es. Rossi M. oppure ID 1234"></div>' +
-      '<div class="field sf-cat"><label class="lbl" for="sf-cat">Patologia / percorso</label><select id="sf-cat" class="input" data-bind="search.categoryId">' + optionsHtml(cats, s.categoryId) + '</select></div>' +
+      '<div class="field sf-cat"><label class="lbl" for="sf-cat">Patologia / percorso</label><select id="sf-cat" class="input" data-bind="search.categoryId" data-rerender="1">' + optionsHtml(cats, s.categoryId) + '</select>' +
+      (handCat() ? '<div class="field-help">' + (isHand(s.categoryId) ? tag('info', '✋ Percorso Mano selezionato') : '<button type="button" class="btn link" data-act="pick-hand">✋ Mano / Chirurgia della mano</button>') + '</div>' : '') + '</div>' +
       '<div class="field sf-dur"><span class="lbl">Durata</span><div class="seg">' +
       [30, 45].map(d => '<label><input type="radio" name="dur" value="' + d + '" data-bind="search.duration" data-type="num"' + (Number(s.duration) === d ? ' checked' : '') + '><span>' + d + ' min</span></label>').join('') + '</div></div>' +
       '<div class="field sf-freq"><span class="lbl">Frequenza settimanale</span><div class="seg">' +
@@ -310,12 +423,14 @@
       presets.map(n => '<label><input type="radio" name="ses" value="' + n + '" data-act="ses"' + (s.sessionsMode === String(n) ? ' checked' : '') + '><span>' + n + '</span></label>').join('') +
       '<label><input type="radio" name="ses" value="altro" data-act="ses"' + (s.sessionsMode === 'altro' ? ' checked' : '') + '><span>Altro</span></label></div>' +
       (s.sessionsMode === 'altro' ? '<input type="number" min="1" max="60" class="input" style="margin-top:6px;width:110px" data-bind="search.sessionsCustom" data-type="num" value="' + esc(s.sessionsCustom) + '" aria-label="Numero di sedute">' : '') + '</div>' +
-      '<div class="field sf-date"><label class="lbl" for="sf-date">Prima data utile</label><input id="sf-date" type="date" class="input" data-bind="search.earliestDate" data-rerender="1" value="' + esc(s.earliestDate) + '"><div class="field-help">' + dLabel(s.earliestDate) + '</div></div>' +
+      '<div class="field sf-date"><label class="lbl" for="sf-date">Prima data utile</label><input id="sf-date" type="date" class="input" data-bind="search.earliestDate" data-rerender="1" value="' + esc(s.earliestDate) + '"><div class="field-help">' + dLabel(s.earliestDate) +
+      (s.request.startTerm.notBefore && s.request.startTerm.notBefore > s.earliestDate ? '<br><b>Ricerca dal ' + E.fmtIt(s.request.startTerm.notBefore) + '</b> (non prima del)' : '') + '</div></div>' +
       '<div class="field sf-pref"><span class="lbl">Fascia oraria preferita (facoltativa)</span><div class="pref-box">' +
       '<label class="chk"><input type="checkbox" data-act="pref-on"' + (s.prefOn ? ' checked' : '') + '> indica</label>' +
       (s.prefOn ? '<span>dalle</span><select class="input" data-bind="search.prefFrom" aria-label="dalle">' + timeOptions(s.prefFrom, '07:00', '15:00', 15) + '</select><span>alle</span><select class="input" data-bind="search.prefTo" aria-label="alle">' + timeOptions(s.prefTo, '07:15', '15:15', 15) + '</select>' +
         '<div class="seg">' + [['flessibile', 'Preferenza flessibile'], ['obbligatoria', 'Vincolo obbligatorio']].map(([v, l]) => '<label><input type="radio" name="pm" value="' + v + '" data-bind="search.prefMode"' + (s.prefMode === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>'
         : '<span class="muted small">Nessuna preferenza: tutti gli orari ambulatoriali</span>') + '</div></div>' +
+      requestPanelHtml(s) +
       '<div class="field sf-go btn-row"><button type="submit" class="btn primary big">🔎 Cerca disponibilità</button>' +
       '<button type="button" class="btn" data-act="search-to-waitlist">＋ Salva in lista d\'attesa</button><button type="button" class="btn" data-act="search-reset">Nuova ricerca</button>' +
       '<span class="muted small">Le disponibilità sono calcolate in minuti da fasce, appuntamenti, assenze, chiusure e previsioni.</span></div>' +
@@ -324,6 +439,39 @@
     return h;
   };
 
+  function requestPanelHtml(s) {
+    const dl = E.computeDeadline(state, s.request);
+    const st = E.deadlineStatus(dl, nowR(), state.settings);
+    return '<details class="sf-req req-box"' + (ui.reqOpen ? ' open' : '') + ' id="req-box"><summary><b>Richiesta: priorità e termine di inizio</b> ' + classTag(s.request.priorityClass) + ' ' +
+      (dl.status === 'ok' ? 'Termine: <b>' + E.fmtDue(dl.due) + '</b> ' + dlStatusTag(st) : dlStatusTag(st)) + '</summary>' +
+      requestFieldsHtml('search.request', s.request, true) +
+      (isHand(s.categoryId) ? handFieldsHtml('search.hand', s.hand, true) : '') +
+      '<div class="dl-preview">' + termHtml(dl) + (dl.classNote ? '<div class="small muted">' + esc(dl.classNote) + '</div>' : '') + '</div></details>';
+  }
+  /** Avvisi sul termine di inizio sopra le proposte. Non modifica nulla: la decisione resta all'operatore. */
+  function deadlineNotice(res) {
+    const dl = res.dl, an = res.analysis;
+    if (!dl) return '';
+    if (dl.status !== 'ok') return '<div class="notice info"><b>Termine di inizio: scadenza da verificare.</b> ' + esc(E.deadlineStatus(dl).text.replace(/^Scadenza da verificare ?/, '')) + ' Le proposte non sono confrontate con un termine.</div>';
+    const optLine = x => '<li><b>' + esc(x.g.therapist.name) + '</b> ' + (x.g.kind === 'specifica' ? '(competenza specifica)' : '(altra idoneità)') + ' · ' + E.weekdaysLabel(res.request.weekdays) + ' ' + hm(x.o.start) + ' · prima seduta <b>' + dLabel(x.o.startDate) + '</b> · ' + esc(x.cmp.text) + '</li>';
+    let h = '<div class="dl-box"><div><span class="lbl">Termine per l\'inizio</span>' + termHtml(dl) + '</div><div><span class="lbl">Classe prescritta</span>' + classTag(dl.original) + (dl.classNote ? '<div class="small muted">' + esc(dl.classNote) + '</div>' : '') + '</div><div><span class="lbl">Oggi</span>' + dlStatusTag(E.deadlineStatus(dl, nowR(), state.settings)) + '<div class="small">' + esc(E.deadlineStatus(dl, nowR(), state.settings).text) + '</div></div></div>';
+    if (dl.conflictNotBefore) h += '<div class="notice bad"><b>⚠ Conflitto tra le indicazioni:</b> la data minima di inizio (' + E.fmtIt(dl.notBefore) + ') è successiva alla scadenza (' + E.fmtDue(dl.due) + '). Nessuna proposta può rispettare entrambe: chiarire con il prescrittore o il servizio.</div>';
+    if (an.noneWithin) {
+      h += '<div class="notice bad dl-alert"><b>⚠ Nessun posto confermato permette di iniziare entro il termine (' + E.fmtDue(dl.due) + ').</b>' +
+        (an.alternatives.length ? '<br>Prime alternative successive, con il ritardo:<ul class="cond">' + an.alternatives.map(optLine).join('') + '</ul>' : '<br>Nessuna alternativa confermata nell\'orizzonte di ricerca.') +
+        (an.probWithin.length ? '<div>Ci sono ' + an.probWithin.length + ' posti <b>probabili</b> entro il termine: non sono prenotazioni e non soddisfano la richiesta finché non diventano certi.</div>' : '') +
+        '<div class="small">Priorità, scadenza e appuntamenti di altri pazienti non sono stati modificati.</div></div>';
+    } else {
+      h += '<div class="notice ok">✓ ' + an.within.length + (an.within.length === 1 ? ' proposta confermata permette' : ' proposte confermate permettono') + ' di iniziare entro il termine. Prima possibile: ' + esc(an.within[0].g.therapist.name) + ', ' + dLabel(an.within[0].o.startDate) + ' ' + hm(an.within[0].o.start) + '.' +
+        (an.probWithin.length ? ' <span class="small">(' + an.probWithin.length + ' posti probabili non conteggiati)</span>' : '') + '</div>';
+    }
+    if (an.specialistLate) {
+      const fs = an.firstSpecific, bo = an.bestOtherWithin;
+      h += '<div class="notice warn"><b>Attenzione:</b> ' + (fs ? 'con <b>competenza specifica</b> l\'inizio più vicino è il ' + dLabel(fs.o.startDate) + ' (' + esc(fs.cmp.text.toLowerCase()) + ')' : 'nessun collega con competenza specifica ha posti confermati') +
+        ', mentre <b>' + esc(bo.g.therapist.name) + '</b> (altra idoneità) può iniziare il ' + dLabel(bo.o.startDate) + ', entro il termine. Il raggruppamento resta per competenza: la decisione finale è dell\'operatore.</div>';
+    }
+    return h;
+  }
   function renderResults() {
     const res = ui.results;
     if (!res) return '';
@@ -334,7 +482,8 @@
     const card = (key, cls, label, desc, n, sub) => '<button class="scard ' + cls + (ui.tab === key ? ' active' : '') + '" data-act="tab" data-tab="' + key + '"><div class="n">' + n + '</div><div class="l">' + label + '</div><div class="d">' + sub + '</div><div class="d">' + desc + '</div></button>';
     let h = '<section class="panel" id="results"><div class="panel-head"><h2>Risultati</h2><span class="muted small">' +
       esc(catName(req.categoryId)) + ' · ' + req.duration + ' min · ' + E.weekdaysLabel(req.weekdays) + ' · ' + req.sessions + ' sedute · dal ' + E.fmtIt(req.earliestDate) +
-      (req.pref ? ' · preferenza ' + req.pref.from + '–' + req.pref.to + ' (' + req.pref.mode + ')' : '') + ' · calcolato in ' + res.ms + ' ms</span></div>';
+      (req.pref ? ' · preferenza ' + req.pref.from + '–' + req.pref.to + ' (' + req.pref.mode + ')' : '') + (req.requiredSkill ? ' · competenza richiesta: ' + esc(skillName(req.requiredSkill)) : '') + ' · calcolato in ' + res.ms + ' ms</span></div>';
+    h += deadlineNotice(res);
     h += '<div class="summary-cards">' +
       card('disponibile', 'ok', '✓ Disponibili per nuovi cicli', 'inizio entro ' + state.settings.futureThresholdDays + ' giorni, prenotabili', c.disponibile.th + ' colleghi', c.disponibile.seats + ' posti indipendenti (' + c.disponibile.alts + ' orari)') +
       card('futuro_confermato', 'fut', '✓ Posti futuri confermati', 'liberi con certezza da una data successiva', c.futuro_confermato.th + ' colleghi', c.futuro_confermato.seats + ' posti indipendenti') +
@@ -382,8 +531,9 @@
       '<button class="btn sm" data-act="show-cycle" data-th="' + th.id + '" data-idx="' + idx + '">📅 Calendario</button></div>';
     return '<tr class="' + (isSub ? 'sub' : 'group-row') + '">' +
       '<td style="min-width:160px">' + (isSub ? '<span class="muted small">↳ altro orario con ' + esc(th.name) + '</span>' : '<div class="who">' + esc(th.name) + '</div>' + (g.kind === 'specifica' ? tag('info', '★ Competenza specifica') : tag('plain', 'Altra idoneità')) + '<div class="muted small">' + profileShort(th.profile) + '</div>' + (moreBtn || '')) + '</td>' +
-      '<td class="nowrap">' + E.weekdaysLabel(req.weekdays) + ' <b style="font-size:1.05rem">' + hm(o.start) + '–' + hm(o.end) + '</b><div class="small">dal <b>' + dLabel(o.startDate) + '</b></div><div class="small muted">ultima ' + dLabel(o.endDate) + '</div></td>' +
-      '<td>' + availabilityTag(o) + (req.pref ? '<div style="margin-top:4px">' + prefTag(o, req) + '</div>' : '') + '</td>' +
+      '<td class="nowrap">' + E.weekdaysLabel(req.weekdays) + ' <b style="font-size:1.05rem">' + hm(o.start) + '–' + hm(o.end) + '</b><div class="small">prima seduta <b>' + dLabel(o.startDate) + '</b></div><div class="small muted">fine prevista del ciclo ' + dLabel(o.endDate) + '</div></td>' +
+      '<td>' + availabilityTag(o) + (req.pref ? '<div style="margin-top:4px">' + prefTag(o, req) + '</div>' : '') +
+      (ui.results.dl && ui.results.dl.status === 'ok' ? '<div style="margin-top:4px">' + cmpTag(E.compareStart(ui.results.dl, o.startDate, o.start), o.bookable) + '</div>' : '') + '</td>' +
       '<td style="min-width:200px">' + conditionsHtml(o) +
       '<details class="why"><summary>Perché è compatibile</summary><ul class="cond">' + o.explanation.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></details></td>' +
       '<td>' + actions + '</td></tr>';
@@ -397,7 +547,7 @@
           : '<span class="muted small">Prima i colleghi con competenza specifica, poi gli altri idonei. Le alternative sovrapposte contano come un solo posto.</span>') + '</div>' +
       '<label class="small">Ordina: <select class="input" style="width:auto;display:inline-block" data-act="sort">' + optionsHtml([['competenza', 'Competenza, poi preferenza e data'], ['data', 'Prima disponibilità assoluta']], ui.sort) + '</select></label></div>';
     if (!groups.length) return h + '<div class="empty">Nessun collega in questa categoria. Prova le altre schede qui sopra, una data diversa o una fascia oraria più ampia.</div>';
-    h += '<div class="table-wrap"><table class="t"><thead><tr><th>Fisioterapista e idoneità</th><th>Giorni, orario, prima e ultima seduta</th><th>Disponibilità' + (req.pref ? ' e preferenza' : '') + '</th><th>Condizioni / problemi</th><th>Azioni</th></tr></thead><tbody>';
+    h += '<div class="table-wrap"><table class="t"><thead><tr><th>Fisioterapista e idoneità</th><th>Giorni, orario, prima seduta e fine del ciclo</th><th>Disponibilità' + (req.pref ? ', preferenza' : '') + (ui.results.dl && ui.results.dl.status === 'ok' ? ', termine di inizio' : '') + '</th><th>Condizioni / problemi</th><th>Azioni</th></tr></thead><tbody>';
     for (const g of groups) {
       const list = g.options.map((o, i) => ({ o, i })).filter(x => x.o.category === cat);
       const key = g.therapist.id + '|' + cat;
@@ -431,6 +581,7 @@
     const a = ui.agenda;
     if (!a.date) a.date = E.weekday(today()) <= 5 ? today() : nextWorkingDay(today());
     if (!a.therapistId) a.therapistId = state.therapists[0].id;
+    if (a.pathway && a.mode === 'settimana' && !E.eligibility(thById(a.therapistId) || {}, a.pathway)) { const t = state.therapists.find(x => E.eligibility(x, a.pathway)); if (t) a.therapistId = t.id; }
     const ctx = E.makeContext(state);
     let h = '<section class="panel"><div class="agenda-tools">' +
       '<div class="seg">' + [['giorno', 'Giorno'], ['settimana', 'Settimana']].map(([v, l]) => '<label><input type="radio" name="am" value="' + v + '" data-act="ag-mode"' + (a.mode === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>' +
@@ -439,15 +590,21 @@
     if (a.mode === 'giorno') {
       h += '<select class="input" data-act="ag-group" aria-label="Filtro colleghi">' + optionsHtml([['tutti', 'Tutti i colleghi'], ['reparto7', 'Gruppo ingresso 7:00'], ['reparto8', 'Gruppo ingresso 8:00'], ['ambulatorio', 'Solo ambulatorio']].concat(state.therapists.map(t => ['th:' + t.id, t.name])), a.group) + '</select>';
     } else {
-      h += '<select class="input" data-act="ag-th" aria-label="Collega">' + optionsHtml(state.therapists.map(t => [t.id, t.name]), a.therapistId) + '</select>';
+      const ths = a.pathway ? state.therapists.filter(t => E.eligibility(t, a.pathway)) : state.therapists;
+      h += '<select class="input" data-act="ag-th" aria-label="Collega">' + optionsHtml(ths.map(t => [t.id, t.name + (a.pathway && E.eligibility(t, a.pathway) === 'specifica' ? ' ★' : '')]), a.therapistId) + '</select>';
     }
-    h += '</div><div class="legend" style="margin-bottom:8px">' + tag('info', 'Seduta programmata') + tag('ok', '✓ Effettuata') + tag('prob', '▤ Riserva provvisoria') + tag('ext', '◐ Estensione da confermare') + tag('bad', '⚠ Conflitto / assenza') + TAG.prot('Reparto, pausa, cartelle') + '<span class="muted small">Fondo bianco = fascia ambulatoriale libera</span></div>';
+    const hc = handCat();
+    h += '<select class="input" data-act="ag-path" aria-label="Filtro percorso">' + optionsHtml([['', 'Tutti i percorsi']].concat(state.categories.map(c => [c.id, (c.hand ? '✋ ' : '') + c.name])), a.pathway) + '</select>' +
+      (hc ? '<button class="btn sm' + (a.pathway === hc.id ? ' primary' : '') + '" data-act="ag-hand">✋ Mano</button>' : '');
+    h += '</div>' + (a.pathway ? '<div class="notice info small">Filtro percorso <b>' + esc(catName(a.pathway)) + '</b>: sono mostrati solo i colleghi idonei (★ = competenza specifica) e sono evidenziati i loro pazienti di questo percorso.</div>' : '') + '<div class="legend" style="margin-bottom:8px">' + tag('info', 'Seduta programmata') + tag('ok', '✓ Effettuata') + tag('prob', '▤ Riserva provvisoria') + tag('ext', '◐ Estensione da confermare') + tag('bad', '⚠ Conflitto / assenza') + TAG.prot('Reparto, pausa, cartelle') + '<span class="muted small">Fondo bianco = fascia ambulatoriale libera</span></div>';
     let cols = [];
     if (a.mode === 'giorno') {
       let ths = state.therapists;
       if (a.group.startsWith('th:')) ths = ths.filter(t => t.id === a.group.slice(3));
       else if (a.group !== 'tutti') ths = ths.filter(t => t.profile === a.group);
-      cols = ths.map(t => ({ th: t, date: a.date, head: '<b>' + esc(t.name) + '</b>' + profileShort(t.profile) }));
+      if (a.pathway) ths = ths.filter(t => E.eligibility(t, a.pathway)).sort((x, y) => (E.eligibility(x, a.pathway) === 'specifica' ? 0 : 1) - (E.eligibility(y, a.pathway) === 'specifica' ? 0 : 1));
+      cols = ths.map(t => ({ th: t, date: a.date, head: '<b>' + (a.pathway && E.eligibility(t, a.pathway) === 'specifica' ? '★ ' : '') + esc(t.name) + '</b>' + profileShort(t.profile) }));
+      if (!cols.length) h += '<div class="empty">Nessun collega corrisponde ai filtri.</div>';
       const cl = ctx.closures.get(a.date);
       h += '<h3>' + E.WEEKDAY_LONG[E.weekday(a.date)].replace(/^./, c => c.toUpperCase()) + ' ' + E.fmtIt(a.date) + (cl ? ' — ' + tag('bad', 'Chiusura: ' + esc(cl.label)) : '') + '</h3>';
     } else {
@@ -489,9 +646,9 @@
             const p = ctx.paths.get(s.pathId);
             const issue = E.sessionIssue(ctx, s);
             count++;
-            const cls = ['appt', s.status === 'effettuata' ? 'effettuata' : '', issue ? 'conflict' : '', s.extension ? 'ext' : '', ui.agenda.highlightPath === s.pathId ? 'hl' : '', s.status === 'programmata' && s.date < t0 ? 'past-open' : ''].join(' ');
+            const cls = ['appt', ui.agenda.pathway ? (p.categoryId === ui.agenda.pathway ? 'pw' : 'dim') : '', s.status === 'effettuata' ? 'effettuata' : '', issue ? 'conflict' : '', s.extension ? 'ext' : '', ui.agenda.highlightPath === s.pathId ? 'hl' : '', s.status === 'programmata' && s.date < t0 ? 'past-open' : ''].join(' ');
             inner += '<button class="' + cls + '" style="top:' + (y(o.start) + 1) + 'px;height:' + Math.max(16, (o.end - o.start) * PX - 2) + 'px" data-act="open-session" data-id="' + s.id + '" title="' + esc(ptName(s.pathId) + ' ' + s.start + ' · ' + catName(p.categoryId) + ' · ' + E.SESSION_STATUS[s.status] + (issue ? ' · ' + issue.reason : '')) + '">' +
-              '<b>' + esc(ptName(s.pathId)) + '</b> ' + hm(o.start) + '–' + hm(o.end) + '<br><span class="st">' + (issue ? '⚠ ' + esc(issue.reason) : s.status === 'effettuata' ? '✓ effettuata' : s.status === 'programmata' && s.date < t0 ? 'esito da registrare' : esc(catName(p.categoryId))) + (s.recoveryOf ? ' · recupero' : '') + (s.originalTherapistId ? ' · sostituzione' : '') + '</span></button>';
+              '<b>' + (isHand(p.categoryId) ? '✋ ' : '') + esc(ptName(s.pathId)) + '</b> ' + hm(o.start) + '–' + hm(o.end) + '<br><span class="st">' + (issue ? '⚠ ' + esc(issue.reason) : s.status === 'effettuata' ? '✓ effettuata' : s.status === 'programmata' && s.date < t0 ? 'esito da registrare' : esc(catName(p.categoryId))) + (s.recoveryOf ? ' · recupero' : '') + (s.originalTherapistId ? ' · sostituzione' : '') + '</span></button>';
           } else if (o.hard) {
             inner += '<div class="appt reserve" style="top:' + (y(o.start) + 1) + 'px;height:' + Math.max(16, (o.end - o.start) * PX - 2) + 'px" title="' + esc(o.why) + '"><b>Riserva</b> ' + esc(ptName(o.pathId)) + '<br><span class="st">' + (o.kind === 'riserva' ? 'fino al ' + E.fmtItShort(o.until) : '') + '</span></div>';
           }
@@ -505,28 +662,61 @@
   /* ================================================================== */
   /* VISTA: Lista d'attesa                                                */
   /* ================================================================== */
+  /** Termine e stato di ogni richiesta in lista (calcolati, mai salvati: il dato originale resta quello inserito). */
+  function waitlistRows() {
+    const now = nowR();
+    return state.waitlist.map(w => {
+      const dl = E.computeDeadline(state, w.request);
+      const st = E.deadlineStatus(dl, now, state.settings);
+      const assigned = w.status === 'assegnato' && w.assignedPathId && pathById(w.assignedPathId) ? E.pathDeadline(state, w.assignedPathId) : null;
+      return { w, dl, st, assigned };
+    });
+  }
+  const DUE_RANK = { scaduto: 0, vicino: 1, entro: 2, da_verificare: 3 };
   VIEWS.lista = function () {
     const prio = state.settings.priorities;
-    let list = state.waitlist.slice();
+    let rows = waitlistRows();
     const f = ui.wlFilter;
-    if (f === 'attivi') list = list.filter(w => ['in_attesa', 'contattato', 'proposta'].includes(w.status));
-    else if (f !== 'tutti') list = list.filter(w => w.status === f);
-    list.sort((a, b) => (prio.indexOf(a.priority) - prio.indexOf(b.priority)) || (a.insertedAt < b.insertedAt ? -1 : 1));
+    if (f === 'attivi') rows = rows.filter(r => ['in_attesa', 'contattato', 'proposta'].includes(r.w.status));
+    else if (f !== 'tutti') rows = rows.filter(r => r.w.status === f);
+    const base = rows;
+    const cls = r => (r.w.request || {}).priorityClass || '';
+    const prioOk = (r, v) => v === 'tutte' || (v === 'senza' ? (cls(r) === 'NI' || cls(r) === '') : cls(r) === v);
+    const dueOk = (r, v) => v === 'tutte' || r.st.code === v;
+    rows = rows.filter(r => prioOk(r, ui.wlPrio) && dueOk(r, ui.wlDue) && (!ui.wlCat || r.w.categoryId === ui.wlCat));
+    if (ui.wlSort === 'scadenza') {
+      const key = r => r.dl.status === 'ok' ? E.dtMin(r.dl.due.date, r.dl.due.min == null ? 1439 : r.dl.due.min) : Infinity;
+      rows.sort((a, b) => (DUE_RANK[a.st.code] - DUE_RANK[b.st.code]) || (key(a) - key(b)) || (a.w.insertedAt < b.w.insertedAt ? -1 : 1));
+    } else rows.sort((a, b) => (prio.indexOf(a.w.priority) - prio.indexOf(b.w.priority)) || (a.w.insertedAt < b.w.insertedAt ? -1 : 1));
+    const n = (pred) => base.filter(pred).length;
+    const chip = (group, v, label, count) => '<label><input type="radio" name="' + group + '" value="' + v + '" data-act="' + group + '"' + (ui[group] === v ? ' checked' : '') + '><span>' + label + (count != null ? ' <small>(' + count + ')</small>' : '') + '</span></label>';
+    const hc = handCat();
     let h = '<section class="panel"><div class="panel-head"><h2>Lista d\'attesa</h2><button class="btn primary" data-act="wl-new">＋ Nuovo paziente in lista</button></div>' +
-      '<div class="btn-row" style="margin-bottom:10px"><div class="seg">' + [['attivi', 'Da sistemare'], ['tutti', 'Tutti'], ['assegnato', 'Assegnati'], ['rinuncia', 'Rinunce']].map(([v, l]) => '<label><input type="radio" name="wlf" value="' + v + '" data-act="wl-filter"' + (f === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>' +
-      '<span class="muted small">Ordinata per priorità (assegnata dal servizio) e poi per data di inserimento.</span></div>';
-    if (!list.length) return h + '<div class="empty">Nessun paziente in questo elenco.</div></section>';
-    h += '<div class="table-wrap"><table class="t"><thead><tr><th>Paziente</th><th>Inserito</th><th>Priorità</th><th>Percorso</th><th>Durata</th><th>Frequenza</th><th>Sedute</th><th>Disponibilità oraria</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>';
-    list.forEach(w => {
+      '<div class="btn-row" style="margin-bottom:8px"><div class="seg">' + [['attivi', 'Da sistemare'], ['tutti', 'Tutti'], ['assegnato', 'Assegnati'], ['rinuncia', 'Rinunce']].map(([v, l]) => '<label><input type="radio" name="wlf" value="' + v + '" data-act="wl-filter"' + (f === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>' +
+      '<label class="small">Ordina: <select class="input" style="width:auto;display:inline-block" data-act="wl-sort">' + optionsHtml([['scadenza', 'Scadenza (scadute e imminenti prima)'], ['interna', 'Priorità interna e attesa']], ui.wlSort) + '</select></label></div>' +
+      '<div class="filter-rows"><div><span class="lbl">Classe prescritta</span><div class="seg">' + chip('wlPrio', 'tutte', 'Tutte') + ['U', 'B', 'D', 'P'].map(c => chip('wlPrio', c, c, n(r => cls(r) === c))).join('') + chip('wlPrio', 'senza', 'Senza priorità', n(r => cls(r) === 'NI' || cls(r) === '')) + '</div></div>' +
+      '<div><span class="lbl">Scadenza</span><div class="seg">' + chip('wlDue', 'tutte', 'Tutte') + chip('wlDue', 'vicino', '◔ Imminenti', n(r => r.st.code === 'vicino')) + chip('wlDue', 'scaduto', '⚠ Scadute', n(r => r.st.code === 'scaduto')) + chip('wlDue', 'da_verificare', '? Da verificare', n(r => r.st.code === 'da_verificare')) + '</div></div>' +
+      '<div><span class="lbl">Percorso</span><div class="btn-row"><select class="input" style="width:auto" data-act="wl-cat" aria-label="Percorso">' + optionsHtml([['', 'Tutti i percorsi']].concat(state.categories.map(c => [c.id, (c.hand ? '✋ ' : '') + c.name])), ui.wlCat) + '</select>' +
+      (hc ? '<button class="btn sm' + (ui.wlCat === hc.id ? ' primary' : '') + '" data-act="wl-hand">✋ Mano / Chirurgia della mano (' + n(r => r.w.categoryId === hc.id) + ')</button>' : '') + '</div></div></div>' +
+      '<p class="muted small">La <b>classe prescritta</b> è il dato originale della prescrizione; il <b>termine applicato</b> deriva da una regola configurata (con fonte e stato di validazione) o da un\'indicazione specifica. Senza regola o senza data di decorrenza la scadenza è "da verificare". I colori sono sempre accompagnati da un testo.</p>';
+    if (!rows.length) return h + '<div class="empty">Nessun paziente con questi filtri.</div></section>';
+    h += '<div class="table-wrap"><table class="t wl-table"><thead><tr><th>Paziente</th><th>Classe prescritta</th><th>Richiesta</th><th>Termine applicato e origine</th><th>Residuo / ritardo</th><th>Percorso</th><th>Ciclo e disponibilità</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>';
+    rows.forEach(({ w, dl, st, assigned }) => {
       const days = E.diffDays(w.insertedAt, today());
-      h += '<tr><td class="who">' + esc(w.name) + (w.note ? '<div class="muted small">' + esc(w.note) + '</div>' : '') + '</td>' +
-        '<td class="nowrap">' + E.fmtIt(w.insertedAt) + '<div class="muted small">' + days + ' giorni</div></td>' +
-        '<td>' + tag(w.priority === prio[0] ? 'bad' : w.priority === prio[prio.length - 1] ? 'plain' : 'prob', esc(w.priority)) + '</td>' +
-        '<td>' + esc(catName(w.categoryId)) + '</td><td>' + w.duration + ' min</td><td class="nowrap">' + E.weekdaysLabel(w.weekdays) + '</td><td>' + w.sessions + '</td>' +
-        '<td>' + (w.pref && w.pref.from ? w.pref.from + '–' + w.pref.to + ' <span class="muted small">(' + w.pref.mode + ')</span>' : '<span class="muted">qualsiasi</span>') + (w.availabilityNote ? '<div class="muted small">' + esc(w.availabilityNote) + '</div>' : '') +
-        '<div class="muted small">dal ' + E.fmtIt(w.earliestDate) + '</div></td>' +
-        '<td><select class="input" style="min-width:150px" data-act="wl-status" data-id="' + w.id + '" aria-label="Stato">' + optionsHtml(Object.entries(E.WAITLIST_STATUS), w.status) + '</select>' +
-        (w.preaccordo ? '<div class="small" style="margin-top:4px">' + tag('prob', '? Preaccordo') + ' ' + esc(thName(w.preaccordo.therapistId)) + ' ' + E.weekdaysLabel(w.preaccordo.weekdays) + ' ' + w.preaccordo.startTime + ' dal ' + E.fmtItShort(w.preaccordo.fromDate) + '<br><span class="muted">non è una prenotazione</span></div>' : '') +
+      const r = w.request || {};
+      let resid;
+      if (assigned) resid = '<div class="small"><b>Prima seduta ' + dShort(assigned.first ? assigned.first.date : null) + '</b></div>' + cmpTag(assigned.cmp, true);
+      else resid = dlStatusTag(st) + '<div class="small">' + esc(st.code === 'da_verificare' ? '' : st.text) + '</div>';
+      h += '<tr class="due-' + st.code + '"><td class="who">' + esc(w.name) + '<div class="muted small">in lista dal ' + E.fmtIt(w.insertedAt) + ' · ' + days + ' gg</div>' + (r.diagnosis ? '<div class="small muted">Diagnosi: ' + esc(r.diagnosis) + '</div>' : '') + (w.note ? '<div class="muted small">' + esc(w.note) + '</div>' : '') + '</td>' +
+        '<td>' + classTag(r.priorityClass) + (dl.classNote && r.priorityClass === 'NI' ? '<div class="small muted">' + (dl.effective ? 'gestita come ' + dl.effective : 'nessuna regola') + '</div>' : '') + '<div class="small muted" title="Priorità interna del servizio, distinta dalla classe prescritta">interna: ' + esc(w.priority) + '</div></td>' +
+        '<td>' + requestSummary(w.request) + (r.prescriberIndication ? '<div class="small">“' + esc(r.prescriberIndication) + '”</div>' : '') + '</td>' +
+        '<td>' + termHtml(dl, { short: true }) + '</td>' +
+        '<td>' + resid + '</td>' +
+        '<td>' + (isHand(w.categoryId) ? tag('info', '✋ ' + esc(catName(w.categoryId))) : esc(catName(w.categoryId))) + handSummary(w.hand) + '</td>' +
+        '<td class="small">' + w.duration + ' min · ' + E.weekdaysLabel(w.weekdays) + ' · ' + w.sessions + ' sedute<div>' + (w.pref && w.pref.from ? w.pref.from + '–' + w.pref.to + ' <span class="muted">(' + w.pref.mode + ')</span>' : '<span class="muted">orario qualsiasi</span>') + '</div>' + (w.availabilityNote ? '<div class="muted">' + esc(w.availabilityNote) + '</div>' : '') +
+        '<div class="muted">dal ' + E.fmtIt(w.earliestDate) + '</div></td>' +
+        '<td><select class="input" style="min-width:140px" data-act="wl-status" data-id="' + w.id + '" aria-label="Stato">' + optionsHtml(Object.entries(E.WAITLIST_STATUS), w.status) + '</select>' +
+        (w.preaccordo ? '<div class="small" style="margin-top:4px">' + tag('prob', '? Preaccordo') + ' ' + esc(thName(w.preaccordo.therapistId)) + ' ' + E.weekdaysLabel(w.preaccordo.weekdays) + ' ' + w.preaccordo.startTime + ' dal ' + E.fmtItShort(w.preaccordo.fromDate) + '<br><span class="muted">non è una prenotazione: non soddisfa il termine</span></div>' : '') +
         (w.assignedPathId && pathById(w.assignedPathId) ? '<div class="small"><a href="#/pazienti/' + w.assignedPathId + '">Apri percorso</a></div>' : '') + '</td>' +
         '<td><div class="btn-row">' + (w.status !== 'assegnato' && w.status !== 'rinuncia' ? '<button class="btn sm primary" data-act="wl-find" data-id="' + w.id + '">🔎 Trova posto</button>' : '') +
         '<button class="btn sm" data-act="wl-edit" data-id="' + w.id + '">Modifica</button></div></td></tr>';
@@ -542,7 +732,7 @@
       sessionsMode: (state.settings.sessionPresets || []).map(String).includes(String(w.sessions)) ? String(w.sessions) : 'altro', sessionsCustom: w.sessions,
       earliestDate: w.earliestDate && w.earliestDate > today() ? w.earliestDate : nextWorkingDay(today()),
       prefOn: !!(w.pref && w.pref.from), prefFrom: w.pref ? w.pref.from : '12:00', prefTo: w.pref ? w.pref.to : '14:45', prefMode: w.pref ? w.pref.mode : 'flessibile',
-      waitlistId: w.id
+      waitlistId: w.id, request: E.clone(w.request || E.emptyRequest()), hand: E.clone(w.hand || E.emptyHand())
     });
     return s;
   }
@@ -570,7 +760,7 @@
     h += '<div class="table-wrap"><table class="t"><thead><tr><th>Paziente</th><th>Percorso</th><th>Fisioterapista</th><th>Giorni e orario</th><th>Cicli</th><th>Sedute effettuate</th><th>Ultima seduta</th><th>Previsione</th><th></th></tr></thead><tbody>';
     rows.forEach(r => {
       const pct = r.pc.planned ? Math.round(100 * r.pc.done / r.pc.planned) : 0;
-      h += '<tr><td class="who">' + esc(r.pt.name) + '</td><td>' + esc(catName(r.p.categoryId)) + '<div class="muted small">' + r.p.duration + ' min</div></td><td>' + esc(thName(r.p.therapistId)) + '</td>' +
+      h += '<tr><td class="who">' + esc(r.pt.name) + (r.p.request ? '<div style="margin-top:2px">' + classTag(r.p.request.priorityClass) + '</div>' : '') + '</td><td>' + (isHand(r.p.categoryId) ? tag('info', '✋ ' + esc(catName(r.p.categoryId))) : esc(catName(r.p.categoryId))) + handSummary(r.p.hand) + '<div class="muted small">' + r.p.duration + ' min</div></td><td>' + esc(thName(r.p.therapistId)) + '</td>' +
         '<td class="nowrap">' + E.weekdaysLabel(r.p.weekdays) + ' ' + r.p.startTime + '</td><td>' + r.pc.cycles.length + '</td>' +
         '<td><div class="small">' + r.pc.done + ' / ' + r.pc.planned + '</div><div class="progress"><div style="width:' + pct + '%"></div></div></td>' +
         '<td class="nowrap">' + (r.pc.lastDate ? dShort(r.pc.lastDate) : '—') + '</td><td>' + FORECAST_TAG[r.p.forecast.state]() + '</td>' +
@@ -595,6 +785,7 @@
       '<dt>Ultima seduta in calendario</dt><dd>' + dLabel(pc.lastDate) + '</dd>' +
       '<dt>Effetto sul posto</dt><dd>' + (ov ? slotTag(ov.slot) : '—') + '</dd></dl>' +
       (ov && ov.alerts.length ? '<div class="notice warn">' + ov.alerts.map(a => '• ' + esc(a.text)).join('<br>') + '</div>' : '') + '</section>';
+    h += requestPanelForPath(p);
     // previsione
     const fs = ui.fcDraft && ui.fcDraft.pathId === p.id ? ui.fcDraft : { pathId: p.id, state: f.state, date: f.date || '', reviewDate: f.reviewDate || '', keepSlots: f.keepSlots === false ? 'no' : f.keepSlots === true ? 'si' : '', note: f.note || '', reserveUntil: f.reserveUntil || '' };
     ui.fcDraft = fs;
@@ -637,6 +828,44 @@
     if (!pc.cycles.length) h += '<div class="notice info">Nessun ciclo calendarizzato per questo percorso.</div>';
     return h;
   }
+  /** Scheda paziente: richiesta, classe prescritta, termine di inizio e (se pertinente) percorso Mano. */
+  function requestPanelForPath(p) {
+    const pd = E.pathDeadline(state, p.id);
+    const r = p.request;
+    let h = '<section class="panel"><div class="panel-head"><h3>Richiesta, priorità e termine di inizio</h3><button class="btn sm" data-act="req-edit" data-id="' + p.id + '">' + (r ? 'Modifica' : '＋ Inserisci') + ' dati della richiesta</button></div>';
+    if (!r) h += '<div class="notice info">Dati della richiesta non registrati per questo percorso (es. percorso creato prima dell\'aggiornamento). Nessuna classe di priorità viene attribuita automaticamente.</div>';
+    else {
+      const o = RO(), dl = pd.dl, st = E.deadlineStatus(dl, nowR(), state.settings);
+      h += '<div class="grid g2"><dl class="kv"><dt>Classe sulla prescrizione</dt><dd>' + classTag(r.priorityClass) + (dl.classNote ? '<div class="small muted">' + esc(dl.classNote) + '</div>' : '') + '</dd>' +
+        '<dt>Prestazione</dt><dd>' + esc(optName(o.services, r.service) || '—') + '</dd><dt>Tipo di accesso</dt><dd>' + esc(optName(o.accessTypes, r.accessType) || '—') + '</dd>' +
+        '<dt>Provenienza</dt><dd>' + esc(optName(o.origins, r.origin) || '—') + '</dd>' +
+        '<dt>Prescrizione</dt><dd>' + E.fmtIt(r.prescriptionDate) + (r.prescriptionTime ? ' ' + r.prescriptionTime : '') + '</dd>' +
+        '<dt>Richiesta di presa in carico</dt><dd>' + E.fmtIt(r.requestDate) + (r.requestTime ? ' ' + r.requestTime : '') + '</dd>' +
+        '<dt>Inserimento in lista</dt><dd>' + E.fmtIt(r.listDate) + (r.listTime ? ' ' + r.listTime : '') + '</dd>' +
+        (r.diagnosis ? '<dt>Diagnosi / quesito</dt><dd>' + esc(r.diagnosis) + '</dd>' : '') +
+        (r.prescriberIndication ? '<dt>Indicazione del prescrittore</dt><dd>' + esc(r.prescriberIndication) + '</dd>' : '') + '</dl>' +
+        '<dl class="kv"><dt>Termine per l\'inizio</dt><dd>' + termHtml(dl) + (r.startTerm && r.startTerm.note ? '<div class="small">' + esc(r.startTerm.note) + '</div>' : '') + '</dd>' +
+        '<dt>Prima seduta</dt><dd>' + (pd.first ? dLabel(pd.first.date) + ' ' + pd.first.start + '<div style="margin-top:3px">' + cmpTag(pd.cmp, true) + '</div>' : '—') + '</dd>' +
+        '<dt>Fine prevista del ciclo</dt><dd>' + dLabel(pd.cycleEnd) + ' <span class="muted small">(distinta dal termine di inizio)</span></dd>' +
+        (!pd.first ? '<dt>Stato oggi</dt><dd>' + dlStatusTag(st) + ' <span class="small">' + esc(st.text) + '</span></dd>' : '') + '</dl></div>';
+    }
+    if (isHand(p.categoryId)) {
+      const hd = p.hand || {};
+      h += '<h4 style="margin-top:8px">✋ Percorso Mano / Chirurgia della mano</h4><dl class="kv"><dt>Sottocategoria</dt><dd>' + esc(subcatName(hd.subcategory) || '—') + '</dd><dt>Lato</dt><dd>' + esc(E.HAND_SIDES[hd.side] || '—') + '</dd>' +
+        '<dt>Intervento / trauma</dt><dd>' + (hd.eventType ? esc(hd.eventType) + ' ' : '') + E.fmtIt(hd.eventDate) + '</dd><dt>Struttura inviante</dt><dd>' + esc(hd.sendingFacility || '—') + '</dd>' +
+        '<dt>Finestra di inizio indicata</dt><dd>' + esc(hd.startWindow || '—') + '</dd><dt>Note del prescrittore</dt><dd>' + esc(hd.prescriberNotes || '—') + '</dd>' +
+        '<dt>Competenza richiesta</dt><dd>' + esc(hd.requiredSkill ? skillName(hd.requiredSkill) : 'nessuna in particolare') + (hd.requiredSkill ? ' · ' + (((thById(p.therapistId) || {}).handSkills || []).includes(hd.requiredSkill) ? TAG.ok('il fisioterapista assegnato la ha') : TAG.bad('il fisioterapista assegnato non la ha')) : '') + '</dd></dl>' +
+        '<p class="small muted">Categorie organizzative, non protocolli terapeutici: il programma non stabilisce quando iniziare dopo un intervento.</p>';
+    }
+    return h + '</section>';
+  }
+  const requestModal = m => ({
+    title: 'Dati della richiesta — ' + esc(ptName(m.pathId)), wide: true,
+    body: requestFieldsHtml('modal.draft.request', m.draft.request, true) + (isHand(m.draft.categoryId) ? handFieldsHtml('modal.draft.hand', m.draft.hand, true) : '') +
+      (() => { const dl = E.computeDeadline(state, m.draft.request); return '<div class="dl-preview"><span class="lbl">Termine calcolato</span>' + termHtml(dl) + (dl.classNote ? '<div class="small muted">' + esc(dl.classNote) + '</div>' : '') + '</div>'; })() +
+      '<p class="small muted">Le modifiche non spostano appuntamenti e non cambiano la priorità: aggiornano solo i dati e il confronto con il termine.</p>',
+    foot: '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="req-save">Salva</button>'
+  });
   function forecastHelp(st) {
     return ({
       da_valutare: 'Il posto NON viene liberato: oltre l\'ultima seduta resta una riserva provvisoria visibile, con avviso di riesame.',
@@ -737,8 +966,10 @@
     if (param) return therapistEditor(param);
     const ctx = E.makeContext(state);
     let h = '<section class="panel"><div class="panel-head"><h2>Schede dei fisioterapisti</h2><button class="btn primary" data-act="th-new">＋ Nuovo collega</button></div>' +
-      '<div class="legend" style="margin-bottom:10px">' + tag('info', '★ Competenza specifica') + tag('plain', 'Altra idoneità') + '<span class="muted small">L\'idoneità è esplicita: se un percorso non è indicato, il collega non viene proposto.</span></div><div class="cards">';
-    for (const t of state.therapists) {
+      '<div class="legend" style="margin-bottom:10px">' + tag('info', '★ Competenza specifica') + tag('plain', 'Altra idoneità') + tag('ext', '✋ Competenza Mano') + '<span class="muted small">L\'idoneità è esplicita: se un percorso non è indicato, il collega non viene proposto.</span></div>' +
+      '<div class="btn-row" style="margin-bottom:10px"><label class="small">Mostra: <select class="input" style="width:auto;display:inline-block" data-act="th-catf">' + optionsHtml([['', 'Tutti i colleghi']].concat(state.categories.map(c => [c.id, 'Idonei per ' + (c.hand ? '✋ ' : '') + c.name])), ui.thCat) + '</select></label>' +
+      (handCat() ? '<button class="btn sm' + (ui.thCat === handCat().id ? ' primary' : '') + '" data-act="th-hand">✋ Idonei Mano / Chirurgia della mano</button>' : '') + '</div><div class="cards">';
+    for (const t of state.therapists.filter(x => !ui.thCat || E.eligibility(x, ui.thCat))) {
       const d1 = t.week[1];
       const ambMin = d1 ? d1.blocks.filter(b => b.type === 'amb').reduce((n, b) => n + E.toMin(b.end) - E.toMin(b.start), 0) : 0;
       const abs = (ctx.absencesByTh.get(t.id) || []).filter(a => a.endDate == null || a.endDate === '' || a.endDate >= today());
@@ -746,7 +977,7 @@
       const nowPaths = new Set(fut.map(s => s.pathId)).size;
       h += '<div class="card"><h4>' + esc(t.name) + '</h4><div class="muted small">' + esc(E.PROFILES[t.profile] || t.profile) + '</div>' +
         '<div class="small" style="margin:6px 0">' + (d1 ? 'Lun: ' + d1.in + '–' + d1.out + ' · ambulatorio ' + ambMin + ' min' : 'Lun: non in servizio') + (t.maxPatientsDay ? ' · max ' + t.maxPatientsDay + ' paz./giorno' : '') + '<br>' + nowPaths + ' pazienti con sedute future</div>' +
-        '<div class="chips">' + t.competenze.map(c => tag('info', '★ ' + esc(catName(c)))).join('') + t.idoneita.map(c => tag('plain', esc(catName(c)))).join('') + '</div>' +
+        '<div class="chips">' + t.competenze.map(c => tag('info', '★ ' + esc(catName(c)))).join('') + t.idoneita.map(c => tag('plain', esc(catName(c)))).join('') + (t.handSkills || []).map(k => tag('ext', '✋ ' + esc(skillName(k)))).join('') + '</div>' +
         (abs.length ? '<div style="margin-top:6px">' + abs.map(a => TAG.bad(esc(a.type) + ' dal ' + E.fmtItShort(a.startDate) + (a.endDate ? ' al ' + E.fmtItShort(a.endDate) : ', rientro non noto'))).join(' ') + '</div>' : '') +
         '<div class="btn-row" style="margin-top:8px"><a class="btn sm" href="#/fisioterapisti/' + t.id + '">Apri scheda</a><button class="btn sm" data-act="th-agenda" data-id="' + t.id + '">Agenda settimana</button></div></div>';
     }
@@ -766,7 +997,7 @@
       state.categories.map(c => {
         const v = t.competenze.includes(c.id) ? 'c' : t.idoneita.includes(c.id) ? 'i' : 'n';
         return '<tr><td>' + esc(c.name) + '</td>' + ['c', 'i', 'n'].map(k => '<td><input type="radio" name="cat-' + c.id + '" data-act="th-cat" data-cat="' + c.id + '" value="' + k + '"' + (v === k ? ' checked' : '') + ' aria-label="' + esc(c.name) + '"></td>').join('') + '</tr>';
-      }).join('') + '</tbody></table></div></section>';
+      }).join('') + '</tbody></table></div>' + handSkillsEditor(t) + '</section>';
     h += '<section class="panel"><div class="panel-head"><h3>Settimana tipo</h3><div class="btn-row"><button class="btn sm" data-act="th-template">Applica lo schema del profilo a tutti i giorni</button><button class="btn sm" data-act="th-copy-mon">Copia il lunedì sugli altri giorni</button></div></div>' +
       '<p class="muted small">Ingresso e uscita sono l\'orario di presenza. Solo le fasce <b>Ambulatorio</b> sono prenotabili; l\'<b>Estensione</b> è prenotabile solo con conferma esplicita; reparto, pausa, cartelle e altre attività sono protette.</p>';
     for (let d = 1; d <= 6; d++) h += dayEditor('week.' + d, t.week[d], E.WEEKDAY_LONG[d].replace(/^./, c => c.toUpperCase()));
@@ -781,6 +1012,15 @@
     const abs = state.absences.filter(a => a.therapistId === id);
     h += '<section class="panel"><h3>Indisponibilità registrate</h3>' + (abs.length ? abs.map(a => '<div class="small">' + esc(a.type) + ' ' + E.fmtIt(a.startDate) + (a.allDay === false ? ' ' + a.startTime + '–' + a.endTime : a.endDate ? ' → ' + E.fmtIt(a.endDate) : ' → rientro non noto') + '</div>').join('') : '<p class="muted small">Nessuna.</p>') + '<p><a href="#/assenze">Gestisci in Ferie e malattie</a></p></section>';
     return h;
+  }
+  function handSkillsEditor(t) {
+    const hc = handCat();
+    if (!hc) return '';
+    const el = E.eligibility(t, hc.id);
+    return '<h4 style="margin-top:12px">✋ Competenze specifiche del percorso Mano / Chirurgia della mano</h4>' +
+      (el ? '' : '<p class="small muted">Il collega non è indicato come idoneo per il percorso Mano: le competenze sotto vengono considerate solo se lo diventa.</p>') +
+      '<div class="btn-row">' + state.settings.handSkills.map(k => '<label class="chk"><input type="checkbox" data-act="th-skill" value="' + esc(k.id) + '"' + ((t.handSkills || []).includes(k.id) ? ' checked' : '') + '> ' + esc(k.name) + '</label>').join('') + '</div>' +
+      '<p class="small muted">Usate quando una richiesta indica una competenza specifica (es. ortesi). Elenco modificabile in Impostazioni → Categorie cliniche.</p>';
   }
   function dayEditor(pathKey, day, title, isException) {
     const errs = day ? E.validateDay(day) : [];
@@ -808,7 +1048,7 @@
   VIEWS.impostazioni = function () {
     const S = state.settings;
     const tab = ui.settingsTab;
-    let h = '<div class="tabs">' + [['parametri', 'Parametri'], ['turni', 'Schemi di turno'], ['categorie', 'Categorie cliniche'], ['chiusure', 'Festività e chiusure'], ['dati', 'Dati e salvataggio'], ['storico', 'Storico modifiche']].map(([k, l]) => '<button class="' + (tab === k ? 'active' : '') + '" data-act="set-tab" data-tab="' + k + '">' + l + '</button>').join('') + '</div>';
+    let h = '<div class="tabs">' + [['parametri', 'Parametri'], ['scadenze', 'Priorità e scadenze'], ['turni', 'Schemi di turno'], ['categorie', 'Categorie cliniche'], ['chiusure', 'Festività e chiusure'], ['dati', 'Dati e salvataggio'], ['storico', 'Storico modifiche']].map(([k, l]) => '<button class="' + (tab === k ? 'active' : '') + '" data-act="set-tab" data-tab="' + k + '">' + l + '</button>').join('') + '</div>';
     if (tab === 'parametri') {
       const num = (key, label, help, min, max) => '<div class="field"><label class="lbl">' + label + '</label><input type="number" class="input" min="' + min + '" max="' + max + '" data-setting="' + key + '" value="' + esc(key.split('.').reduce((o, k) => o[k], S)) + '"><div class="field-help">' + help + '</div></div>';
       h += '<section class="panel"><h3>Parametri della ricerca e delle previsioni</h3><div class="grid g3">' +
@@ -822,8 +1062,9 @@
         '<div class="field"><label class="chk"><input type="checkbox" data-setting="warn45.enabled"' + (S.warn45.enabled ? ' checked' : '') + '> Avviso attivo</label></div>' +
         num('warn45.threshold', 'Avvisa oltre N sedute da 45 al giorno', '', 0, 10) +
         '<div class="field"><span class="lbl">Applica ai profili</span>' + Object.entries(E.PROFILES).map(([k, l]) => '<label class="chk"><input type="checkbox" data-act="warn45-profile" value="' + k + '"' + (S.warn45.profiles.includes(k) ? ' checked' : '') + '> ' + esc(l) + '</label>').join('<br>') + '</div></div></section>' +
-        '<section class="panel"><h3>Priorità della lista d\'attesa</h3><div class="field"><label class="lbl">Valori dalla più alta alla più bassa, separati da virgola</label><input class="input" data-setting="priorities" value="' + esc(S.priorities.join(', ')) + '"></div></section>';
+        '<section class="panel"><h3>Priorità interna della lista d\'attesa</h3><p class="muted small">Valori organizzativi del servizio, distinti dalla classe U/B/D/P riportata sulla prescrizione (vedi "Priorità e scadenze").</p><div class="field"><label class="lbl">Valori dalla più alta alla più bassa, separati da virgola</label><input class="input" data-setting="priorities" value="' + esc(S.priorities.join(', ')) + '"></div></section>';
     }
+    if (tab === 'scadenze') h += settingsDeadlines();
     if (tab === 'turni') {
       const t7 = S.templates.reparto7, t8 = S.templates.reparto8, ta = S.templates.ambulatorio;
       h += '<section class="panel"><h3>Limiti dell\'ambulatorio pomeridiano</h3><p class="muted small">Questi limiti non sono ancora definiti in modo rigido: modificali qui. L\'<b>estensione</b> è tempo ricavabile solo dopo conferma; il resto fino a fine turno è riservato alle cartelle.</p>' +
@@ -841,9 +1082,14 @@
     if (tab === 'categorie') {
       h += '<section class="panel"><h3>Categorie cliniche (esempi modificabili)</h3><p class="muted small">Non rappresentano l\'elenco reale del servizio. Una categoria in uso non può essere eliminata.</p><div class="table-wrap"><table class="t"><thead><tr><th>Nome</th><th>In uso</th><th></th></tr></thead><tbody>' +
         state.categories.map(c => {
-          const used = state.paths.some(p => p.categoryId === c.id) || state.waitlist.some(w => w.categoryId === c.id);
-          return '<tr><td><input class="input" data-act="cat-rename" data-id="' + c.id + '" value="' + esc(c.name) + '" aria-label="Nome categoria"></td><td>' + (used ? 'sì' : 'no') + '</td><td>' + (used ? '' : '<button class="btn sm danger" data-act="cat-del" data-id="' + c.id + '">Elimina</button>') + '</td></tr>';
+          const used = c.hand || state.paths.some(p => p.categoryId === c.id) || state.waitlist.some(w => w.categoryId === c.id);
+          return '<tr><td><input class="input" data-act="cat-rename" data-id="' + c.id + '" value="' + esc(c.name) + '" aria-label="Nome categoria"></td><td>' + (c.hand ? '✋ percorso Mano' + (state.paths.some(p => p.categoryId === c.id) ? ', in uso' : '') : used ? 'sì' : 'no') + '</td><td>' + (used ? '' : '<button class="btn sm danger" data-act="cat-del" data-id="' + c.id + '">Elimina</button>') + '</td></tr>';
         }).join('') + '</tbody></table></div><div class="btn-row" style="margin-top:10px"><input class="input" id="cat-new" style="max-width:300px" placeholder="Nuova categoria" aria-label="Nuova categoria"><button class="btn" data-act="cat-add">＋ Aggiungi</button></div></section>';
+      const hc = handCat();
+      if (hc) {
+        h += '<section class="panel"><h3>✋ Percorso ' + esc(hc.name) + '</h3><p class="muted small">Il percorso è organizzativo e distinto dalla diagnosi specifica. Sottocategorie e competenze sono <b>esempi modificabili</b>, non protocolli terapeutici automatici.</p><div class="grid g2">' +
+          optListEditor('handSub', 'Sottocategorie', hc.subcategories) + optListEditor('handSkills', 'Competenze specifiche dei fisioterapisti', state.settings.handSkills) + '</div></section>';
+      }
     }
     if (tab === 'chiusure') {
       const cl = state.closures.slice().sort((a, b) => a.date < b.date ? -1 : 1);
@@ -867,10 +1113,57 @@
     return h;
   };
 
+  /** Elenco modificabile di voci {id, name}: rinomina, aggiungi, elimina se non in uso. */
+  function optListEditor(key, title, list) {
+    return '<div><h4>' + esc(title) + '</h4><table class="t"><tbody>' + list.map(x => {
+      const used = optUsed(state, key, x.id);
+      return '<tr><td><input class="input" data-act="opt-rename" data-key="' + key + '" data-id="' + esc(x.id) + '" value="' + esc(x.name) + '" aria-label="Nome"></td><td class="small nowrap">' + (used ? 'in uso' : '<button class="btn sm danger" data-act="opt-del" data-key="' + key + '" data-id="' + esc(x.id) + '">Elimina</button>') + '</td></tr>';
+    }).join('') + '</tbody></table><div class="btn-row" style="margin-top:6px"><input class="input" id="opt-new-' + key + '" style="max-width:260px" placeholder="Nuova voce" aria-label="Nuova voce"><button class="btn sm" data-act="opt-add" data-key="' + key + '">＋ Aggiungi</button></div></div>';
+  }
+  function optListOf(st, key) {
+    if (key === 'handSkills') return st.settings.handSkills;
+    if (key === 'handSub') { const h = st.categories.find(c => c.hand); return h ? h.subcategories : []; }
+    return st.settings.requestOptions[key];
+  }
+  function optUsed(st, key, id) {
+    const reqs = st.waitlist.map(w => ({ r: w.request || {}, h: w.hand || {} })).concat(st.paths.map(p => ({ r: p.request || {}, h: p.hand || {} })));
+    if (key === 'handSkills') return st.therapists.some(t => (t.handSkills || []).includes(id)) || reqs.some(x => x.h.requiredSkill === id);
+    if (key === 'handSub') return reqs.some(x => x.h.subcategory === id);
+    const field = { accessTypes: 'accessType', services: 'service', origins: 'origin' }[key];
+    return reqs.some(x => x.r[field] === id) || (st.settings.deadlineRules || []).some(r => r[field] === id);
+  }
+  function settingsDeadlines() {
+    const S = state.settings, o = S.requestOptions;
+    const sel = (id, field, list, v, empty) => '<select class="input" data-act="rule-field" data-id="' + esc(id) + '" data-field="' + field + '" aria-label="' + field + '">' + optionsHtml((empty ? [['', empty]] : []).concat(list), v) + '</select>';
+    let h = '<section class="panel"><h3>Riferimenti regionali e limiti di applicazione</h3><div class="notice info">Come <b>riferimento informativo</b>, la pagina della Regione Liguria <a href="' + E.LIGURIA_URL + '" target="_blank" rel="noopener">Liste d\'attesa</a> riporta: <b>U</b> entro 72 ore; <b>B</b> entro 10 giorni; <b>D</b> entro 30 giorni per le visite e 60 giorni per gli accertamenti diagnostici; <b>P</b> di norma entro 120 giorni, oppure oltre secondo indicazione del prescrittore; priorità non specificata: gestione come P.</div>' +
+      '<ul class="small"><li>La classe prescritta è conservata così com\'è (anche "Non indicata"); l\'eventuale regola di gestione è separata.</li><li>Il programma non attribuisce priorità dalla diagnosi e non modifica quella prescritta.</li><li>Il termine di visite ed esami <b>non</b> viene applicato automaticamente all\'inizio dei cicli fisioterapici: per i cicli servono una regola specifica o il "Termine per iniziare il trattamento".</li><li>U = 72 ore di calendario, non tre giorni lavorativi; se manca l\'ora necessaria il dato viene segnalato.</li><li>Le chiusure del servizio possono impedire un appuntamento ma non spostano la scadenza.</li><li>Se mancano la regola o la data di decorrenza: "Scadenza da verificare".</li></ul>' +
+      '<div class="grid g3"><div class="field"><label class="lbl">Priorità non indicata sulla prescrizione</label><select class="input" data-act="unspec">' + optionsHtml([['P', 'Gestisci come P (riferimento regionale)'], ['', 'Nessuna regola: scadenza da verificare']], S.unspecifiedAs || '') + '</select></div>' +
+      '<div class="field"><label class="lbl">"Vicino alla scadenza" per termini in ore</label><input type="number" class="input" min="1" max="240" data-setting="deadlineWarn.hours" value="' + esc(S.deadlineWarn.hours) + '"><div class="field-help">Ore residue</div></div>' +
+      '<div class="field"><label class="lbl">"Vicino alla scadenza" per termini in giorni</label><input type="number" class="input" min="0" max="60" data-setting="deadlineWarn.days" value="' + esc(S.deadlineWarn.days) + '"><div class="field-help">Giorni residui</div></div></div></section>';
+    h += '<section class="panel"><div class="panel-head"><h3>Regole dei termini</h3><div class="btn-row"><button class="btn sm" data-act="rule-add">＋ Nuova regola</button><button class="btn sm danger" data-act="rules-reset">Ripristina regole predefinite</button></div></div>' +
+      '<p class="muted small">Si applica la <b>prima</b> regola attiva che corrisponde a classe, prestazione e tipo di accesso (vuoto = qualsiasi). Le regole con stato "Configurazione demo" sono esempi fittizi e vanno validate dal servizio.</p>' +
+      '<div class="table-wrap"><table class="t rules"><thead><tr><th>Attiva</th><th>Classe</th><th>Prestazione</th><th>Accesso</th><th>Durata</th><th>Unità</th><th>Decorre dalla</th><th>Fonte</th><th>Stato di validazione</th><th></th></tr></thead><tbody>' +
+      S.deadlineRules.map(r => '<tr><td><input type="checkbox" data-act="rule-field" data-id="' + esc(r.id) + '" data-field="active"' + (r.active !== false ? ' checked' : '') + ' aria-label="Attiva"></td>' +
+        '<td>' + sel(r.id, 'priorityClass', ['U', 'B', 'D', 'P'].map(c => [c, c]), r.priorityClass) + '</td>' +
+        '<td>' + sel(r.id, 'service', o.services.map(x => [x.id, x.name]), r.service, 'qualsiasi') + '</td>' +
+        '<td>' + sel(r.id, 'accessType', o.accessTypes.map(x => [x.id, x.name]), r.accessType, 'qualsiasi') + '</td>' +
+        '<td><input type="number" class="input" style="width:80px" min="1" data-act="rule-field" data-id="' + esc(r.id) + '" data-field="amount" value="' + esc(r.amount) + '" aria-label="Durata"></td>' +
+        '<td>' + sel(r.id, 'unit', [['ore', 'ore'], ['giorni', 'giorni']], r.unit) + '</td>' +
+        '<td>' + sel(r.id, 'from', Object.entries(E.TERM_EVENTS), r.from) + '</td>' +
+        '<td><input class="input" data-act="rule-field" data-id="' + esc(r.id) + '" data-field="source" value="' + esc(r.source) + '" aria-label="Fonte" title="' + esc(r.note || '') + '"></td>' +
+        '<td>' + sel(r.id, 'validation', Object.entries(E.RULE_VALIDATION), r.validation) + '</td>' +
+        '<td><button class="btn sm danger" data-act="rule-del" data-id="' + esc(r.id) + '">Elimina</button></td></tr>').join('') +
+      '</tbody></table></div></section>';
+    h += '<section class="panel"><h3>Voci organizzative della richiesta</h3><p class="muted small">Coprono i casi della demo e <b>non</b> sono un elenco ufficiale esaustivo delle modalità prescrittive aziendali: aggiungi, rinomina o elimina (se non in uso).</p><div class="grid g3">' +
+      optListEditor('accessTypes', 'Tipo di accesso', o.accessTypes) + optListEditor('services', 'Prestazione richiesta', o.services) + optListEditor('origins', 'Provenienza', o.origins) + '</div></section>';
+    return h;
+  }
+
   /* ================================================================== */
   /* MODALI                                                               */
   /* ================================================================== */
   const MODALS = {};
+  MODALS.request = requestModal;
   MODALS.confirm = m => ({
     title: m.title, body: m.html,
     foot: '<button class="btn" data-act="close-modal">Annulla</button><button class="btn ' + (m.danger ? 'danger' : 'primary') + '" data-act="modal-ok">' + esc(m.okLabel) + '</button>'
@@ -900,12 +1193,18 @@
   };
   MODALS.book = m => {
     const { g, o, req } = m;
+    const dl = ui.results && ui.results.dl;
+    const cmp = dl ? E.compareStart(dl, o.startDate, o.start) : null;
+    const late = cmp && (cmp.code === 'oltre' || cmp.code === 'prima_minimo');
     return {
       title: 'Conferma assegnazione', wide: true,
       body: '<div class="grid g2"><div class="field"><label class="lbl" for="bk-name">Paziente (nome o identificativo) *</label><input id="bk-name" class="input" value="' + esc(ui.search.name) + '" autofocus></div><div></div></div>' +
         '<dl class="kv" style="margin-top:10px"><dt>Fisioterapista</dt><dd>' + esc(g.therapist.name) + ' · ' + (g.kind === 'specifica' ? 'competenza specifica' : 'altra idoneità') + '</dd>' +
         '<dt>Percorso</dt><dd>' + esc(catName(req.categoryId)) + ' · ' + req.duration + ' min</dd><dt>Giorni e orario</dt><dd><b>' + E.weekdaysLabel(req.weekdays) + ' ' + hm(o.start) + '–' + hm(o.end) + '</b></dd>' +
-        '<dt>Ciclo</dt><dd>' + req.sessions + ' sedute, dal <b>' + dLabel(o.startDate) + '</b> al <b>' + dLabel(o.endDate) + '</b></dd></dl>' +
+        '<dt>Prima seduta</dt><dd><b>' + dLabel(o.startDate) + ' ' + hm(o.start) + '</b></dd>' +
+        '<dt>Termine di inizio</dt><dd>' + (dl ? termHtml(dl, { short: true }) + '<div style="margin-top:4px">' + cmpTag(cmp, true) + '</div>' : '—') + '</dd>' +
+        '<dt>Fine prevista del ciclo</dt><dd>' + req.sessions + ' sedute, ultima il <b>' + dLabel(o.endDate) + '</b> <span class="muted small">(data distinta dal termine di inizio)</span></dd></dl>' +
+        (late ? '<div class="notice bad"><b>⚠ ' + esc(cmp.text) + '.</b> La scelta resta all\'operatore: la priorità e il termine non vengono modificati.<br><label class="chk" style="margin-top:6px"><input type="checkbox" id="bk-late"> Confermo comunque questa assegnazione, consapevole del ritardo</label></div>' : '') +
         (o.status === 'ext' ? '<div class="notice warn"><b>Attenzione: la proposta usa la fascia di estensione</b> in ' + o.extDates.length + ' date. ' + esc(o.extDates[0].info.text) + '.<br><label class="chk" style="margin-top:6px"><input type="checkbox" id="bk-ext"> Ho verificato con il collega l\'estensione della fascia e il tempo per le cartelle</label></div>' : '') +
         (o.warnings.length ? '<div class="notice warn">' + o.warnings.map(w => E.fmtItShort(w.date) + ': ' + esc(w.text)).join('<br>') + '</div>' : '') +
         '<p class="small muted">Prima di salvare il programma ricontrolla tutte le date con i dati aggiornati.</p>' + cycleDatesHtml({ perDate: o.dates.map(d => ({ date: d, r: { status: o.extDates.some(x => x.date === d) ? 'ext' : 'ok', extInfo: (o.extDates.find(x => x.date === d) || {}).info } })) }, o.skipped, o.start, req.duration),
@@ -995,15 +1294,17 @@
   };
   MODALS.waitlist = m => {
     const w = m.draft;
+    if (!w.request) w.request = E.emptyRequest({ listDate: w.insertedAt });
+    if (!w.request.startTerm) w.request.startTerm = E.emptyRequest().startTerm;
+    if (isHand(w.categoryId) && !w.hand) w.hand = E.emptyHand();
     const k = w.weekdays.slice().sort().join(',');
     const freq = w.freqMode || (k === '1,3,5' ? 'lmv' : k === '2,4' ? 'mg' : 'custom');
     return {
       title: m.isNew ? 'Nuovo paziente in lista d\'attesa' : 'Modifica — ' + esc(w.name), wide: true,
       body: '<div class="grid g3">' +
         '<div class="field"><label class="lbl">Nome / identificativo *</label><input class="input" data-bind="modal.draft.name" value="' + esc(w.name) + '" autofocus></div>' +
-        '<div class="field"><label class="lbl">Data di inserimento</label><input type="date" class="input" data-bind="modal.draft.insertedAt" value="' + esc(w.insertedAt) + '"></div>' +
-        '<div class="field"><label class="lbl">Priorità (assegnata dal servizio)</label><select class="input" data-bind="modal.draft.priority">' + optionsHtml(state.settings.priorities.map(p => [p, p]), w.priority) + '</select></div>' +
-        '<div class="field"><label class="lbl">Patologia / percorso</label><select class="input" data-bind="modal.draft.categoryId">' + optionsHtml(state.categories.map(c => [c.id, c.name]), w.categoryId) + '</select></div>' +
+        '<div class="field"><label class="lbl">Priorità interna del servizio</label><select class="input" data-bind="modal.draft.priority">' + optionsHtml(state.settings.priorities.map(p => [p, p]), w.priority) + '</select><div class="field-help">Organizzativa, distinta dalla classe prescritta.</div></div>' +
+        '<div class="field"><label class="lbl">Patologia / percorso</label><select class="input" data-bind="modal.draft.categoryId" data-rerender="1">' + optionsHtml(state.categories.map(c => [c.id, (c.hand ? '✋ ' : '') + c.name]), w.categoryId) + '</select></div>' +
         '<div class="field"><label class="lbl">Durata</label><select class="input" data-bind="modal.draft.duration" data-type="num">' + optionsHtml([[30, '30 min'], [45, '45 min']], w.duration) + '</select></div>' +
         '<div class="field"><label class="lbl">Sedute</label><input type="number" min="1" max="60" class="input" data-bind="modal.draft.sessions" data-type="num" value="' + esc(w.sessions) + '"></div>' +
         '<div class="field"><span class="lbl">Frequenza</span><div class="seg">' + [['lmv', 'Lun-Mer-Ven'], ['mg', 'Mar-Gio'], ['custom', 'Personalizzata']].map(([v, l]) => '<label><input type="radio" name="wfq" value="' + v + '" data-act="wl-freq"' + (freq === v ? ' checked' : '') + '><span>' + l + '</span></label>').join('') + '</div>' +
@@ -1013,7 +1314,10 @@
         '<div class="field"><label class="lbl">Fascia oraria (facoltativa)</label><div class="btn-row"><select class="input" style="width:100px" data-bind="modal.draft.prefFrom">' + optionsHtml([['', '—']], w.pref ? w.pref.from : '') + timeOptions(w.pref ? w.pref.from : '', '07:00', '15:00', 15) + '</select><select class="input" style="width:100px" data-bind="modal.draft.prefTo">' + optionsHtml([['', '—']], w.pref ? w.pref.to : '') + timeOptions(w.pref ? w.pref.to : '', '07:15', '15:15', 15) + '</select></div></div>' +
         '<div class="field"><label class="lbl">Tipo di vincolo</label><select class="input" data-bind="modal.draft.prefMode">' + optionsHtml([['flessibile', 'Preferenza flessibile'], ['obbligatoria', 'Vincolo obbligatorio']], w.pref ? w.pref.mode : 'flessibile') + '</select></div>' +
         '<div class="field"><label class="lbl">Note sulla disponibilità</label><input class="input" data-bind="modal.draft.availabilityNote" value="' + esc(w.availabilityNote || '') + '"></div>' +
-        '<div class="field" style="grid-column:1/-1"><label class="lbl">Nota</label><input class="input" data-bind="modal.draft.note" value="' + esc(w.note || '') + '"></div></div>',
+        '<div class="field" style="grid-column:1/-1"><label class="lbl">Nota</label><input class="input" data-bind="modal.draft.note" value="' + esc(w.note || '') + '"></div></div>' +
+        '<h4 style="margin-top:14px">Richiesta: priorità e termine di inizio</h4>' + requestFieldsHtml('modal.draft.request', w.request, true) +
+        (isHand(w.categoryId) ? handFieldsHtml('modal.draft.hand', w.hand, true) : '') +
+        (() => { const dl = E.computeDeadline(state, w.request); return '<div class="dl-preview"><span class="lbl">Termine calcolato</span>' + termHtml(dl) + ' ' + dlStatusTag(E.deadlineStatus(dl, nowR(), state.settings)) + (dl.classNote ? '<div class="small muted">' + esc(dl.classNote) + '</div>' : '') + '</div>'; })(),
       foot: (m.isNew ? '' : '<button class="btn danger" data-act="wl-delete">Elimina</button>') + '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="wl-save">Salva</button>'
     };
   };
@@ -1025,8 +1329,8 @@
     return {
       title: 'Pazienti in lista compatibili con il posto di ' + esc(ptName(p.id)), wide: true,
       body: '<p>' + esc(thName(p.therapistId)) + ' · ' + E.weekdaysLabel(p.weekdays) + ' ' + p.startTime + ' · ' + slotTag(ov.slot) + '</p><p class="small muted">Ordinati per priorità e poi per tempo di attesa. La verifica controlla tutte le date del ciclo del paziente in lista.</p>' +
-        '<table class="t"><thead><tr><th>Paziente</th><th>Priorità</th><th>Attesa</th><th>Percorso</th><th>Ciclo</th><th>Verifica</th><th></th></tr></thead><tbody>' +
-        list.map(x => '<tr><td class="who">' + esc(x.entry.name) + '</td><td>' + esc(x.entry.priority) + '</td><td>' + E.diffDays(x.entry.insertedAt, today()) + ' gg</td><td>' + esc(catName(x.entry.categoryId)) + ' · ' + x.entry.duration + ' min</td><td>' + E.weekdaysLabel(x.entry.weekdays) + ' · ' + x.entry.sessions + ' dal ' + E.fmtItShort(x.startDate) + '</td><td>' +
+        '<table class="t"><thead><tr><th>Paziente</th><th>Classe / priorità interna</th><th>Attesa</th><th>Percorso</th><th>Ciclo</th><th>Verifica</th><th></th></tr></thead><tbody>' +
+        list.map(x => '<tr><td class="who">' + esc(x.entry.name) + '</td><td>' + classTag((x.entry.request || {}).priorityClass) + ' <span class="small muted">' + esc(x.entry.priority) + '</span></td><td>' + E.diffDays(x.entry.insertedAt, today()) + ' gg</td><td>' + esc(catName(x.entry.categoryId)) + ' · ' + x.entry.duration + ' min</td><td>' + E.weekdaysLabel(x.entry.weekdays) + ' · ' + x.entry.sessions + ' dal ' + E.fmtItShort(x.startDate) + '</td><td>' +
           (x.ev.status === 'ok' ? TAG.ok('certo') : x.ev.status === 'ext' ? TAG.ext('estensione') : x.ev.status === 'prob' ? TAG.prob('probabile') : TAG.bad(esc(x.ev.firstFail.r.reason) + ' (' + E.fmtItShort(x.ev.firstFail.date) + ')')) + '</td><td><button class="btn sm primary" data-act="wl-find" data-id="' + x.entry.id + '">Trova posto</button></td></tr>').join('') + '</tbody></table>',
       foot: '<button class="btn" data-act="close-modal">Chiudi</button>'
     };
@@ -1081,6 +1385,7 @@
   };
   ACT.ses = el => { ui.search.sessionsMode = el.value; render(); };
   ACT['pref-on'] = el => { ui.search.prefOn = el.checked; render(); };
+  ACT['pick-hand'] = () => { const h = handCat(); if (h) { ui.search.categoryId = h.id; ui.reqOpen = true; render(); } };
   ACT['search-reset'] = () => { ui.search = defaultSearch(); ui.results = null; render(); };
   ACT.tab = el => { ui.tab = el.dataset.tab; render(); };
   ACT.sort = el => { ui.sort = el.value; if (ui.results) ui.results.request.sort = el.value; render(); };
@@ -1093,11 +1398,14 @@
     if (!name) { toast('Inserisci il nome o l\'identificativo del paziente.', 'bad'); document.getElementById('bk-name').classList.add('invalid'); return; }
     const extBox = document.getElementById('bk-ext');
     if (m.o.status === 'ext' && !(extBox && extBox.checked)) { toast('Spunta la conferma dell\'estensione della fascia.', 'bad'); return; }
+    const lateBox = document.getElementById('bk-late');
+    if (lateBox && !lateBox.checked) { toast('La prima seduta è oltre il termine o prima della data minima: spunta la conferma per procedere.', 'bad'); return; }
     fresh();
     const r = safe(() => E.bookCycle(state, {
       patientName: name, categoryId: m.req.categoryId, therapistId: m.g.therapist.id, duration: m.req.duration,
       weekdays: m.req.weekdays, startTime: hm(m.o.start), startDate: m.o.startDate, sessions: m.req.sessions,
-      acceptExtension: m.o.status === 'ext', waitlistId: ui.search.waitlistId || null
+      acceptExtension: m.o.status === 'ext', waitlistId: ui.search.waitlistId || null,
+      request: E.clone(ui.search.request), hand: isHand(m.req.categoryId) ? E.clone(ui.search.hand) : undefined
     }));
     if (!r) { closeModal(); runSearch(); return; }
     closeModal();
@@ -1127,9 +1435,12 @@
   };
   function newWaitlistFromSearch(name) {
     const req = buildRequest();
+    const request = E.clone(ui.search.request);
+    if (!request.listDate) request.listDate = today(); // l'inserimento in lista avviene ora
     return {
-      id: E.uid('wl'), name, insertedAt: today(), priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: req.categoryId,
-      duration: req.duration, weekdays: req.weekdays, sessions: req.sessions, earliestDate: req.earliestDate, pref: req.pref, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null
+      id: E.uid('wl'), name, insertedAt: request.listDate, priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: req.categoryId,
+      duration: req.duration, weekdays: req.weekdays, sessions: req.sessions, earliestDate: req.earliestDate, pref: req.pref, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null,
+      request, hand: isHand(req.categoryId) ? E.clone(ui.search.hand) : undefined
     };
   }
   ACT['search-to-waitlist'] = () => {
@@ -1144,6 +1455,13 @@
   ACT['ag-mode'] = el => { ui.agenda.mode = el.value; render(); };
   ACT['ag-prev'] = () => { const a = ui.agenda; a.date = a.mode === 'giorno' ? prevWorkday(a.date) : E.addDays(a.date, -7); render(); };
   ACT['ag-next'] = () => { const a = ui.agenda; a.date = a.mode === 'giorno' ? nextWorkingDayAny(a.date) : E.addDays(a.date, 7); render(); };
+  ACT['ag-path'] = el => { setAgendaPath(el.value); };
+  ACT['ag-hand'] = () => { const h = handCat(); setAgendaPath(ui.agenda.pathway === h.id ? '' : h.id); };
+  function setAgendaPath(v) {
+    const a = ui.agenda; a.pathway = v;
+    if (v && a.mode === 'settimana' && !E.eligibility(thById(a.therapistId) || {}, v)) { const t = state.therapists.find(x => E.eligibility(x, v)); if (t) a.therapistId = t.id; }
+    render();
+  }
   ACT['ag-today'] = () => { ui.agenda.date = today(); render(); };
   function prevWorkday(d) { d = E.addDays(d, -1); while (E.weekday(d) > 5) d = E.addDays(d, -1); return d; }
   function nextWorkingDayAny(d) { d = E.addDays(d, 1); while (E.weekday(d) > 5) d = E.addDays(d, 1); return d; }
@@ -1184,6 +1502,11 @@
   };
   // --- lista d'attesa
   ACT['wl-filter'] = el => { ui.wlFilter = el.value; render(); };
+  ACT.wlPrio = el => { ui.wlPrio = el.value; render(); };
+  ACT.wlDue = el => { ui.wlDue = el.value; render(); };
+  ACT['wl-cat'] = el => { ui.wlCat = el.value; render(); };
+  ACT['wl-sort'] = el => { ui.wlSort = el.value; render(); };
+  ACT['wl-hand'] = () => { const h = handCat(); ui.wlCat = ui.wlCat === h.id ? '' : h.id; render(); };
   ACT['wl-find'] = el => {
     const w = state.waitlist.find(x => x.id === el.dataset.id);
     ui.search = waitlistToSearch(w);
@@ -1199,7 +1522,7 @@
     commit(st, 'Stato aggiornato.');
   };
   ACT['wl-new'] = () => {
-    openModal({ type: 'waitlist', isNew: true, draft: { id: E.uid('wl'), name: '', insertedAt: today(), priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: state.categories[0].id, duration: 30, weekdays: [1, 3, 5], sessions: 10, earliestDate: nextWorkingDay(today()), pref: null, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null } });
+    openModal({ type: 'waitlist', isNew: true, draft: { id: E.uid('wl'), name: '', insertedAt: today(), priority: state.settings.priorities[1] || state.settings.priorities[0], categoryId: state.categories[0].id, duration: 30, weekdays: [1, 3, 5], sessions: 10, earliestDate: nextWorkingDay(today()), pref: null, status: 'in_attesa', note: '', availabilityNote: '', preaccordo: null, request: E.emptyRequest({ listDate: today() }) } });
   };
   ACT['wl-edit'] = el => { openModal({ type: 'waitlist', draft: E.clone(state.waitlist.find(x => x.id === el.dataset.id)) }); };
   ACT['wl-freq'] = el => {
@@ -1220,10 +1543,17 @@
     }
     delete d.prefFrom; delete d.prefTo; delete d.prefMode; delete d.freqMode;
     d.name = d.name.trim();
+    // la data di inserimento in lista è un solo dato: quella della richiesta
+    if (!d.request.listDate) d.request.listDate = d.insertedAt || today();
+    d.insertedAt = d.request.listDate;
+    if (d.request.migrated && (d.request.priorityClass || d.request.service || d.request.accessType)) delete d.request.migrated;
+    if (!isHand(d.categoryId)) delete d.hand;
+    const nb = d.request.startTerm && d.request.startTerm.notBefore;
+    if (nb && (!d.earliestDate || nb > d.earliestDate)) d.earliestDate = nb;
     const st = E.clone(fresh());
     const i = st.waitlist.findIndex(x => x.id === d.id);
     if (i >= 0) st.waitlist[i] = d; else st.waitlist.push(d);
-    E.addLog(st, (i >= 0 ? 'Modificato in lista d\'attesa: ' : 'Inserito in lista d\'attesa: ') + d.name + ' (' + catName(d.categoryId) + ', priorità ' + d.priority + ')');
+    E.addLog(st, (i >= 0 ? 'Modificato in lista d\'attesa: ' : 'Inserito in lista d\'attesa: ') + d.name + ' (' + catName(d.categoryId) + ', classe ' + (E.PRIORITY_CLASSES[d.request.priorityClass] || 'da inserire') + ', priorità interna ' + d.priority + ')');
     if (m.isNew && parseHash()[0] === 'trova') ui.search.waitlistId = d.id;
     closeModal();
     commit(st, 'Lista d\'attesa aggiornata.');
@@ -1287,6 +1617,21 @@
     Object.assign(s, { name: ptName(p.id) + ' (rinnovo)', categoryId: p.categoryId, duration: p.duration, weekdays: p.weekdays.slice(), freq: k === '1,3,5' ? 'lmv' : k === '2,4' ? 'mg' : 'custom', sessionsMode: 'altro', sessionsCustom: Number(el.dataset.n), earliestDate: pv.dates[0] });
     ui.search = s; closeModal(); location.hash = '#/trova'; setTimeout(runSearch, 0);
   };
+  ACT['req-edit'] = el => {
+    const p = pathById(el.dataset.id);
+    openModal({ type: 'request', pathId: p.id, draft: { categoryId: p.categoryId, request: E.clone(p.request || E.emptyRequest()), hand: E.clone(p.hand || E.emptyHand()) } });
+  };
+  ACT['req-save'] = () => {
+    const m = ui.modal;
+    const st = E.clone(fresh());
+    const p = st.paths.find(x => x.id === m.pathId);
+    const req = E.clone(m.draft.request); delete req.migrated;
+    p.request = req;
+    if (isHand(p.categoryId)) p.hand = E.clone(m.draft.hand);
+    E.addLog(st, 'Dati della richiesta aggiornati per ' + ptName(p.id) + ' (classe ' + (E.PRIORITY_CLASSES[req.priorityClass] || 'da inserire') + ')');
+    closeModal();
+    commit(st, 'Dati della richiesta salvati.');
+  };
   ACT['show-compatible'] = el => openModal({ type: 'compatible', pathId: el.dataset.path });
   // --- assenze
   ACT['abs-impact'] = el => openModal({ type: 'absImpact', id: el.dataset.id });
@@ -1313,10 +1658,13 @@
   ACT['th-new'] = () => {
     const st = E.clone(fresh());
     const id = E.uid('th');
-    st.therapists.push({ id, name: 'Nuovo collega', profile: 'reparto7', competenze: [], idoneita: [], week: E.buildWeek('reparto7', st.settings), exceptions: [], maxPatientsDay: null, note: '' });
+    st.therapists.push({ id, name: 'Nuovo collega', profile: 'reparto7', competenze: [], idoneita: [], handSkills: [], week: E.buildWeek('reparto7', st.settings), exceptions: [], maxPatientsDay: null, note: '' });
     E.addLog(st, 'Aggiunto un nuovo collega');
     state = st; Store.save(state); ui.thDraft = null; go('#/fisioterapisti/' + id);
   };
+  ACT['th-skill'] = el => { const t = ui.thDraft; t.handSkills = (t.handSkills || []).filter(x => x !== el.value); if (el.checked) t.handSkills.push(el.value); };
+  ACT['th-catf'] = el => { ui.thCat = el.value; render(); };
+  ACT['th-hand'] = () => { const h = handCat(); ui.thCat = ui.thCat === h.id ? '' : h.id; render(); };
   ACT['th-cancel'] = () => { ui.thDraft = null; render(); };
   ACT['th-cat'] = el => {
     const t = ui.thDraft, c = el.dataset.cat;
@@ -1387,6 +1735,50 @@
       commit(st, 'Schema applicato.' + (conf ? ' Appuntamenti in conflitto: ' + conf + '.' : ''));
     });
   };
+  ACT.unspec = el => { const st = E.clone(fresh()); st.settings.unspecifiedAs = el.value; E.addLog(st, 'Gestione della priorità non indicata: ' + (el.value ? 'come ' + el.value : 'nessuna regola')); commit(st, 'Impostazione salvata.'); };
+  ACT['rule-field'] = el => {
+    const st = E.clone(fresh());
+    const r = st.settings.deadlineRules.find(x => x.id === el.dataset.id);
+    if (!r) return;
+    const f = el.dataset.field;
+    let v = el.type === 'checkbox' ? el.checked : el.value;
+    if (f === 'amount') { v = Number(v); if (!(v > 0)) { toast('La durata deve essere maggiore di zero.', 'bad'); render(); return; } }
+    r[f] = v;
+    E.addLog(st, 'Regola dei termini modificata (' + r.priorityClass + ', ' + (r.service || 'qualsiasi prestazione') + '): ' + f + ' = ' + v);
+    commit(st, 'Regola salvata.');
+  };
+  ACT['rule-add'] = () => {
+    const st = E.clone(fresh());
+    st.settings.deadlineRules.push({ id: E.uid('rule'), priorityClass: 'B', service: 'ciclo', accessType: 'primo', amount: 10, unit: 'giorni', from: 'richiesta', validation: 'demo', source: 'Configurazione demo da validare dal servizio', note: '', active: true });
+    E.addLog(st, 'Aggiunta una regola dei termini (configurazione demo da validare)');
+    commit(st, 'Regola aggiunta in fondo all\'elenco: completala.');
+  };
+  ACT['rule-del'] = el => {
+    confirmBox('Eliminare la regola?', '<p>Le richieste che la usavano mostreranno "Scadenza da verificare" se non c\'è un\'altra regola applicabile.</p>', 'Elimina', () => {
+      const st = E.clone(fresh()); st.settings.deadlineRules = st.settings.deadlineRules.filter(x => x.id !== el.dataset.id); E.addLog(st, 'Eliminata una regola dei termini'); commit(st, 'Regola eliminata.');
+    }, { danger: true });
+  };
+  ACT['rules-reset'] = () => {
+    confirmBox('Ripristinare le regole predefinite?', '<p>Le regole attuali saranno sostituite con i riferimenti regionali informativi e le regole demo iniziali.</p>', 'Ripristina', () => {
+      const st = E.clone(fresh()); st.settings.deadlineRules = E.clone(E.DEFAULT_DEADLINE_RULES); E.addLog(st, 'Regole dei termini ripristinate ai valori predefiniti'); commit(st, 'Regole ripristinate.');
+    }, { danger: true });
+  };
+  ACT['opt-rename'] = el => {
+    const v = el.value.trim(); if (!v) { render(); return; }
+    const st = E.clone(fresh()); const x = optListOf(st, el.dataset.key).find(o => o.id === el.dataset.id);
+    E.addLog(st, 'Voce rinominata: ' + x.name + ' → ' + v); x.name = v; commit(st, 'Voce rinominata.');
+  };
+  ACT['opt-add'] = el => {
+    const inp = document.getElementById('opt-new-' + el.dataset.key); const v = inp ? inp.value.trim() : '';
+    if (!v) { toast('Scrivi il nome della nuova voce.', 'bad'); return; }
+    const st = E.clone(fresh()); optListOf(st, el.dataset.key).push({ id: E.uid('op'), name: v }); E.addLog(st, 'Aggiunta voce: ' + v); commit(st, 'Voce aggiunta.');
+  };
+  ACT['opt-del'] = el => {
+    const st = E.clone(fresh()); const key = el.dataset.key;
+    if (optUsed(st, key, el.dataset.id)) { toast('La voce è in uso e non può essere eliminata.', 'bad'); return; }
+    const list = optListOf(st, key); const i = list.findIndex(o => o.id === el.dataset.id); const n = list[i].name; list.splice(i, 1);
+    E.addLog(st, 'Eliminata voce: ' + n); commit(st, 'Voce eliminata.');
+  };
   ACT['cat-add'] = () => {
     const v = document.getElementById('cat-new').value.trim(); if (!v) return;
     const st = E.clone(fresh()); st.categories.push({ id: E.uid('cat'), name: v }); E.addLog(st, 'Aggiunta categoria: ' + v); commit(st, 'Categoria aggiunta.');
@@ -1418,7 +1810,7 @@
     const el = ev.target.closest('[data-act]');
     if (!el) return;
     const act = el.dataset.act;
-    if (['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'import', 'sort', 'ag-group', 'ag-th', 'ag-date', 'wl-status', 'session-status', 'cat-rename', 'path-filter'].includes(act)) return; // gestiti su "change"
+    if (['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'import', 'sort', 'ag-group', 'ag-th', 'ag-date', 'wl-status', 'session-status', 'cat-rename', 'path-filter', 'wlPrio', 'wlDue', 'wl-cat', 'wl-sort', 'ag-path', 'th-skill', 'th-catf', 'rule-field', 'opt-rename', 'unspec'].includes(act)) return; // gestiti su "change"
     if (act === 'close-modal-nav') { ACT[act](el, ev); return; }
     if (ACT[act]) { if (el.tagName === 'A' && el.getAttribute('href') === '#') ev.preventDefault(); if (el.tagName === 'BUTTON') ev.preventDefault(); ACT[act](el, ev); }
   });
@@ -1463,7 +1855,7 @@
       commit(st, key.startsWith('templates.') ? 'Salvato. Premi "Applica ai colleghi del gruppo" per aggiornare le schede.' : 'Impostazione salvata.');
       return;
     }
-    if (act && ACT[act] && ['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'sort', 'wl-status', 'session-status'].includes(act)) { ACT[act](el, ev); return; }
+    if (act && ACT[act] && ['freq', 'wd', 'ses', 'pref-on', 'ag-mode', 'wl-filter', 'path-state', 'wl-freq', 'wl-wd', 'th-cat', 'day-toggle', 'warn45-profile', 'sort', 'wl-status', 'session-status', 'wlPrio', 'wlDue', 'wl-cat', 'wl-sort', 'ag-path', 'th-skill', 'th-catf', 'rule-field', 'opt-rename', 'unspec'].includes(act)) { ACT[act](el, ev); return; }
     if (el.dataset.bind) { bindValue(el); if (el.dataset.rerender) { if (el.dataset.bind.startsWith('modal.')) renderModal(); else render(); } }
   });
   document.addEventListener('input', ev => {
@@ -1488,6 +1880,7 @@
     if (f.dataset.form === 'search') { ui.search.waitlistId = ui.search.waitlistId || null; runSearch(); }
     if (f.dataset.form === 'absence') saveAbsence();
   });
+  document.addEventListener('toggle', ev => { if (ev.target && ev.target.id === 'req-box') ui.reqOpen = ev.target.open; }, true);
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && ui.modal) closeModal(); });
 
   function saveAbsence() {
@@ -1517,6 +1910,11 @@
   }
 
   render();
+  if (migrationNotes.length && !firstRun) {
+    Store.save(state);
+    toast('Dati salvati aggiornati alla nuova versione, senza perdite: ' + migrationNotes.join('; ') + '.');
+    migrationNotes = [];
+  }
   if (migratedAmb) {
     Store.save(state);
     toast('Aggiornati gli orari reali dei colleghi solo ambulatoriali. Gli appuntamenti demo creati con i vecchi orari possono risultare in conflitto: per dati coerenti usa Impostazioni → Dati e salvataggio → Ripristina i dati di esempio.');

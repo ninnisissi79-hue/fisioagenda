@@ -29,29 +29,30 @@
     { id: 'vest', name: 'Vestibolare' },
     { id: 'linf', name: 'Linfedema' },
     { id: 'pelv', name: 'Pavimento pelvico' },
-    { id: 'resp', name: 'Riabilitazione respiratoria' }
+    { id: 'resp', name: 'Riabilitazione respiratoria' },
+    { id: 'mano', name: 'Mano / Chirurgia della mano', hand: true }
   ];
 
-  // [nome, profilo, competenze specifiche, altre idoneità]
+  // [nome, profilo, competenze specifiche, altre idoneità, competenze specifiche del percorso Mano]
   const STAFF = [
     ['Giulia Ferri', 'reparto7', ['neuro'], ['orto', 'rachide', 'protesi']],
-    ['Marco Conti', 'reparto7', ['spalla'], ['orto', 'protesi', 'rachide']],
-    ['Sara Galli', 'reparto7', ['linf'], ['orto', 'rachide']],
+    ['Marco Conti', 'reparto7', ['spalla', 'mano'], ['orto', 'protesi', 'rachide'], ['ortesi', 'postop', 'tendini']],
+    ['Sara Galli', 'reparto7', ['linf'], ['orto', 'rachide', 'mano']],
     ['Luca Moretti', 'reparto7', ['rachide'], ['orto', 'protesi', 'spalla']],
     ['Elena Rinaldi', 'reparto7', ['pelv'], ['rachide', 'orto']],
     ['Davide Marini', 'reparto7', ['protesi'], ['orto', 'spalla', 'rachide']],
     ['Chiara Lombardi', 'reparto7', ['resp'], ['neuro', 'orto']],
-    ['Paolo Greco', 'reparto7', ['orto'], ['protesi', 'spalla', 'rachide']],
+    ['Paolo Greco', 'reparto7', ['orto'], ['protesi', 'spalla', 'rachide', 'mano']],
     ['Francesca Costa', 'reparto8', ['neuro', 'vest'], ['rachide']],
     ['Andrea Fontana', 'reparto8', ['spalla'], ['orto', 'protesi']],
     ['Valentina Barbieri', 'reparto8', ['rachide'], ['orto', 'pelv']],
     ['Simone Caruso', 'reparto8', ['protesi'], ['orto', 'rachide']],
     ['Martina Gentile', 'reparto8', ['linf'], ['orto', 'resp']],
     ['Matteo Ricci', 'reparto8', ['vest'], ['neuro', 'rachide']],
-    ['Laura De Luca', 'reparto8', ['orto'], ['protesi', 'spalla', 'rachide']],
+    ['Laura De Luca', 'reparto8', ['orto', 'mano'], ['protesi', 'spalla', 'rachide'], ['postop', 'tendini']],
     ['Roberto Mancini', 'reparto8', ['resp'], ['neuro']],
     ['Alessia Villa', 'ambulatorio', ['rachide', 'spalla'], ['orto', 'protesi']],
-    ['Federico Serra', 'ambulatorio', ['orto', 'protesi'], ['rachide', 'spalla']]
+    ['Federico Serra', 'ambulatorio', ['orto', 'protesi'], ['rachide', 'spalla', 'mano'], ['ortesi']]
   ];
 
   const SURNAMES = ['Rossi', 'Russo', 'Ferrari', 'Esposito', 'Bianchi', 'Romano', 'Colombo', 'Bruno', 'Ricci', 'Marino',
@@ -77,7 +78,7 @@
 
     const therapists = STAFF.map((s, i) => {
       const t = {
-        id: 'th' + String(i + 1).padStart(2, '0'), name: s[0], profile: s[1], competenze: s[2], idoneita: s[3],
+        id: 'th' + String(i + 1).padStart(2, '0'), name: s[0], profile: s[1], competenze: s[2], idoneita: s[3], handSkills: s[4] || [],
         week: E.buildWeek(s[1], settings), exceptions: [],
         maxPatientsDay: s[1] === 'ambulatorio' ? 8 : null,
         note: s[1] === 'ambulatorio' ? 'Solo ambulatorio: pazienti 8:15–14:40 (fino alle 14:45 con estensione), 6–8 pazienti al giorno.' : ''
@@ -97,8 +98,8 @@
     });
 
     let state = {
-      version: 1, meta: { createdAt: new Date().toISOString(), generatedFor: today, demo: true },
-      settings, categories: E.clone(CATEGORIES), therapists, closures,
+      version: 2, meta: { createdAt: new Date().toISOString(), generatedFor: today, demo: true },
+      settings, categories: E.clone(CATEGORIES).map(c => c.hand ? Object.assign(c, { subcategories: E.clone(E.HAND_SUBCATEGORIES) }) : c), therapists, closures,
       absences: [
         { id: 'ab1', therapistId: 'th03', type: 'Ferie', startDate: E.addDays(base, 14), endDate: E.addDays(base, 18), allDay: true, note: 'Ferie programmate' }
       ],
@@ -220,27 +221,77 @@
       { id: 'ab4', therapistId: 'th13', type: 'Ferie', startDate: E.addDays(base, 35), endDate: E.addDays(base, 39), allDay: true, note: 'Ferie richieste di recente' }
     );
 
-    // lista d'attesa
+    // dati della richiesta dei percorsi già in carico (fittizi, coerenti con la prima seduta)
+    const ctx2 = E.makeContext(state, { today });
+    const classes = ['B', 'D', 'D', 'P', 'P', 'NI'];
+    const origins = ['mmg', 'specialista', 'reparto', 'specialista', 'mmg'];
+    for (const p of state.paths) {
+      const ss = ctx2.sessionsByPath.get(p.id) || [];
+      const first = ss.length ? ss[0].date : (p.createdAt || today);
+      const listDate = E.addDays(first, -(8 + Math.floor(rnd() * 30)));
+      const req = E.emptyRequest({
+        priorityClass: pick(classes), prescriptionDate: E.addDays(listDate, -(1 + Math.floor(rnd() * 6))), requestDate: listDate, listDate,
+        accessType: state.cycles.filter(c => c.pathId === p.id).length > 1 ? 'prosecuzione' : 'primo', service: 'ciclo',
+        origin: p.categoryId === 'mano' ? 'chir_mano' : pick(origins)
+      });
+      p.request = req;
+      if (p.categoryId === 'mano') {
+        p.hand = E.emptyHand({ subcategory: pick(['postop', 'tendini', 'fratture', 'rigidita', 'artrosi']), side: pick(['destro', 'sinistro']), sendingFacility: 'Chirurgia della mano (struttura fittizia)' });
+      }
+    }
+
+    // lista d'attesa: ogni richiesta ha classe, date, accesso, prestazione e provenienza (dati fittizi)
+    const R = o => E.emptyRequest(Object.assign({}, o, { startTerm: Object.assign(E.emptyRequest().startTerm, o.startTerm || {}) }));
+    const ago = n => E.addDays(today, -n);
     const W = (k, o) => Object.assign({
       id: 'wl' + k, insertedAt: E.addDays(today, -o.daysAgo), status: 'in_attesa', duration: 30, sessions: 10,
       earliestDate: E.addDays(base, 7), pref: null, note: '', preaccordo: null
     }, o);
     state.waitlist = [
-      W(1, { name: newName(), daysAgo: 41, priority: 'Alta', categoryId: 'protesi', weekdays: [1, 3, 5], pref: { from: '12:00', to: '15:00', mode: 'flessibile' }, availabilityNote: 'Preferisce fine mattinata' }),
-      W(2, { name: newName(), daysAgo: 37, priority: 'Media', categoryId: 'rachide', weekdays: [2, 4], status: 'contattato' }),
-      W(3, { name: newName(), daysAgo: 33, priority: 'Alta', categoryId: 'neuro', duration: 45, weekdays: [1, 3, 5], availabilityNote: 'Accompagnato dal figlio, solo mattina presto', pref: { from: '07:00', to: '09:00', mode: 'obbligatoria' } }),
-      W(4, { name: newName(), daysAgo: 30, priority: 'Bassa', categoryId: 'spalla', weekdays: [2, 4] }),
-      W(5, { name: newName(), daysAgo: 27, priority: 'Media', categoryId: 'linf', weekdays: [1, 3, 5], duration: 45 }),
-      W(6, { name: newName(), daysAgo: 25, priority: 'Alta', categoryId: 'orto', weekdays: [1, 3, 5], sessions: 10, pref: { from: '12:20', to: '14:45', mode: 'flessibile' } }),
-      W(7, { name: newName(), daysAgo: 22, priority: 'Media', categoryId: 'vest', weekdays: [2, 4], sessions: 5 }),
-      W(8, { name: newName(), daysAgo: 20, priority: 'Bassa', categoryId: 'rachide', weekdays: [1, 3, 5], status: 'rinuncia', note: 'Ha scelto un altro centro' }),
-      W(9, { name: newName(), daysAgo: 16, priority: 'Media', categoryId: 'pelv', weekdays: [2, 4], pref: { from: '12:00', to: '14:30', mode: 'flessibile' } }),
-      W(10, { name: newName(), daysAgo: 12, priority: 'Alta', categoryId: 'resp', weekdays: [2, 4], sessions: 10 }),
-      W(11, { name: newName(), daysAgo: 9, priority: 'Media', categoryId: 'protesi', weekdays: [2, 4], duration: 45 }),
-      W(12, { name: newName(), daysAgo: 6, priority: 'Bassa', categoryId: 'orto', weekdays: [1, 3, 5] }),
-      W(13, { name: newName(), daysAgo: 4, priority: 'Media', categoryId: 'spalla', weekdays: [1, 3, 5], pref: { from: '07:00', to: '09:00', mode: 'flessibile' } }),
-      W(14, { name: newName(), daysAgo: 2, priority: 'Alta', categoryId: 'neuro', weekdays: [2, 4] })
+      W(1, { name: newName(), daysAgo: 41, priority: 'Alta', categoryId: 'protesi', weekdays: [1, 3, 5], pref: { from: '12:00', to: '15:00', mode: 'flessibile' }, availabilityNote: 'Preferisce fine mattinata',
+        request: R({ priorityClass: 'P', prescriptionDate: ago(44), requestDate: ago(41), listDate: ago(41), accessType: 'primo', service: 'ciclo', origin: 'reparto',
+          startTerm: { date: E.addDays(ago(44), 60), source: 'prescrittore', note: 'Il prescrittore indica di iniziare entro 60 giorni dalla dimissione' } }) }),
+      W(2, { name: newName(), daysAgo: 37, priority: 'Media', categoryId: 'rachide', weekdays: [2, 4], status: 'contattato',
+        request: R({ priorityClass: 'D', prescriptionDate: ago(40), requestDate: ago(37), listDate: ago(37), accessType: 'primo', service: 'ciclo', origin: 'mmg', diagnosis: 'Lombalgia cronica' }) }),
+      W(3, { name: newName(), daysAgo: 33, priority: 'Alta', categoryId: 'neuro', duration: 45, weekdays: [1, 3, 5], availabilityNote: 'Accompagnato dal figlio, solo mattina presto', pref: { from: '07:00', to: '09:00', mode: 'obbligatoria' },
+        request: R({ priorityClass: 'NI', prescriptionDate: ago(35), requestDate: ago(33), listDate: ago(33), accessType: 'primo', service: 'valutazione_fisio', origin: 'specialista' }) }),
+      W(4, { name: newName(), daysAgo: 30, priority: 'Bassa', categoryId: 'spalla', weekdays: [2, 4],
+        request: R({ priorityClass: 'P', prescriptionDate: ago(31), requestDate: ago(30), listDate: ago(30), accessType: 'prosecuzione', service: 'ciclo', origin: 'specialista' }) }),
+      W(5, { name: newName(), daysAgo: 27, priority: 'Media', categoryId: 'linf', weekdays: [1, 3, 5], duration: 45,
+        request: R({ priorityClass: 'B', prescriptionDate: ago(29), requestDate: ago(28), listDate: ago(27), accessType: 'primo', service: 'ciclo', origin: 'specialista' }) }),
+      W(6, { name: newName(), daysAgo: 25, priority: 'Alta', categoryId: 'orto', weekdays: [1, 3, 5], sessions: 10, pref: { from: '12:20', to: '14:45', mode: 'flessibile' },
+        request: R({ priorityClass: 'NI', prescriptionDate: ago(26), requestDate: ago(25), listDate: ago(25), accessType: 'primo', service: 'ciclo', origin: 'mmg' }) }),
+      W(7, { name: newName(), daysAgo: 22, priority: 'Media', categoryId: 'vest', weekdays: [2, 4], sessions: 5,
+        request: R({ priorityClass: 'D', prescriptionDate: ago(23), requestDate: ago(22), listDate: ago(22), accessType: 'controllo', service: 'valutazione_fisio', origin: 'specialista' }) }),
+      W(8, { name: newName(), daysAgo: 20, priority: 'Bassa', categoryId: 'rachide', weekdays: [1, 3, 5], status: 'rinuncia', note: 'Ha scelto un altro centro',
+        request: R({ priorityClass: 'P', prescriptionDate: ago(22), requestDate: ago(20), listDate: ago(20), accessType: 'primo', service: 'ciclo', origin: 'mmg' }) }),
+      W(9, { name: newName(), daysAgo: 8, priority: 'Media', categoryId: 'pelv', weekdays: [2, 4], pref: { from: '12:00', to: '14:30', mode: 'flessibile' },
+        request: R({ priorityClass: 'B', prescriptionDate: ago(10), requestDate: ago(9), listDate: ago(8), accessType: 'primo', service: 'ciclo', origin: 'specialista' }) }),
+      W(10, { name: newName(), daysAgo: 1, priority: 'Alta', categoryId: 'resp', weekdays: [2, 4], sessions: 10,
+        request: R({ priorityClass: 'U', prescriptionDate: ago(1), prescriptionTime: '09:10', requestDate: ago(1), requestTime: '11:30', listDate: ago(1), listTime: '11:45', accessType: 'primo', service: 'ciclo', origin: 'reparto', diagnosis: 'Esiti di polmonite, dimissione ospedaliera' }) }),
+      W(11, { name: newName(), daysAgo: 9, priority: 'Media', categoryId: 'protesi', weekdays: [2, 4], duration: 45,
+        request: R({ priorityClass: 'D', prescriptionDate: ago(12), requestDate: ago(9), listDate: ago(9), accessType: 'primo', service: 'visita_fisiatrica', origin: 'mmg' }) }),
+      W(12, { name: newName(), daysAgo: 6, priority: 'Bassa', categoryId: 'orto', weekdays: [1, 3, 5],
+        request: R({ priorityClass: 'D', prescriptionDate: ago(8), requestDate: ago(6), listDate: ago(6), accessType: 'primo', service: 'accertamento', origin: 'specialista' }) }),
+      W(13, { name: newName(), daysAgo: 4, priority: 'Media', categoryId: 'spalla', weekdays: [1, 3, 5], pref: { from: '07:00', to: '09:00', mode: 'flessibile' },
+        request: R({ priorityClass: 'U', prescriptionDate: ago(1), requestDate: ago(1), listDate: ago(1), accessType: 'primo', service: 'visita_fisiatrica', origin: 'mmg' }) }),
+      W(14, { name: newName(), daysAgo: 2, priority: 'Alta', categoryId: 'neuro', weekdays: [2, 4],
+        request: R({ priorityClass: 'U', prescriptionDate: ago(2), prescriptionTime: '10:00', requestDate: ago(2), requestTime: '10:20', listDate: ago(2), accessType: 'controllo', service: 'visita_fisiatrica', origin: 'specialista' }) }),
+      // percorso Mano: la provenienza dalla Chirurgia della mano NON rende la richiesta urgente
+      W(15, { name: newName(), daysAgo: 3, priority: 'Media', categoryId: 'mano', weekdays: [1, 3, 5],
+        request: R({ priorityClass: 'B', prescriptionDate: ago(4), requestDate: ago(3), listDate: ago(3), accessType: 'primo', service: 'ciclo', origin: 'chir_mano', diagnosis: 'Sutura tendine flessore 3° dito',
+          startTerm: { date: E.addDays(today, 7), notBefore: E.addDays(today, 2), source: 'prescrittore', note: 'Il chirurgo indica l\'inizio tra il 2° e il 7° giorno da oggi' } }),
+        hand: E.emptyHand({ subcategory: 'tendini', side: 'destro', eventType: 'intervento', eventDate: ago(5), sendingFacility: 'Chirurgia della mano (struttura fittizia)', prescriberNotes: 'Protocollo indicato dal chirurgo in lettera', requiredSkill: 'postop' }) }),
+      W(16, { name: newName(), daysAgo: 1, priority: 'Media', categoryId: 'mano', weekdays: [2, 4], sessions: 5,
+        request: R({ priorityClass: 'NI', prescriptionDate: ago(2), requestDate: ago(1), listDate: ago(1), accessType: 'primo', service: 'valutazione_fisio', origin: 'chir_mano' }),
+        hand: E.emptyHand({ subcategory: 'ortesi', side: 'sinistro', eventType: 'trauma', eventDate: ago(9), sendingFacility: 'Pronto soccorso (struttura fittizia)', requiredSkill: 'ortesi' }) }),
+      W(17, { name: newName(), daysAgo: 5, priority: 'Bassa', categoryId: 'mano', weekdays: [1, 3, 5],
+        request: R({ priorityClass: 'P', prescriptionDate: ago(6), requestDate: ago(5), listDate: ago(5), accessType: 'primo', service: 'ciclo', origin: 'chir_mano',
+          startTerm: { date: E.addDays(today, 5), notBefore: E.addDays(today, 12), source: 'prescrittore', note: 'Esempio di indicazioni incompatibili: da chiarire con il prescrittore' } }),
+        hand: E.emptyHand({ subcategory: 'rigidita', side: 'bilaterale', sendingFacility: 'Chirurgia della mano (struttura fittizia)' }) })
     ];
+    // la prima data utile rispetta l'eventuale data "non prima del"
+    state.waitlist.forEach(w => { const nb = w.request && w.request.startTerm.notBefore; if (nb && nb > w.earliestDate) w.earliestDate = nb; });
     state.log = [];
     E.addLog(state, 'Dati demo generati (tutti fittizi) per il ' + E.fmtIt(today));
     return state;

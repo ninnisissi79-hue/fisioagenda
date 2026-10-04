@@ -29,6 +29,9 @@ Le voci dei menu di Netlify possono cambiare nel tempo: se non trovi una voce, c
 ## Per aggiornare la demo in futuro
 
 Nel progetto su Netlify apri **Deploys** e trascina il nuovo ZIP nel riquadro in fondo alla pagina (“Drag and drop your project output folder here”). **Il link resta lo stesso.**
+Lo ZIP contiene `index.html` direttamente nella cartella principale (non dentro una sottocartella), come richiesto da Netlify.
+
+**Cosa succede ai visitatori che avevano già provato la demo:** alla prima apertura della nuova versione i loro dati di prova, salvati nel browser, vengono **aggiornati senza perdite** (si aggiungono i campi su priorità, scadenze e percorso Mano) e compare un avviso. Per vedere gli esempi nuovi della lista d’attesa (classi U/B/D/P, percorso Mano) basta premere **“Ripristina esempi”**.
 Per rigenerare lo ZIP dal codice: `npm run build:netlify`.
 
 ## Cosa sapere
@@ -37,5 +40,5 @@ Per rigenerare lo ZIP dal codice: `npm run build:netlify`.
 - **Perdita dei dati di prova:** le prove si perdono se il visitatore cancella i dati del browser o usa la navigazione anonima. Su iPhone, Safari può cancellarle se il sito non viene aperto per alcuni giorni. Il pulsante **“Ripristina esempi”** riporta tutto ai dati iniziali, sempre dopo una conferma.
 - **noindex non vuol dire privato:** la direttiva chiede ai motori di ricerca, come Google, di non mostrare il sito nei risultati. **Chiunque abbia il link può aprire la demo** e inoltrarlo ad altri. Non c'è password.
 - **Durata del link:** con un account gratuito il sito resta online finché non lo elimini (in Netlify: Project configuration → Delete project). Un caricamento fatto **senza account** è invece temporaneo.
-- **Costi:** il piano gratuito di Netlify è sufficiente per questa demo (circa 230 KB). Verifica sul sito di Netlify i limiti aggiornati del piano gratuito.
+- **Costi:** il piano gratuito di Netlify è sufficiente per questa demo (circa 300 KB). Verifica sul sito di Netlify i limiti aggiornati del piano gratuito.
 - **Anteprima su WhatsApp:** compaiono titolo (“FisioAgenda · Demo”) e descrizione. Non c'è un'immagine di anteprima, perché richiederebbe di conoscere in anticipo l'indirizzo definitivo del sito: si può aggiungere dopo la pubblicazione.

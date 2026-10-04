@@ -5,6 +5,8 @@
  */
 'use strict';
 const path = require('path');
+const fs = require('fs');
+const zlib = require('zlib');
 let chromium;
 try { ({ chromium } = require('playwright')); }
 catch (e) { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
@@ -81,7 +83,7 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   const hl = await page.locator('.appt.hl').count();
   ok(hl >= 1, 'il nuovo appuntamento è evidenziato in agenda (' + hl + ' nella settimana)');
   ok(/Prova E2E/.test(await page.locator('.appt.hl').first().innerText()), 'il nome del paziente compare in agenda');
-  ok((await page.locator('.agenda-tools select').inputValue()) !== '', 'agenda settimanale del collega ' + thName);
+  ok((await page.locator('.agenda-tools select[data-act=ag-th]').inputValue()) !== '', 'agenda settimanale del collega ' + thName);
   await shot('e2e-3-agenda');
 
   console.log('5. Persistenza dopo il ricaricamento');
@@ -127,7 +129,7 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
 
   console.log('9. Tablet (1024×768) e sezioni secondarie');
   await page.setViewportSize({ width: 1024, height: 768 });
-  for (const r of ['agenda', 'previsioni', 'fisioterapisti', 'impostazioni']) {
+  for (const r of ['agenda', 'lista', 'previsioni', 'fisioterapisti', 'impostazioni']) {
     await page.goto(URL + '#/' + r); await page.waitForTimeout(150);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     ok(!overflow, 'nessuno scorrimento orizzontale della pagina in ' + r);
@@ -157,6 +159,75 @@ function ok(cond, msg) { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); if (!c
   ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'confermando, tornano i dati di esempio');
   await page.reload(); await page.waitForSelector('.search-form');
   ok(!(await page.evaluate(() => window.FisioApp.state.patients.some(p => p.name === 'Marcatore'))), 'il ripristino resta dopo il ricaricamento');
+
+  console.log('12. Lista d\'attesa: classe prescritta, termine, filtri');
+  await page.goto(URL + '#/lista'); await page.waitForSelector('.wl-table');
+  const head = await page.locator('.wl-table thead').innerText();
+  ok(/Classe prescritta/i.test(head) && /Termine applicato/i.test(head) && /Residuo/i.test(head), 'colonne classe, termine applicato e residuo presenti');
+  ok(await page.locator('.wl-table .tag:has-text("Scaduto")').count() > 0, 'stato "Scaduto" mostrato con testo');
+  ok(await page.locator('.wl-table:has-text("Configurazione demo da validare dal servizio")').count() === 1, 'regole demo etichettate come da validare');
+  ok(await page.locator('.wl-table:has-text("Riferimento regionale")').count() === 1, 'origine regionale indicata');
+  await page.click('label:has(input[name=wlPrio][value=U])'); await page.waitForTimeout(150);
+  const uCells = await page.locator('.wl-table tbody tr td:nth-child(2)').allInnerTexts();
+  ok(uCells.length > 0 && uCells.every(t => /Classe U/.test(t)), 'filtro U: solo richieste di classe U (' + uCells.length + ')');
+  await page.click('label:has(input[name=wlPrio][value=senza])'); await page.waitForTimeout(150);
+  const niCells = await page.locator('.wl-table tbody tr td:nth-child(2)').allInnerTexts();
+  ok(niCells.length > 0 && niCells.every(t => /Non indicata|Da inserire/.test(t)), 'filtro "senza priorità": valore originale "Non indicata" conservato');
+  await page.click('label:has(input[name=wlPrio][value=tutte])');
+  await page.click('label:has(input[name=wlDue][value=scaduto])'); await page.waitForTimeout(150);
+  const scad = await page.locator('.wl-table tbody tr').count();
+  ok(scad > 0 && scad === await page.locator('.wl-table tbody tr.due-scaduto').count(), 'filtro scadute');
+  await page.click('label:has(input[name=wlDue][value=tutte])');
+  await page.click('button:has-text("Mano / Chirurgia della mano")'); await page.waitForTimeout(150);
+  const handRows = await page.locator('.wl-table tbody tr').count();
+  ok(handRows === 3 && await page.locator('.wl-table tbody tr:has-text("Mano / Chirurgia")').count() === 3, 'filtro percorso Mano (' + handRows + ' richieste)');
+
+  console.log('13. Mano: ricerca con termine, conflitto e competenza');
+  const conflictRow = page.locator('.wl-table tbody tr:has-text("Conflitto")');
+  await conflictRow.locator('button:has-text("Trova posto")').click();
+  await page.waitForSelector('#results'); await page.waitForTimeout(200);
+  ok(await page.locator('#results .notice.bad:has-text("Conflitto tra le indicazioni")').count() === 1, 'data minima successiva alla scadenza: conflitto segnalato');
+  ok(await page.locator('#results .dl-alert:has-text("Nessun posto confermato")').count() === 1, 'avviso evidente: nessun posto entro il termine');
+  ok(await page.locator('#results .dl-alert li').count() > 0, 'prime alternative successive con ritardo');
+  ok(await page.locator('#results tr.group-row .tag:has-text("Ritardo")').count() > 0, 'ritardo indicato nelle proposte');
+  ok(/Mano/.test(await page.locator('#sf-cat').inputValue().then(v => page.locator('#sf-cat option[value="' + v + '"]').innerText())), 'percorso Mano caricato nella ricerca');
+  await shot('e2e-5-mano');
+  const lateBtn = page.locator('#results tr.group-row button:has-text("✓ Conferma")').first();
+  if (await lateBtn.count()) {
+    await lateBtn.click(); await page.waitForSelector('.modal #bk-name');
+    ok(await page.locator('.modal #bk-late').count() === 1, 'conferma di un posto oltre il termine: richiesta presa d\'atto esplicita');
+    ok(/Fine prevista del ciclo/.test(await page.locator('.modal').innerText()), 'fine del ciclo distinta dal termine di inizio');
+    await page.click('[data-act=book-confirm]'); await page.waitForTimeout(150);
+    ok(await page.locator('.modal #bk-name').count() === 1, 'senza presa d\'atto la conferma non procede');
+    await page.check('#bk-late'); await page.click('[data-act=book-confirm]'); await page.waitForSelector('.cal');
+    ok(true, 'assegnazione confermata dall\'operatore nonostante il ritardo');
+  }
+
+  console.log('14. Agenda e fisioterapisti: filtro Mano');
+  await page.goto(URL + '#/agenda'); await page.waitForSelector('.cal');
+  await page.click('label:has(input[name=am][value=giorno])'); await page.waitForTimeout(100);
+  await page.click('button:has-text("✋ Mano")'); await page.waitForTimeout(150);
+  const cols = await page.locator('.cal-col').count();
+  ok(cols > 0 && cols < 18, 'agenda filtrata sui colleghi idonei al percorso Mano (' + cols + ')');
+  await page.goto(URL + '#/fisioterapisti'); await page.click('button:has-text("Idonei Mano")'); await page.waitForTimeout(150);
+  ok(await page.locator('.card').count() === cols, 'schede filtrate: stessi colleghi idonei');
+  ok(await page.locator('.card .tag:has-text("Ortesi")').count() > 0, 'competenza ortesi visibile');
+  await page.goto(URL + '#/impostazioni'); await page.click('text=Priorità e scadenze'); await page.waitForTimeout(150);
+  ok(await page.locator('table.rules tbody tr').count() >= 10, 'regole dei termini configurabili');
+
+  console.log('15. Aggiornamento dei dati salvati con la versione precedente');
+  const v1 = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures', 'stato-v1-demo.json.gz'))).toString();
+  const oldState = JSON.parse(v1);
+  await page.evaluate(t => localStorage.setItem('fisioagenda.v1', t), v1);
+  await page.goto(URL + '#/lista'); await page.reload(); await page.waitForSelector('.wl-table');
+  const mig = await page.evaluate(() => { const s = window.FisioApp.state; return { sessions: s.sessions.length, paths: s.paths.length, patients: s.patients.length, wl: s.waitlist.length, hand: s.categories.filter(c => c.hand).length, cls: s.waitlist.map(w => w.request.priorityClass) }; });
+  ok(mig.sessions === oldState.sessions.length && mig.paths === oldState.paths.length && mig.patients === oldState.patients.length && mig.wl === oldState.waitlist.length, 'sedute, percorsi, pazienti e lista conservati');
+  ok(mig.hand === 1, 'percorso Mano aggiunto una sola volta');
+  ok(mig.cls.every(c => c === ''), 'nessuna classe di priorità attribuita automaticamente');
+  ok(await page.locator('.wl-table .tag:has-text("Da completare")').count() > 0, 'richieste precedenti segnalate come da completare');
+  ok(await page.locator('.toast:has-text("aggiornati alla nuova versione")').count() === 1, 'avviso di aggiornamento dei dati');
+  await page.reload(); await page.waitForSelector('.wl-table');
+  ok(await page.evaluate(() => window.FisioApp.state.sessions.length) === oldState.sessions.length, 'dati aggiornati conservati dopo un nuovo ricaricamento');
 
   ok(errors.length === 0, 'nessun errore JavaScript' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();

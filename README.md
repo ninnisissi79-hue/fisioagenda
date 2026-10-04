@@ -2,6 +2,7 @@
 
 Gestionale dimostrativo per organizzare l’attività ambulatoriale di un servizio ospedaliero di fisioterapia con 18 fisioterapisti.
 Lo scopo principale è **assegnare rapidamente un paziente** e smaltire la lista d’attesa: inserisci i dati del paziente e vedi subito **chi può prenderlo, in quali giorni e a che ora, da quando**, distinguendo i posti **certi** da quelli solo **probabili**.
+Per ogni richiesta registra anche la **classe di priorità prescritta** (U, B, D, P o “Non indicata”) e confronta la prima seduta proposta con il **termine per l’inizio**, quando una regola o un’indicazione lo permette. Il percorso **Mano / Chirurgia della mano** è visibile in tutte le sezioni.
 
 > **Tutti i nomi (colleghi e pazienti) sono inventati.** Le categorie cliniche sono esempi modificabili, non l’elenco reale del servizio.
 
@@ -48,6 +49,14 @@ Altre prove utili:
 - **Pazienti e cicli → Apri**: cambia la previsione (per esempio *Sospensione*, scegliendo se mantenere o liberare il posto) oppure aggiungi un **rinnovo**.
 - **Previsioni**: posti che si liberano e pazienti in lista compatibili, ordinati per priorità e attesa.
 
+Prove su priorità, scadenze e percorso Mano:
+- **Lista d’attesa**: usa i filtri *Classe prescritta* (U/B/D/P, *Senza priorità*), *Scadenza* (*Imminenti*, *Scadute*, *Da verificare*) e il pulsante **✋ Mano / Chirurgia della mano**. Ogni riga mostra classe prescritta, termine applicato con la sua origine, giorni/ore residui o ritardo e lo stato (con colore **e** testo).
+- Nella lista, la richiesta Mano con la nota “indicazioni incompatibili” → **Trova posto**: compaiono il conflitto tra “non prima del” e scadenza, l’avviso “Nessun posto confermato entro il termine” e le prime alternative con il ritardo. Confermando un posto in ritardo viene chiesta una presa d’atto esplicita: la decisione resta all’operatore.
+- **Trova un posto → Richiesta: priorità e termine di inizio**: prova classe U, *Visita fisiatrica*, *Primo accesso*, con la data della richiesta **senza ora** → “Scadenza da verificare: manca l’ora”; aggiungi l’ora → termine a 72 ore esatte.
+- **Pazienti e cicli → Apri**: sezione *Richiesta, priorità e termine di inizio* (prima seduta confrontata con il termine, fine prevista del ciclo separata) e, per i percorsi Mano, sottocategoria, lato, intervento/trauma, struttura inviante, competenza richiesta.
+- **Agenda → ✋ Mano** e **Fisioterapisti → Idonei Mano**: colleghi idonei, con ★ la competenza specifica e le competenze Mano (es. ortesi).
+- **Impostazioni → Priorità e scadenze**: riferimenti regionali, regole modificabili e voci organizzative.
+
 ## 3. Dove vengono salvati i dati
 
 - I dati sono salvati **solo nel browser del computer in uso** (archivio locale del browser, *localStorage*).
@@ -76,7 +85,14 @@ Altre prove utili:
 | Sedute che liberano la data | assenza paziente, annullata dal servizio, da recuperare: lo spazio in quella data diventa utilizzabile (es. per recuperi) | — |
 | Conteggio sedute | contano programmate, effettuate, assenze e da recuperare; una seduta *recuperata* è contata una volta sola tramite il suo recupero; una seduta *annullata dal servizio* non conta e il ciclo mostra “mancano N” | — |
 | Orari proposti | solo orari “naturali” (inizio fascia, subito prima o dopo altri appuntamenti), per evitare decine di alternative quasi identiche | — |
-| Priorità lista d’attesa | Alta / Media / Bassa, **assegnate dall’operatore** (mai dal programma) | Impostazioni → Parametri |
+| Priorità interna della lista | Alta / Media / Bassa, **assegnate dall’operatore** (mai dal programma); restano distinte dalla classe prescritta | Impostazioni → Parametri |
+| Classe prescritta | U, B, D, P o “Non indicata”: **dato originale**, mai modificato né dedotto dalla diagnosi | scheda della richiesta |
+| Priorità non indicata | gestita come **P** (riferimento regionale), ma il valore resta “Non indicata”; si può disattivare | Impostazioni → Priorità e scadenze |
+| Regole dei termini | riferimenti regionali (visite e accertamenti, primo accesso) + 2 regole **fittizie** per i cicli, etichettate “Configurazione demo da validare dal servizio” | Impostazioni → Priorità e scadenze |
+| Decorrenza | indicata da ogni regola (prescrizione, richiesta o inserimento in lista); nella demo le regole regionali decorrono dalla richiesta, **da verificare con il servizio** | Impostazioni → Priorità e scadenze |
+| “Vicino alla scadenza” | 24 ore residue (termini in ore) · 3 giorni (termini in giorni) | Impostazioni → Priorità e scadenze |
+| Voci della richiesta | tipo di accesso, prestazione, provenienza: **esempi** per la demo, non un elenco ufficiale | Impostazioni → Priorità e scadenze |
+| Percorso Mano | categoria “Mano / Chirurgia della mano” con sottocategorie e competenze (es. ortesi) di esempio | Impostazioni → Categorie cliniche; scheda del collega |
 | Sabato | non lavorativo, ma attivabile per singolo collega | scheda del collega |
 
 ## 5. Regole principali applicate dal motore
@@ -88,12 +104,23 @@ Altre prove utili:
 5. **Programmato ≠ effettuato**: nessuna seduta diventa effettuata da sola; le date passate senza esito vengono segnalate.
 6. **Assenze**: aggiornano le disponibilità e segnalano tutti gli appuntamenti coinvolti, senza cancellarli né spostare altri pazienti; con rientro non noto nessuna disponibilità successiva appare certa.
 7. **Date e orari**: date di calendario e orari locali Europe/Rome, senza conversioni di fuso: gli appuntamenti non si spostano con il cambio dell’ora.
-8. **Doppio controllo**: prima di confermare un’assegnazione, un rinnovo, un recupero o una sostituzione i conflitti vengono ricalcolati sui dati aggiornati.
+8. **Priorità e termini di inizio**:
+   - classe prescritta, provenienza e tipo di accesso sono campi distinti: un invio dalla Chirurgia della mano **non** diventa urgente;
+   - il termine deriva dal “**Termine per iniziare il trattamento**” della richiesta (data/ora, eventuale “non prima del”, origine: prescrittore, protocollo del servizio o obiettivo demo, nota), che prevale, oppure dalla **prima regola attiva** che corrisponde a classe, prestazione e tipo di accesso;
+   - senza regola applicabile o senza data di decorrenza: **“Scadenza da verificare”**, mai un termine inventato. Il termine di visite ed esami **non** si applica da solo ai cicli;
+   - i termini in ore sono ore di calendario sull’orario locale (U = 72 ore, non tre giorni lavorativi); se manca l’ora necessaria il dato mancante viene segnalato;
+   - le chiusure possono impedire un appuntamento ma **non spostano** la scadenza (se il termine cade in chiusura viene solo segnalato);
+   - si distinguono sempre **termine di inizio** e **fine prevista del ciclo**;
+   - nelle proposte: prima seduta, compatibilità con il termine, ritardo, disponibilità confermata o probabile. Un posto **probabile non conta** come richiesta soddisfatta. Se nessun posto confermato rispetta il termine compare un avviso evidente con le prime alternative e il ritardo; viene evidenziato quando un collega con altra idoneità può iniziare entro il termine e uno specialista solo dopo. Nulla viene modificato automaticamente: priorità, scadenza e appuntamenti altrui restano come sono;
+   - competenza Mano richiesta (es. ortesi): sono proposti solo i colleghi che la hanno; gli esclusi sono elencati con il motivo. Il programma non deduce quando iniziare dopo un intervento.
+9. **Aggiornamento dei dati salvati**: aprendo la nuova versione, i dati già salvati nel browser vengono completati **senza perdite**: si aggiungono solo i campi nuovi (le richieste in lista risultano “da completare”, senza classe attribuita), una categoria “Mano” già esistente viene **riusata** (stesso codice e stesse assegnazioni), e un avviso riepiloga le modifiche (anche nello Storico).
+10. **Doppio controllo**: prima di confermare un’assegnazione, un rinnovo, un recupero o una sostituzione i conflitti vengono ricalcolati sui dati aggiornati.
 
 ## 6. Cosa è stato verificato
 
-- **45 test automatici del motore e dei dati demo** (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
-- **Prova completa dell’interfaccia nel browser** (`npm run test:e2e`, Chromium): nuovo paziente → ricerca → calendario del ciclo → conferma → agenda con evidenza → **ricaricamento della pagina con dati conservati** → recupero con conteggio invariato → malattia con rientro non noto → “Trova posto” dalla lista d’attesa → controllo del layout tablet (1024×768) → ripristino degli esempi con conferma. La stessa prova è stata eseguita sia su `index.html` sia sul file unico `dist/FisioAgenda.html`.
+- **62 test automatici del motore e dei dati demo** (`npm test`). I 17 nuovi (`tests/priority.test.js`) verificano: richiesta U con scadenza a 72 ore di calendario (anche nel fine settimana) e U senza ora → dato mancante; richiesta B con posto entro e oltre il termine (ritardo indicato, specialista solo dopo e altro collega entro); nessun posto entro il termine → alternative, senza modifiche ai dati; D visita 30 giorni / D accertamento 60 giorni; ciclo senza regola → nessuna scadenza automatica, regola demo mai presentata come ufficiale; data di decorrenza mancante; priorità non indicata conservata anche dopo l’assegnazione; controllo/rinnovo distinti dal primo accesso; posto probabile non conteggiato; “non prima del” successivo alla scadenza → conflitto; chiusura sul giorno di scadenza senza spostamento; termine di inizio distinto dalla fine del ciclo; percorso Mano con idoneità e competenza richiesta; aggiornamento dei dati demo salvati con la versione precedente (`tests/fixtures/stato-v1-demo.json.gz`) senza perdite e riuso di una categoria “Mano” esistente.
+- Precedenti: test del motore e dei dati demo (`npm test`), tra cui tutti i casi richiesti: spazio di 30 min che non ospita una seduta da 45; appuntamento che inizia esattamente alla fine del precedente; nessuna sovrapposizione con reparto, pausa e cartelle; buco presente solo il lunedì che non basta per lun-mer-ven; controllo di tutte le date (anche la decima); un solo paziente mattutino per il gruppo delle 8; malattia a metà ciclo; rientro ignoto; decima seduta senza previsione; posto probabile non prenotabile; rinnovo con aggiornamento delle previsioni e conflitti; seduta finale occupata con conclusione confermata; recupero non contato due volte; festività e chiusure; sospensione con posto mantenuto o liberato; 4×30 dalle 12:40 → 14:40; 45+3×30 dalle 12:40 → 14:55 come estensione da verificare (17 minuti residui per le cartelle); cambio dell’ora del 25/10/2026; prenotazione concorrente dello stesso posto.
+- **Prova completa dell’interfaccia nel browser** (`npm run test:e2e`, Chromium): nuovo paziente → ricerca → calendario del ciclo → conferma → agenda con evidenza → **ricaricamento della pagina con dati conservati** → recupero con conteggio invariato → malattia con rientro non noto → “Trova posto” dalla lista d’attesa → controllo del layout tablet (1024×768) → ripristino degli esempi con conferma. Nuove verifiche nel browser: colonne e filtri della lista d’attesa (U, senza priorità, scadute, Mano), ricerca Mano con conflitto e alternative in ritardo, conferma in ritardo solo con presa d’atto, filtro Mano in agenda e nelle schede, regole configurabili, **caricamento dei dati salvati con la versione precedente** (nessuna perdita, nessuna classe attribuita, avviso di aggiornamento). La stessa prova è stata eseguita sia su `index.html` sia sul file unico `dist/FisioAgenda.html`.
 
 ## 7. Cosa manca (possibili passi successivi)
 
@@ -102,6 +129,7 @@ Altre prove utili:
 - Ricerca di cicli con orari diversi nei vari giorni (per esempio lunedì 8:15 e mercoledì 12:40) o con cambio di collega a metà ciclo: oggi la ricerca ordinaria cerca lo stesso orario e lo stesso collega, mentre recuperi e sostituzioni sono espliciti e confermati.
 - Opzione per allungare automaticamente un ciclo saltando le ferie note del collega.
 - Stampa ed esportazione dell’agenda (PDF/Excel) e notifiche ai colleghi.
+- **Validazione delle regole dei termini** da parte del servizio: evento di decorrenza, eventuali regole per i cicli, gestione di controlli e rinnovi. Le regole “demo” vanno sostituite o validate.
 - Verifica dei valori reali ancora da confermare: limiti dell’ambulatorio pomeridiano dei gruppi con reparto, tempo per le cartelle, soglia delle sedute da 45, durata della riserva provvisoria, festività locali.
 
 ## 8. Per chi sviluppa
@@ -114,6 +142,8 @@ js/demo-data.js       generatore dei dati fittizi (date relative al giorno di pr
 js/app.js             interfaccia (viste, finestre, salvataggio locale)
 tests/engine.test.js  test del motore (node --test)
 tests/demo.test.js    test di coerenza dei dati demo
+tests/priority.test.js test di priorità, termini di inizio, percorso Mano e aggiornamento dei dati salvati
+tests/fixtures/       stato salvato con la versione precedente (per verificare l'aggiornamento)
 tests/e2e.js          prova completa nel browser (Playwright)
 tools/build.js        crea dist/FisioAgenda.html (file unico)
 tools/build-netlify.js crea dist/FisioAgenda-netlify.zip (index.html + _headers) per Netlify
