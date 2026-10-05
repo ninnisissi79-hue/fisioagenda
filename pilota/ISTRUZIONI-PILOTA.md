@@ -13,12 +13,14 @@ Servono **un servizio esterno gratuito**, cioè **Supabase** (database, account 
    - **Database password:** premi *Generate*, salvala nel tuo gestore di password e **non inviarla a nessuno**, nemmeno a me.
    - **Region:** una regione europea, per esempio *Central EU (Frankfurt)*.
    - **Plan:** Free.
+   - Opzioni di sicurezza consigliate (compatibili con il pilota): **Data API attiva**, **RLS automatica attiva**, **esposizione automatica delle nuove tabelle disattivata**. Le autorizzazioni necessarie sono concesse esplicitamente dallo script, solo in lettura per gli utenti autenticati.
 3. Attendi che il progetto sia pronto (1–2 minuti).
 
 ## 2. Installa il database (2 minuti)
 
 1. Nel progetto apri **SQL Editor → New query**.
 2. Copia **tutto** il contenuto di [`supabase/setup-completo.sql`](supabase/setup-completo.sql), incollalo e premi **Run**. Il risultato atteso è “Success. No rows returned”.
+   Se avevi già eseguito una versione precedente dello script (senza la parte `20261005000003_grants`), esegui soltanto [`supabase/migrations/20261005000003_grants.sql`](supabase/migrations/20261005000003_grants.sql): si può ripetere senza problemi.
 3. Nuova query: copia il contenuto di [`supabase/seed.sql`](supabase/seed.sql) (dati dimostrativi **fittizi**) e premi **Run**.
 
 ## 3. Blocca la registrazione libera

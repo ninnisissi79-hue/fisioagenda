@@ -61,11 +61,13 @@ try {
 
   // ---------------------------------------------------------------- assenza oggi, distribuzione su più sostituti
   const today = psql('select app.today()');
-  const conti = psql("select id from therapists where name='Marco Conti'");
+  // il collega (non di prova) con più pazienti oggi
+  const conti = psql(`select a.therapist_id from appointments a join therapists t on t.id=a.therapist_id where a.day='${today}' and a.status='programmata' and t.name not like 'Test %' group by 1 order by count(*) desc, 1 limit 1`);
+  const contiName = psql(`select name from therapists where id='${conti}'`);
   const nToday = Number(psql(`select count(*) from appointments where therapist_id='${conti}' and day='${today}' and status='programmata'`));
-  assert.ok(nToday >= 2, 'Marco Conti ha pazienti oggi nei dati demo');
+  assert.ok(nToday >= 2, contiName + ' ha pazienti oggi nei dati demo');
   await p1.click('text=Gestisci assenza fisioterapista');
-  await p1.selectOption('#abs-th', { label: 'Marco Conti' });
+  await p1.selectOption('#abs-th', { label: contiName });
   await p1.click('button:has-text("Registra l’assenza e cerca i sostituti")');
   await p1.waitForSelector('.subst', { timeout: 20000 });
   const rows = await p1.$$('.subst');
@@ -77,7 +79,7 @@ try {
   ok(`Assenza di oggi registrata: ${nToday} pazienti proposti a ${subs.size} sostituti diversi`);
 
   // due scelte sullo stesso posto: segnalate come alternative, conferma bloccata.
-  // (Nei dati demo gli orari di Marco Conti non coincidono: imponiamo alla seconda riga la stessa scelta della prima.)
+  // (Nei dati demo gli orari dello stesso collega non coincidono: imponiamo alla seconda riga la stessa scelta della prima.)
   const absId = decodeURIComponent((await p1.evaluate(() => location.hash)).split('/')[3]);
   const rowIds = await p1.$$eval('.subst', els => els.map(e => e.getAttribute('data-row')));
   await p1.evaluate(([absId, r0, r1]) => {
@@ -99,7 +101,7 @@ try {
   await p2.selectOption('select[data-bind="ag.th"]', { label: firstSub });
   await p2.waitForTimeout(300);
   const before = await text(p2, '.agenda-grid');
-  assert.ok(!/sostituisce Marco Conti/.test(before));
+  assert.ok(!before.includes('sostituisce ' + contiName));
   // riepilogo e conferma
   await p1.click('button:has-text("Rivedi e conferma")');
   await p1.waitForSelector('.modal');
@@ -112,7 +114,7 @@ try {
   assert.equal(psql(`select count(*) from appointments where therapist_id='${conti}' and day > '${today}' and status='programmata'`) !== '0', true, 'il resto dei cicli resta al titolare');
   ok('Riepilogo, conferma e salvataggio: sostituzioni per singola seduta, cicli invariati');
   // aggiornamento visibile all'altra collega senza ricaricare
-  await p2.waitForFunction(() => /sostituisce Marco Conti/.test(document.querySelector('.agenda-grid').textContent), null, { timeout: 15000 });
+  await p2.waitForFunction(n => document.querySelector('.agenda-grid').textContent.includes('sostituisce ' + n), contiName, { timeout: 15000 });
   ok('La seconda collega vede la sostituzione in agenda senza ricaricare (tempo reale)');
 
   // ---------------------------------------------------------------- trova posto + prenotazione simultanea
