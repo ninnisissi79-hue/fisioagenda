@@ -299,7 +299,7 @@
 
   /* ---------------- struttura della pagina ---------------- */
   const NAV = [
-    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['trova', 'Trova posto'], ['agenda', 'Agenda'], ['pazienti', 'Pazienti'],
+    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['pazienti', 'Pazienti'],
     ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['config', 'Configurazione'], ['storico', 'Storico']
   ];
   function connLabel() {
@@ -417,7 +417,7 @@
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && A.modal && !A.modal.sticky) FA.closeModal(); });
 
   FA.actions['cfg-open'] = el => { A.ui.cfgTab = el.getAttribute('data-t'); FA.go('config'); };
-  FA.actions['go'] = el => FA.go(el.getAttribute('data-view'), ...(el.getAttribute('data-param') ? [el.getAttribute('data-param')] : []));
+  FA.actions['go'] = el => FA.go(el.getAttribute('data-view'), ...(el.getAttribute('data-param') ? el.getAttribute('data-param').split('/') : []));
   FA.actions['close-modal'] = () => FA.closeModal();
   FA.actions['logout'] = () => FA.logout(false);
   FA.actions['refresh'] = () => { FA.toast('Aggiornamento dei dati…'); return refresh(); };

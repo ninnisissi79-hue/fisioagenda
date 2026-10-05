@@ -247,7 +247,7 @@
           (iss ? '<br><span class="small" style="color:var(--bad)">⚠ ' + esc(iss.message) + '</span>' : '') + '</span></div>' });
       });
       items.sort((a, b) => a.s < b.s ? -1 : a.s > b.s ? 1 : (a.z || 0) - (b.z || 0));
-      html += '<div class="th-card"><h4><span>' + esc(t.name) + '</span><span class="small muted">' + (t.activity === 'ambulatorio' ? 'solo ambulatorio' : 'ambulatorio e reparto') + '</span></h4>' +
+      html += '<div class="th-card"><h4><span>' + esc(t.name) + '</span> <a class="small" href="#/calendario/' + t.id + '/' + d + '">settimana ▸</a><span class="small muted">' + (t.activity === 'ambulatorio' ? 'solo ambulatorio' : 'ambulatorio e reparto') + '</span></h4>' +
         abs.map(a => '<div class="absent">Assente (' + esc(E.ABSENCE_KIND[a.kind]) + ')' + (a.start_time ? ' ' + a.start_time + '–' + a.end_time : ' tutto il giorno') + (a.end_date ? '' : ' · rientro non noto') + '</div>').join('') +
         (items.length ? items.map(x => x.html).join('') : '<div class="slot muted">Non in servizio</div>') + '</div>';
     });
@@ -260,7 +260,7 @@
     const th = el.getAttribute('data-th');
     const cats = FA.categories().filter(c => E.skillLevel(A.ctx, th, c.id));
     const day = el.getAttribute('data-day');
-    A.ui.qb = { th, day, start: el.getAttribute('data-start'), mode: 'nuovo', name: '', cycle_id: '', category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id,
+    A.ui.qb = { th, day, start: el.getAttribute('data-start'), slotStart: el.getAttribute('data-start'), end: el.getAttribute('data-end'), mode: 'nuovo', name: '', cycle_id: '', category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id,
       duration: 30, sessions: 10, weekdays: [E.weekday(day)], priority: 'NI', request_type: 'prima' };
     FA.openModal({ title: 'Prenota con ' + FA.thName(th), wide: true, live: true, body: qbBody,
       foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="qb-save"' + (A.ui.qb.okAll ? FA.saveDisabled() : ' disabled') + '>' + (A.saving ? 'Salvataggio…' : 'Conferma e salva') + '</button>' });
@@ -281,7 +281,7 @@
     f.dates = dates;
     f.okAll = !!f.start && checks.length === n && checks.every(x => !x.chk) && (f.mode === 'nuovo' ? !!(f.name || '').trim() : !!f.cycle_id) && !!f.category_id;
     const bad = checks.filter(x => x.chk);
-    return '<p>Primo appuntamento: <strong>' + esc(FA.dayLabel(f.day)) + '</strong> con <strong>' + esc(FA.thName(f.th)) + '</strong>. Stesso orario e stesso collega per tutte le sedute.</p>' +
+    return '<p>Primo appuntamento: <strong>' + esc(FA.dayLabel(f.day)) + '</strong> con <strong>' + esc(FA.thName(f.th)) + '</strong>' + (f.end ? ' (spazio libero ' + esc(f.slotStart) + '–' + esc(f.end) + ')' : '') + '. Stesso orario e stesso collega per tutte le sedute; occupa solo la durata scelta.</p>' +
       '<div class="field"><label>Paziente</label>' + FA.seg('qb.mode', [['nuovo', 'Nuovo paziente (fittizio)'], ['attesa', 'Dalla lista d’attesa']], f.mode) + '</div>' +
       (f.mode === 'nuovo' ? '<div class="field" style="max-width:420px"><label>Nome (fittizio)</label><input type="text" data-bind="qb.name" data-rerender value="' + esc(f.name) + '" placeholder="es. Bianchi L."></div>'
         : '<div class="field"><label>Richiesta</label><select data-bind="qb.cycle_id" data-rerender><option value="">— scegli —</option>' + waiting.map(c => FA.option(c.id, '[' + c.priority + '] ' + FA.patName(c.patient_id) + ' · ' + FA.catName(c.category_id) + ' · ' + c.duration + ' min × ' + c.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
@@ -311,12 +311,94 @@
       const c = A.ctx.cyc.get(cycleId);
       await FA.save('Prenotazione', () => FA.rpc('book_cycle', { p_cycle: cycleId, p_version: version, p_therapist: f.th, p_start: f.start, p_weekdays: f.weekdays, p_dates: f.dates }));
       FA.closeModal();
-      FA.go('paziente', c.patient_id);
+      if (A.view !== 'calendario') FA.go('paziente', c.patient_id);
     } catch (e) {
       f.error = e.message + (f.cycle_id ? ' La richiesta è comunque salvata in lista d’attesa: puoi riprovare.' : '');
       FA.renderModal();
     }
   };
+
+
+  /* ======================= CALENDARIO SETTIMANALE DI UN FISIOTERAPISTA ======================= */
+  const PX = 1.25; // pixel per minuto
+  function weekView(params) {
+    const ctx = A.ctx;
+    const thId = params[0] && ctx.th.get(params[0]) ? params[0] : (FA.isFisio() && A.me.therapist_id) || (FA.activeTherapists()[0] || {}).id;
+    if (!thId) return '<div class="panel">Nessun fisioterapista: inseriscili da Configurazione.</div>';
+    const th = ctx.th.get(thId);
+    const base = params[1] || A.today;
+    const mon = E.addDays(base, 1 - E.weekday(base));
+    let days = [0, 1, 2, 3, 4, 5].map(i => E.addDays(mon, i));
+    if (!E.dayBlocks(ctx, thId, days[5]).length) days = days.slice(0, 5);
+    let minS = 24 * 60, maxE = 0;
+    days.forEach(d => E.dayBlocks(ctx, thId, d).forEach(b => { minS = Math.min(minS, E.toMin(b.start)); maxE = Math.max(maxE, E.toMin(b.end)); }));
+    (ctx.data.appointments || []).filter(a => a.therapist_id === thId && days.includes(a.day)).forEach(a => { minS = Math.min(minS, E.toMin(a.start_time)); maxE = Math.max(maxE, E.toMin(a.end_time)); });
+    if (maxE <= minS) { minS = 7 * 60; maxE = 15 * 60 + 15; }
+    minS = Math.floor(minS / 30) * 30; maxE = Math.ceil(maxE / 30) * 30;
+    const H = (maxE - minS) * PX;
+    const y = t => (E.toMin(t) - minS) * PX;
+    const box = (s, e, cls, inner, attrs) => '<div class="' + cls + '" style="top:' + y(s) + 'px;height:' + Math.max(14, y(e) - y(s) - 1) + 'px"' + (attrs || '') + '>' + inner + '</div>';
+    const can = FA.canEditTh(thId);
+    let ruler = '<div class="wk-ruler" style="height:' + H + 'px">';
+    for (let m = minS; m <= maxE; m += 30) ruler += '<div class="wk-tick' + (m % 60 ? ' half' : '') + '" style="top:' + (m - minS) * PX + 'px">' + (m % 60 ? '' : E.fromMin(m)) + '</div>';
+    ruler += '</div>';
+    const cols = days.map(d => {
+      const blocks = E.dayBlocks(ctx, thId, d);
+      const abs = E.absenceOnDay(ctx, thId, d);
+      const appts = (ctx.data.appointments || []).filter(a => a.therapist_id === thId && a.day === d);
+      const occ = appts.filter(a => E.OCCUPYING.has(a.status));
+      const other = appts.filter(a => !E.OCCUPYING.has(a.status) && a.status !== 'spostata' && a.status !== 'liberata');
+      let inner = '';
+      const closed = ctx.closures.get(d);
+      blocks.forEach(b => {
+        inner += b.kind === 'amb' ? box(b.start, b.end, 'wk-amb', '') : box(b.start, b.end, 'wk-blk', '<span>' + esc(E.BLOCK[b.kind]) + '</span>');
+      });
+      // spazi liberi: ambulatorio meno pazienti e assenze (durata flessibile: si sceglie ora e durata)
+      if (!closed) blocks.filter(b => b.kind === 'amb').forEach(b => {
+        const busy = occ.map(a => [E.toMin(a.start_time), E.toMin(a.end_time)])
+          .concat(abs.map(x => x.start_time ? [E.toMin(x.start_time), E.toMin(x.end_time)] : [0, 24 * 60])).sort((p, q) => p[0] - q[0]);
+        let cur = E.toMin(b.start); const end = E.toMin(b.end);
+        const gaps = [];
+        busy.forEach(([s0, e0]) => { if (e0 <= cur || s0 >= end) return; if (s0 > cur) gaps.push([cur, s0]); cur = Math.max(cur, e0); });
+        if (cur < end) gaps.push([cur, end]);
+        gaps.filter(([g0, g1]) => g1 - g0 >= 30).forEach(([g0, g1]) => {
+          const ok = can && d >= A.today;
+          inner += box(E.fromMin(g0), E.fromMin(g1), 'wk-free' + (ok ? ' act' : ''), (ok ? '+ ' : '') + 'libero ' + E.fromMin(g0) + '–' + E.fromMin(g1),
+            ok ? ' data-act="ag-book" data-th="' + thId + '" data-day="' + d + '" data-start="' + E.fromMin(g0) + '" data-end="' + E.fromMin(g1) + '" role="button" tabindex="0" title="Prenota un paziente in questo spazio"' : '');
+        });
+      });
+      occ.forEach(a => {
+        const c = ctx.cyc.get(a.cycle_id);
+        const iss = A.issues.find(i => i.appointment_id === a.id && i.kind !== 'esito_mancante');
+        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (iss ? ' issue' : ''),
+          '<strong>' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '</strong> ' + FA.prio(c ? c.priority : 'NI') +
+          '<br><span class="small">' + esc(c ? FA.catName(c.category_id) : '') + (a.status !== 'programmata' ? ' · ' + esc(E.STATUS[a.status]) : '') +
+          (a.original_therapist_id ? ' · sostituisce ' + esc(FA.thName(a.original_therapist_id)) : '') + (a.recovery_of ? ' · recupero' : '') + (iss ? ' · ⚠ ' + esc(iss.message) : '') + '</span>',
+          ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0"');
+      });
+      abs.forEach(x => {
+        inner += x.start_time ? box(x.start_time, x.end_time, 'wk-abs', 'Assente (' + esc(E.ABSENCE_KIND[x.kind]) + ')') :
+          '<div class="wk-abs" style="top:0;height:' + H + 'px">Assente tutto il giorno (' + esc(E.ABSENCE_KIND[x.kind]) + ')' + (x.end_date ? '' : ' · rientro non noto') + '</div>';
+      });
+      if (closed) inner += '<div class="wk-closed" style="top:0;height:' + H + 'px">Chiuso: ' + esc(closed) + '</div>';
+      return '<div class="wk-day' + (d === A.today ? ' today' : '') + '"><div class="wk-head">' + esc(E.fmtItDay(d)) + '</div>' +
+        '<div class="wk-col" style="height:' + H + 'px">' + inner + '</div>' +
+        (other.length ? '<div class="wk-other">' + other.map(a => '<button class="chip ' + (a.status === 'da_riprogrammare' ? 'bad' : 'grey') + '" data-act="open-appt" data-id="' + a.id + '">' +
+          a.start_time + ' ' + esc(FA.patName(a.patient_id)) + ' · ' + esc(E.STATUS[a.status]) + ((a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by ? ' · da recuperare' : '') + '</button>').join('') + '</div>' : '') + '</div>';
+    }).join('');
+    return '<div class="row between"><h2>Calendario di ' + esc(th.name) + '</h2><a class="btn small" href="#/agenda/' + days[0] + '">Agenda di tutti</a></div>' +
+      '<div class="panel"><div class="row">' +
+      '<select style="max-width:260px" data-bind="wkTh" data-on="wk-th">' + FA.activeTherapists().map(t => FA.option(t.id, t.name + (FA.canEditTh(t.id) ? '' : ' (consultazione)'), thId)).join('') + '</select>' +
+      '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + E.addDays(mon, -7) + '">◀ Settimana prima</button>' +
+      '<button class="btn small" data-act="wk-today" data-th="' + thId + '">Questa settimana</button>' +
+      '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + E.addDays(mon, 7) + '">Settimana dopo ▶</button>' +
+      '<strong>' + E.fmtIt(days[0]) + ' – ' + E.fmtIt(days[days.length - 1]) + '</strong></div>' +
+      '<p class="small muted" style="margin:6px 0 0">' + (can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (scegli ora e durata: occupa solo il tempo della sua seduta); clicca un paziente per segnare effettuata, assenza, recupero o spostarlo.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p></div>' +
+      '<div class="wk-grid" style="grid-template-columns:52px repeat(' + days.length + ', minmax(140px, 1fr))"><div><div class="wk-head">&nbsp;</div>' + ruler + '</div>' + cols + '</div>';
+  }
+  FA.views.calendario = { render: weekView };
+  FA.actions['wk-th'] = el => { const p = (A.params[1] || A.today); FA.go('calendario', el.value, p); };
+  FA.actions['wk-today'] = el => FA.go('calendario', el.getAttribute('data-th'), A.today);
 
   /* ======================= APPUNTAMENTO ======================= */
   function pickBlock(am, a, cyc, title) {
@@ -356,6 +438,11 @@
     const canOutcome = ['programmata', 'effettuata', 'assente', 'annullata'].includes(a.status) && !a.recovered_by;
     const canMove = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const canRecover = (a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by && cyc.status === 'attivo';
+    if (a.status === 'programmata') h += '<div class="row" style="margin:10px 0"><strong>Azioni rapide:</strong>' +
+      (a.day <= A.today ? '<button class="btn small ok" data-act="am-quick" data-s="effettuata"' + FA.saveDisabled() + '>✓ Effettuata</button>' : '') +
+      '<button class="btn small" data-act="am-quick" data-s="assente_rec"' + FA.saveDisabled() + '>Assente · da recuperare</button>' +
+      '<button class="btn small" data-act="am-quick" data-s="assente"' + FA.saveDisabled() + '>Assente</button>' +
+      '<button class="btn small" data-act="am-quick" data-s="annullata"' + FA.saveDisabled() + '>Annullata dal paziente</button></div>';
     h += '<div class="row" style="margin:10px 0">' +
       (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito / assenza' : 'Correggi esito') + '</button>' : '') +
       (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Sposta solo questa seduta</button>' : '') +
@@ -383,6 +470,16 @@
     const label = { 'am-outcome': 'Salva esito', 'am-move': 'Sposta la seduta', 'am-recover': 'Prenota il recupero' }[btn];
     return '<button class="btn" data-act="close-modal">Chiudi</button>' + (btn ? '<button class="btn primary" data-act="' + btn + '"' + FA.saveDisabled() + '>' + (A.saving ? 'Salvataggio…' : label) + '</button>' : '');
   }
+  FA.actions['am-quick'] = async el => {
+    const am = A.ui.am, a = A.ctx.appt.get(am.id), k = el.getAttribute('data-s');
+    const status = k === 'assente_rec' ? 'assente' : k;
+    try {
+      await FA.save({ effettuata: 'Seduta effettuata', assente_rec: 'Assenza con recupero', assente: 'Assenza del paziente', annullata: 'Seduta annullata' }[k],
+        () => FA.rpc('register_outcome', { p_id: a.id, p_version: a.version, p_status: status, p_cancel_by: status === 'annullata' ? 'paziente' : null, p_to_recover: k === 'assente_rec', p_note: '' }));
+      if (k === 'assente_rec') { am.mode = 'recupero'; am.pick = { day: a.day >= A.today ? E.addDays(a.day, 1) : A.today, th: a.therapist_id, start: '' }; am.error = null; FA.renderModal(); }
+      else FA.closeModal();
+    } catch (e) { am.error = e.message; FA.renderModal(); }
+  };
   FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.error = null; FA.renderModal(); };
   FA.actions['open-patient'] = el => { FA.closeModal(); FA.go('paziente', el.getAttribute('data-id')); };
   FA.actions['am-outcome'] = async () => {

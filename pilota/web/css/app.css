@@ -218,3 +218,26 @@ tr.clickable:hover td { background: #f6f9fd; }
   .user .who { display: none; }
 }
 @media print { .top, .nav, .pilot-banner { display: none; } }
+
+/* calendario settimanale di un fisioterapista */
+.wk-grid { display: grid; gap: 6px; overflow-x: auto; align-items: start; }
+.wk-head { font-weight: 700; font-size: .9rem; padding: 6px 4px; text-align: center; background: #f8fafc; border: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+.wk-day.today .wk-head { background: var(--primary); color: #fff; }
+.wk-col { position: relative; background: #fff; border: 1px solid var(--line); border-top: 0; }
+.wk-ruler { position: relative; }
+.wk-tick { position: absolute; right: 4px; font-size: .75rem; color: var(--ink-3); transform: translateY(-50%); }
+.wk-col > div { position: absolute; left: 2px; right: 2px; border-radius: 5px; font-size: .78rem; overflow: hidden; padding: 2px 5px; line-height: 1.25; }
+.wk-amb { background: #f3faf6; left: 0 !important; right: 0 !important; border-radius: 0 !important; }
+.wk-blk { background: repeating-linear-gradient(135deg, #eef0f3, #eef0f3 6px, #e5e8ec 6px, #e5e8ec 12px); color: var(--prot); left: 0 !important; right: 0 !important; border-radius: 0 !important; }
+.wk-free { border: 1px dashed var(--ok-line); color: var(--ok); background: transparent; }
+.wk-free.act { cursor: pointer; font-weight: 600; }
+.wk-free.act:hover { background: var(--ok-bg); }
+.wk-appt { background: var(--primary-soft); border: 1px solid #a9c8ec; border-left: 4px solid var(--primary); cursor: pointer; z-index: 2; }
+.wk-appt:hover { filter: brightness(.97); }
+.wk-appt.st-effettuata { background: var(--ok-bg); border-color: var(--ok-line); border-left-color: var(--ok); }
+.wk-appt.st-trattenuta { background: var(--info-bg); border-color: var(--info-line); border-left-color: var(--info); }
+.wk-appt.issue { background: var(--bad-bg); border-color: var(--bad-line); border-left-color: var(--bad); }
+.wk-abs { background: rgba(180, 35, 24, .12); border: 1px solid var(--bad-line); color: var(--bad); font-weight: 700; z-index: 3; pointer-events: none; }
+.wk-closed { background: rgba(91, 100, 114, .18); color: var(--prot); font-weight: 700; z-index: 3; }
+.wk-other { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
+.wk-other .chip { cursor: pointer; text-align: left; white-space: normal; }

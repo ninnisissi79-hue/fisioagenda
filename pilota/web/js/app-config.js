@@ -102,26 +102,49 @@
     const bad = ambWithReparto();
     if (!bad.length) return '';
     return '<div class="form-warn"><strong>' + bad.length + ' colleghi “solo ambulatorio” hanno una fascia di reparto nel turno:</strong> ' + esc(bad.map(t => t.name).join(', ')) +
-      '.<br><button class="btn small primary" data-act="amb-fix"' + adminSave() + '>Correggi: turno “Solo ambulatorio” da oggi</button> <span class="small">I turni precedenti restano nello storico; prima del salvataggio vedi gli appuntamenti coinvolti.</span></div>';
+      '.<br><button class="btn small primary" data-act="amb-fix"' + adminSave() + '>Correggi i turni (scegli 7:00 o 8:00 per ognuno)</button> <span class="small">I turni precedenti restano nello storico; prima del salvataggio vedi gli appuntamenti coinvolti.</span></div>';
   }
-  FA.actions['amb-fix'] = async () => {
-    const bad = ambWithReparto();
-    const week = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = d <= 5 ? TEMPLATES.ambulatorio.day.map(x => Object.assign({}, x)) : []; });
-    let conf = [];
+  const ambWeek = k => { const w = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { w[d] = d <= 5 ? TEMPLATES[k].day.map(x => Object.assign({}, x)) : []; }); return w; };
+  /** schema ambulatoriale più vicino all'ora di ingresso già inserita */
+  const guessAmb = thId => {
+    const v = E.shiftFor(A.ctx, thId, A.today) || (A.ctx.shifts.get(thId) || [])[0];
+    const starts = v ? Object.values(v.week || {}).flat().map(x => E.hhmm(x.start)).filter(Boolean).sort() : [];
+    return starts.length && starts[0] < '07:45' ? 'ambulatorio7' : 'ambulatorio';
+  };
+  FA.actions['amb-fix'] = () => {
+    const sel = {};
+    ambWithReparto().forEach(t => { sel[t.id] = guessAmb(t.id); });
+    A.ui.af = { sel, conf: null, error: null };
+    FA.openModal({ title: 'Turni dei colleghi “solo ambulatorio”', wide: true, sticky: true,
+      body() {
+        const f = A.ui.af;
+        return '<p>Per ogni collega scegli lo schema ambulatoriale (in vigore da oggi). Gli orari personali si rifiniscono poi da “Nuovo turno con decorrenza”, per esempio fino alle 13:45.</p>' +
+          '<div class="table-wrap"><table><tbody>' + Object.keys(f.sel).map(id => '<tr><td><strong>' + esc(FA.thName(id)) + '</strong></td><td><select data-bind="af.sel.' + id + '">' +
+            FA.option('ambulatorio7', TEMPLATES.ambulatorio7.label, f.sel[id]) + FA.option('ambulatorio', TEMPLATES.ambulatorio.label, f.sel[id]) + FA.option('', 'Non cambiare (lo sistemo a mano)', f.sel[id]) + '</select></td></tr>').join('') +
+          '</tbody></table></div>' + (f.conf ? conflictsBox(f.conf) : '') + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn" data-act="amb-fix-check"' + adminSave() + '>Verifica appuntamenti coinvolti</button>' +
+        '<button class="btn primary" data-act="amb-fix-save"' + (A.ui.af.conf ? adminSave() : ' disabled title="Prima verifica"') + '>Applica</button>' });
+  };
+  FA.actions['amb-fix-check'] = async () => {
+    const f = A.ui.af; f.error = null; let conf = [];
     try {
-      for (const t of bad) {
-        const r = await FA.rpc('admin_save_shift', { p_th: t.id, p_valid_from: A.today, p_week: week, p_note: 'Correzione: solo ambulatorio', p_dry_run: true });
-        conf = conf.concat(r.conflicts.map(c => Object.assign({ th: t.name }, c)));
+      for (const [id, k] of Object.entries(f.sel)) if (k) {
+        const r = await FA.rpc('admin_save_shift', { p_th: id, p_valid_from: A.today, p_week: ambWeek(k), p_note: 'Correzione: solo ambulatorio', p_dry_run: true });
+        conf = conf.concat(r.conflicts.map(c => Object.assign({}, c, { patient: FA.thName(id) + ' · ' + c.patient })));
       }
-    } catch (e) { FA.toast('Verifica non riuscita: ' + e.message, 'bad'); return; }
-    const msg = 'Applico il turno “Solo ambulatorio” (8:15–14:40, pausa 12:20–12:40) da oggi a ' + bad.length + ' colleghi.\n' +
-      (conf.length ? conf.length + ' appuntamenti già prenotati non sarebbero compatibili e verranno segnalati da sistemare (non vengono spostati).' : 'Nessun appuntamento già prenotato diventa incompatibile.') + '\n\nConfermi?';
-    if (!confirm(msg)) return;
+      f.conf = conf;
+    } catch (e) { f.error = e.message; }
+    FA.renderModal();
+  };
+  FA.actions['amb-fix-save'] = async () => {
+    const f = A.ui.af;
     try {
       await FA.save('Turni corretti', async () => {
-        for (const t of bad) await FA.rpc('admin_save_shift', { p_th: t.id, p_valid_from: A.today, p_week: week, p_note: 'Correzione: solo ambulatorio', p_dry_run: false });
+        for (const [id, k] of Object.entries(f.sel)) if (k) await FA.rpc('admin_save_shift', { p_th: id, p_valid_from: A.today, p_week: ambWeek(k), p_note: 'Correzione: ' + TEMPLATES[k].label, p_dry_run: false });
       });
-    } catch (e) { /* già segnalato */ }
+      FA.closeModal();
+    } catch (e) { f.error = e.message; FA.renderModal(); }
   };
 
   /* ---------------- inserimento rapido di più colleghi ---------------- */
@@ -134,7 +157,7 @@
         return '<div class="field"><label>Nomi dei colleghi, uno per riga</label><textarea rows="10" data-bind="tb.names" placeholder="Rossi Anna\nVerdi Marco\n…">' + esc(f.names) + '</textarea>' +
           '<div class="help">' + names.length + ' nomi. Chi ha un’attività o un turno diverso lo correggi dopo dalla sua scheda.</div></div>' +
           '<div class="grid3"><div class="field"><label>Attività</label>' + FA.seg('tb.activity', [['ambulatorio', 'Solo ambulatorio'], ['ambulatorio_reparto', 'Ambulatorio e reparto']], f.activity) + '</div>' +
-          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).filter(([k]) => f.activity !== 'ambulatorio' || k === 'ambulatorio').map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select>' +
+          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).filter(([k]) => f.activity !== 'ambulatorio' || k.startsWith('ambulatorio')).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select>' +
           (f.activity === 'ambulatorio' ? '<div class="help">Solo ambulatorio: nessuna fascia di reparto.</div>' : '') + '</div>' +
           '<div class="field"><label>Turno in vigore dal</label><input type="date" data-bind="tb.from" value="' + esc(f.from) + '"></div></div>' +
           '<p class="muted small">Le competenze si assegnano subito dopo nella “Tabella competenze”.</p>' +
@@ -150,7 +173,7 @@
     if (!todo.length) { f.error = names.length ? 'Questi nomi sono già presenti.' : 'Scrivi almeno un nome.'; FA.renderModal(); return; }
     f.error = null;
     // chi fa solo ambulatorio non va in reparto: schema ambulatoriale in ogni caso
-    const tpl = f.activity === 'ambulatorio' && f.tpl ? 'ambulatorio' : f.tpl;
+    const tpl = f.activity === 'ambulatorio' && f.tpl && !f.tpl.startsWith('ambulatorio') ? (f.tpl === 'reparto7' ? 'ambulatorio7' : 'ambulatorio') : f.tpl;
     const week = {};
     [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = tpl && d <= 5 ? TEMPLATES[tpl].day.map(x => Object.assign({}, x)) : []; });
     const okNames = [], fail = [];
@@ -238,7 +261,7 @@
     [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = cur ? (cur.week[String(d)] || []).map(b => Object.assign({}, b)) : []; });
     const thr = A.ctx.th.get(th);
     if (thr && thr.activity === 'ambulatorio' && Object.values(week).some(day => day.some(b => b.kind === 'reparto')))
-      [1, 2, 3, 4, 5].forEach(d => { week[d] = TEMPLATES.ambulatorio.day.map(x => Object.assign({}, x)); });
+      [1, 2, 3, 4, 5].forEach(d => { week[d] = TEMPLATES[guessAmb(th)].day.map(x => Object.assign({}, x)); });
     A.ui.sh = { th, valid_from: E.addDays(A.today, 1), note: '', week, conflicts: null, checked: false };
     FA.openModal({ title: 'Nuovo turno di ' + FA.thName(th), wide: true, sticky: true,
       body() {
@@ -262,7 +285,8 @@
   const TEMPLATES = {
     reparto7: { label: 'Ambulatorio e reparto, ingresso 7:00', day: [b('preparazione', '07:00', '07:15'), b('amb', '07:15', '09:00'), b('reparto', '09:00', '12:00'), b('pausa', '12:00', '12:20'), b('amb', '12:20', '13:20'), b('documentazione', '13:20', '14:12')] },
     reparto8: { label: 'Ambulatorio e reparto, ingresso 8:00', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '09:00', 1), b('reparto', '09:00', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:45'), b('documentazione', '14:45', '15:12')] },
-    ambulatorio: { label: 'Solo ambulatorio, 8:00–15:12', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:40'), b('documentazione', '14:40', '15:12')] }
+    ambulatorio7: { label: 'Solo ambulatorio, ingresso 7:00 (pazienti 7:15–13:40)', day: [b('preparazione', '07:00', '07:15'), b('amb', '07:15', '12:00'), b('pausa', '12:00', '12:20'), b('amb', '12:20', '13:40'), b('documentazione', '13:40', '14:12')] },
+    ambulatorio: { label: 'Solo ambulatorio, ingresso 8:00 (pazienti 8:15–14:40)', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:40'), b('documentazione', '14:40', '15:12')] }
   };
   FA.actions['sh-tpl'] = () => {
     const f = A.ui.sh, t = TEMPLATES[f.tpl];

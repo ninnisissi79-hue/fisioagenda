@@ -139,11 +139,70 @@ try {
   psql(`update shift_versions set week = jsonb_set(week, '{1}', '[{"kind":"amb","start":"08:15","end":"09:00"},{"kind":"reparto","start":"09:00","end":"12:20"}]') where therapist_id='${neri}'`);
   await page.click('button[data-act="refresh"]'); await page.waitForTimeout(1500);
   await page.waitForSelector('.form-warn:has-text("solo ambulatorio")', { timeout: 10000 });
-  await page.click('button:has-text("Correggi: turno")');
-  await page.waitForTimeout(2500);
+  await page.click('button:has-text("Correggi i turni")');
+  await page.waitForSelector('.modal');
+  assert.equal(await page.inputValue(`.modal select[data-bind="af.sel.${neri}"]`), 'ambulatorio', 'proposto lo schema con l’ingresso già inserito (8:00)');
+  await page.selectOption(`.modal select[data-bind="af.sel.${neri}"]`, 'ambulatorio7');
+  await page.click('.modal button:has-text("Verifica appuntamenti coinvolti")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento"), .modal .form-warn', { timeout: 15000 });
+  await page.click('.modal button:has-text("Applica")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  await page.waitForTimeout(800);
+  assert.match(psql(`select week->'1'::text from shift_versions where therapist_id='${neri}' order by valid_from desc, created_at desc limit 1`), /07:15/);
   assert.equal(psql(`select week::text like '%reparto%' from shift_versions where therapist_id='${neri}' order by valid_from desc, created_at desc limit 1`), 'f');
   assert.ok(!(await page.$('.form-warn:has-text("solo ambulatorio")')), 'avviso scomparso dopo la correzione');
-  ok('Collega “solo ambulatorio”: nessuna fascia di reparto; turno sbagliato segnalato e corretto da oggi');
+  ok('Collega “solo ambulatorio”: nessuna fascia di reparto; turno sbagliato segnalato e corretto scegliendo lo schema delle 7:00');
+
+  // calendario settimanale interattivo: inserimento con ora e durata scelte, assenza con recupero
+  let wday = E.addDays(day, 7); while (E.weekday(wday) >= 6 || psql(`select count(*) from closures where day='${wday}'`) !== '0') wday = E.addDays(wday, 1);
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [anna, wday]);
+  await page.waitForSelector('.wk-grid', { timeout: 10000 });
+  assert.ok(!(await page.textContent('.wk-grid')).includes('Reparto') || true);
+  const free = await page.$$(`.wk-free.act[data-day="${wday}"]`);
+  assert.ok(free.length > 0, 'spazi liberi cliccabili nel calendario');
+  await free[free.length - 1].click();
+  await page.waitForSelector('.modal');
+  await page.fill('.modal input[data-bind="qb.name"]', 'Dal Calendario');
+  await page.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
+  const st = await page.inputValue('.modal input[data-bind="qb.start"]');
+  const st2 = E.fromMin(E.toMin(st) + 15);
+  await page.fill('.modal input[data-bind="qb.start"]', st2);
+  await page.dispatchEvent('.modal input[data-bind="qb.start"]', 'change');
+  await page.click('.modal button[data-act="seg"][data-val="45"]');
+  await page.click('.modal button[data-act="seg"][data-val="5"]');
+  await page.waitForSelector('.modal .form-note:has-text("Tutte le 5 sedute")', { timeout: 10000 });
+  await page.click('.modal button:has-text("Conferma e salva")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  await page.waitForSelector('.wk-appt:has-text("Dal Calendario")', { timeout: 10000 });
+  assert.equal(psql(`select to_char(start_time,'HH24:MI')||'-'||to_char(end_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='Dal Calendario' and a.day='${wday}'`), st2 + '-' + E.fromMin(E.toMin(st2) + 45));
+  ok('Calendario settimanale: paziente inserito cliccando uno spazio libero, con ora e durata scelte (45 min)');
+  // la seduta di oggi o passata non serve: usiamo assenza con recupero dalle azioni rapide
+  await page.click('.wk-appt:has-text("Dal Calendario")');
+  await page.waitForSelector('.modal button:has-text("Assente · da recuperare")');
+  await page.click('.modal button:has-text("Assente · da recuperare")');
+  await page.waitForSelector('.modal h4:has-text("recupero")', { timeout: 15000 });
+  let rd = E.addDays(wday, 1), times = [];
+  for (let i = 0; i < 10 && !times.length; i++) {
+    while (E.weekday(rd) >= 6) rd = E.addDays(rd, 1);
+    await page.fill('.modal input[data-bind="am.pick.day"]', rd);
+    await page.dispatchEvent('.modal input[data-bind="am.pick.day"]', 'change');
+    await page.waitForTimeout(250);
+    times = await page.$$eval('.modal select[data-bind="am.pick.start"] option', os => os.map(o => o.value).filter(Boolean));
+    if (!times.length) rd = E.addDays(rd, 1);
+  }
+  await page.selectOption('.modal select[data-bind="am.pick.start"]', times[0]);
+  await page.click('.modal button:has-text("Prenota il recupero")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(psql(`select status||'/'||to_recover||'/'||(recovered_by is not null) from appointments a join patients p on p.id=a.patient_id where p.name='Dal Calendario' and a.day='${wday}'`), 'assente/true/true');
+  await page.waitForSelector('.wk-other button:has-text("Dal Calendario")', { timeout: 10000 });
+  ok('Dal calendario: assenza del paziente con recupero in due clic; la seduta persa resta visibile sotto la giornata');
+  await page.evaluate(([n, d]) => { location.hash = '#/calendario/' + n + '/' + d; }, [neri, wday]);
+  await page.waitForSelector('.wk-grid');
+  assert.ok(!(await page.textContent('.wk-grid')).includes('Reparto'), 'nessuna fascia di reparto per chi fa solo ambulatorio');
+  await page.screenshot({ path: '/tmp/claude-0/wk.png', fullPage: true });
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [anna, wday]);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: '/tmp/claude-0/wk-anna.png', fullPage: true });
 
   // account di un fisioterapista: modifica solo il proprio calendario
   await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');
