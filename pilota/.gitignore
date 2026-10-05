@@ -1,0 +1,6 @@
+node_modules/
+web/config.js
+backup/
+dist/
+test-results/
+*.log
