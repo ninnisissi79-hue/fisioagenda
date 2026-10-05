@@ -122,6 +122,8 @@
           '<div class="field"><label>Nota</label><input type="text" data-bind="sh.note" value="' + esc(f.note) + '"></div></div>' +
           '<p class="small muted">Fasce: solo “Ambulatorio” è prenotabile. Reparto, pausa, documentazione e preparazione sono protette. “max” limita i pazienti in quella fascia.</p>' +
           '<div class="row"><button class="btn small" data-act="sh-copy">Copia il lunedì su martedì–venerdì</button>' +
+          '<select style="max-width:300px;min-height:34px" data-bind="sh.tpl" data-on="sh-tpl"><option value="">Parti da uno schema pronto…</option>' +
+          Object.entries(TEMPLATES).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + '</select>' +
           '<select style="max-width:300px;min-height:34px" data-bind="sh.from_th" data-on="sh-copy-th"><option value="">Parti dal turno di un collega…</option>' +
           FA.allTherapists().filter(t => t.id !== f.th && (A.ctx.shifts.get(t.id) || []).length).map(t => FA.option(t.id, t.name, f.from_th)).join('') + '</select></div>' +
           [1, 2, 3, 4, 5, 6, 7].map(d => '<div class="week-day" style="margin-top:8px"><h4>' + E.WD_LONG[d] + '</h4>' + blocksEditor('sh.week.' + d, listAt('sh.week.' + d)) + '</div>').join('') +
@@ -129,6 +131,18 @@
       },
       foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn" data-act="sh-check"' + adminSave() + '>Verifica appuntamenti coinvolti</button>' +
         '<button class="btn primary" data-act="sh-save"' + (A.ui.sh.checked ? adminSave() : ' disabled title="Prima verifica gli appuntamenti coinvolti"') + '>Salva il nuovo turno</button>' });
+  };
+  // schemi di partenza (dalla versione 3): modificabili fascia per fascia, per ogni collega
+  const b = (kind, start, end, max) => ({ kind, start, end, max: max || null });
+  const TEMPLATES = {
+    reparto7: { label: 'Ambulatorio e reparto, ingresso 7:00', day: [b('preparazione', '07:00', '07:15'), b('amb', '07:15', '09:00'), b('reparto', '09:00', '12:00'), b('pausa', '12:00', '12:20'), b('amb', '12:20', '13:20'), b('documentazione', '13:20', '14:12')] },
+    reparto8: { label: 'Ambulatorio e reparto, ingresso 8:00', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '09:00', 1), b('reparto', '09:00', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:45'), b('documentazione', '14:45', '15:12')] },
+    ambulatorio: { label: 'Solo ambulatorio, 8:00–15:12', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:40'), b('documentazione', '14:40', '15:12')] }
+  };
+  FA.actions['sh-tpl'] = () => {
+    const f = A.ui.sh, t = TEMPLATES[f.tpl];
+    if (t) [1, 2, 3, 4, 5].forEach(d => { f.week[d] = t.day.map(x => Object.assign({}, x)); });
+    f.checked = false; FA.renderModal();
   };
   FA.actions['sh-copy-th'] = () => {
     const f = A.ui.sh; const v = E.shiftFor(A.ctx, f.from_th, A.today) || (A.ctx.shifts.get(f.from_th) || [])[0];

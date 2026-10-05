@@ -411,6 +411,7 @@
   });
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && A.modal && !A.modal.sticky) FA.closeModal(); });
 
+  FA.actions['cfg-open'] = el => { A.ui.cfgTab = el.getAttribute('data-t'); FA.go('config'); };
   FA.actions['go'] = el => FA.go(el.getAttribute('data-view'), ...(el.getAttribute('data-param') ? [el.getAttribute('data-param')] : []));
   FA.actions['close-modal'] = () => FA.closeModal();
   FA.actions['logout'] = () => FA.logout(false);
@@ -429,7 +430,19 @@
       const toFix = A.issues.filter(i => (i.kind === 'conflitto' || i.kind === 'da_riprogrammare') && ctx.appt.get(i.appointment_id) && ctx.appt.get(i.appointment_id).day <= E.addDays(d, 1));
       const seats = E.freeSeats(ctx, d);
       const workday = E.weekday(d) <= 5 && !ctx.closures.has(d);
-      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' +
+      const nTh = FA.activeTherapists().length;
+      const noShift = FA.activeTherapists().filter(t => !(ctx.shifts.get(t.id) || []).length);
+      let guide = '';
+      if (!nTh || noShift.length) {
+        const step = (n, done, txt, btn) => '<li class="todo-item"><div><span class="chip ' + (done ? 'ok' : 'warn') + '">' + (done ? '✓ fatto' : 'passo ' + n) + '</span> ' + txt + '</div><div>' + (done ? '' : btn) + '</div></li>';
+        guide = '<div class="panel" style="border:2px solid var(--primary)"><h3>Primi passi</h3>' + (FA.isAdmin()
+          ? '<ul class="list">' +
+            step(1, nTh > 0, 'Inserisci i fisioterapisti con le loro competenze (★ specifica o abilitato per ogni percorso).', '<button class="btn small primary" data-act="cfg-open" data-t="fisio">Inserisci fisioterapisti</button>') +
+            step(2, nTh > 0 && !noShift.length, 'Definisci il turno settimanale di ognuno (puoi partire da uno schema pronto).' + (noShift.length && nTh ? ' Mancano: ' + esc(noShift.map(t => t.name).join(', ')) + '.' : ''), '<button class="btn small primary" data-act="cfg-open" data-t="turni">Inserisci turni</button>') +
+            step(3, false, 'Registra ferie e malattie già note da “Gestisci assenza fisioterapista”; poi inserisci i pazienti fittizi da “Trova posto” o cliccando un posto libero in agenda.', '') + '</ul>'
+          : '<p>Il coordinatore deve ancora completare fisioterapisti e turni.</p>') + '</div>';
+      }
+      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + guide +
         '<div class="big-actions">' +
         '<button class="big-action urgent" data-act="go" data-view="assenze"><span class="t">Gestisci assenza fisioterapista</span><span class="d">Registra l’assenza e trova subito i sostituti per i pazienti coinvolti.</span></button>' +
         '<button class="big-action" data-act="go" data-view="trova"><span class="t">Trova posto per un paziente</span><span class="d">Chi può prenderlo, in quali giorni, a che ora e da quando.</span></button></div>' +
