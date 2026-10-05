@@ -21,9 +21,16 @@ if (!url || !key) { console.log('Sito non generato: indica FA_URL e FA_KEY (chia
 if (/service_role|sb_secret_/.test(key)) { console.error('ERRORE: questa è una chiave SEGRETA. Usa la chiave pubblica (publishable/anon).'); process.exit(1); }
 const out = path.join(root, 'dist/sito');
 fs.rmSync(out, { recursive: true, force: true });
-fs.cpSync(path.join(root, 'web'), out, { recursive: true, filter: s => !s.endsWith('config.js') || s.endsWith('config.example.js') });
+const localCfg = path.join(root, 'web', 'config.js');
+fs.cpSync(path.join(root, 'web'), out, { recursive: true, filter: s => path.resolve(s) !== localCfg });
 fs.writeFileSync(path.join(out, 'config.js'), `window.FA_CONFIG = { supabaseUrl: ${JSON.stringify(url)}, supabaseKey: ${JSON.stringify(key)} };\n`);
 fs.writeFileSync(path.join(out, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY\n  Referrer-Policy: no-referrer\n');
+// controllo: ogni file richiesto da index.html deve essere nel pacchetto
+const html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+const refs = [...html.matchAll(/(?:src|href)="([^"#:]+)"/g)].map(m => m[1]);
+const missing = refs.filter(r => !fs.existsSync(path.join(out, r)));
+if (missing.length) { console.error('ERRORE: file mancanti nel pacchetto: ' + missing.join(', ')); process.exit(1); }
+console.log('Controllo pacchetto: ' + refs.length + ' file richiesti, tutti presenti.');
 const zip = path.join(root, 'dist/fisioagenda-pilota-sito.zip');
 fs.rmSync(zip, { force: true });
 execFileSync('zip', ['-qr', zip, '.'], { cwd: out });
