@@ -8,7 +8,8 @@ insert into public.categories (id, name, sort) values
   ('orto', 'Ortopedia post-chirurgica', 3), ('protesi', 'Protesi anca / ginocchio', 4), ('spalla', 'Spalla', 5),
   ('rachide', 'Rachide / lombalgia', 6), ('neuro', 'Neurologico', 7), ('onco', 'Oncologico', 8),
   ('linf', 'Linfedema', 9), ('pelv', 'Pavimento pelvico', 10), ('resp', 'Riabilitazione respiratoria', 11),
-  ('ortesi', 'Ambulatorio ortesi', 12)
+  ('ortesi', 'Ambulatorio ortesi', 12),
+  ('bambino', 'Bambino (età evolutiva)', 13), ('mieloleso', 'Mieloleso', 14)
 on conflict (id) do nothing;
 
 -- festività nazionali 2026–2027 (il Santo Patrono non è inserito: aggiungilo dall'app)
