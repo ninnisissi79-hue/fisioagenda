@@ -84,6 +84,24 @@ try {
   await page.waitForSelector('h2:has-text("Paziente Prova")', { timeout: 15000 });
   ok('Paziente fittizio inserito e assegnato: occupa il suo posto per 5 sedute');
 
+  // paziente con ciclo già in corso: 10 sedute di cui 3 già svolte -> se ne prenotano 7
+  await page.evaluate(d => { location.hash = '#/agenda/' + d; }, day);
+  await page.waitForTimeout(300);
+  await page.selectOption('select[data-bind="ag.th"]', verdi);
+  await page.click('[data-act="ag-book"] >> nth=-1');
+  await page.fill('.modal input[data-bind="qb.name"]', 'Paziente In Corso');
+  await page.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
+  await page.selectOption('.modal select[data-bind="qb.request_type"]', 'continuazione');
+  await page.fill('.modal input[data-bind="qb.prior"]', '3');
+  await page.dispatchEvent('.modal input[data-bind="qb.prior"]', 'change');
+  await page.waitForSelector('.modal .form-note:has-text("Tutte le 7 sedute")', { timeout: 10000 });
+  await page.click('.modal button:has-text("Conferma e salva")');
+  await page.waitForSelector('h2:has-text("Paziente In Corso")', { timeout: 15000 });
+  const sheet = await page.textContent('main');
+  assert.match(sheet, /Effettuate: 3 \(di cui 3 prima dell’inserimento\)/);
+  assert.match(sheet, /Programmate: 7/);
+  ok('Ciclo già in corso: 3 sedute già svolte contate come effettuate, prenotate solo le 7 rimanenti');
+
   // assenza del fisioterapista e sostituzione
   await page.evaluate(() => { location.hash = '#/oggi'; });
   await page.click('text=Gestisci assenza fisioterapista');
@@ -97,7 +115,7 @@ try {
   await page.click('button:has-text("Rivedi e conferma")');
   await page.click('.modal button:has-text("Conferma e salva")');
   await page.waitForSelector('text=Esito del salvataggio', { timeout: 15000 });
-  assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id where a.day='${day}'`), 'Verdi Marco');
+  assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id join patients p on p.id=a.patient_id where a.day='${day}' and p.name='Paziente Prova'`), 'Verdi Marco');
   assert.equal(psql(`select count(*) from appointments where therapist_id='${anna}' and day > '${day}'`), '4', 'il resto del ciclo resta a Rossi Anna');
   ok('Assenza di Rossi Anna: il paziente passa a Verdi Marco allo stesso orario solo per quel giorno');
   assert.deepEqual(errors, []);

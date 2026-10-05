@@ -418,6 +418,9 @@
     });
     const cyc = ctx.cyc.get(cycleId);
     const planned = cyc ? cyc.planned_sessions : 0;
+    // sedute già svolte prima dell'inserimento nel pilota (ciclo in corso): contano come effettuate
+    c.precedenti = cyc ? (cyc.prior_sessions || 0) : 0;
+    c.effettuate += c.precedenti;
     c.previste = planned;
     c.mancanoDaProgrammare = Math.max(0, planned - c.effettuate - c.programmate - c.trattenute - c.daRiprogrammare - c.daRecuperare);
     return c;

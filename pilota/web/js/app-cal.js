@@ -16,6 +16,16 @@
   const wdChecks = (path, cur) => '<div class="checks">' + [1, 2, 3, 4, 5, 6].map(d =>
     '<label><input type="checkbox" data-bind="' + path + '" data-multi value="' + d + '"' + ((cur || []).includes(d) ? ' checked' : '') + ' data-rerender> ' + E.WD_SHORT[d] + '</label>').join('') + '</div>';
 
+  /** Ciclo già iniziato: sedute svolte prima dell'inserimento (si prenotano solo le rimanenti). */
+  function priorField(path, f) {
+    if (f.request_type !== 'continuazione') { f.prior = 0; return ''; }
+    const n = Number(f.sessions || f.planned || 10);
+    if (!(Number(f.prior) >= 0) || Number(f.prior) >= n) f.prior = 0;
+    return '<div class="field" style="max-width:520px"><label>Sedute già svolte (ciclo in corso)</label><input type="number" min="0" max="' + (n - 1) + '" data-num data-bind="' + path + '.prior" data-rerender value="' + esc(f.prior || 0) + '">' +
+      '<div class="help">Contate come effettuate. Si prenotano solo le ' + (n - (Number(f.prior) || 0)) + ' sedute rimanenti.</div></div>';
+  }
+  const remaining = f => Number(f.sessions) - (f.request_type === 'continuazione' ? (Number(f.prior) || 0) : 0);
+
   /* ======================= TROVA POSTO ======================= */
   function findState() {
     if (!A.ui.find) A.ui.find = { mode: 'nuovo', category_id: 'mano', priority: 'NI', request_type: 'prima', duration: 30, weekdays: [1, 3, 5], sessions: 10, from: A.today, pref: false };
@@ -42,11 +52,12 @@
       '<div class="grid3">' +
       '<div class="field"><label for="f-cat">Percorso</label><select id="f-cat" data-bind="find.category_id">' + FA.categories().map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
       '<div class="field"><label for="f-pr">Priorità</label><select id="f-pr" data-bind="find.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>' +
-      '<div class="field"><label for="f-rt">Tipo di richiesta</label><select id="f-rt" data-bind="find.request_type">' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div>' +
+      '<div class="field"><label for="f-rt">Tipo di richiesta</label><select id="f-rt" data-bind="find.request_type" data-rerender>' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div>' +
       '</div>' +
       '<div class="grid3"><div class="field"><label>Durata della seduta</label>' + FA.seg('find.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration) + '</div>' +
       '<div class="field"><label>Sedute del ciclo</label>' + FA.seg('find.sessions', E.SESSION_PRESETS.map(n => [n, String(n)]), f.sessions) + '</div>' +
       '<div class="field"><label for="f-from">A partire dal</label><input id="f-from" type="date" data-bind="find.from" value="' + esc(f.from || A.today) + '" min="' + A.today + '"></div></div>' +
+      priorField('find', f) +
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('find.weekdays', f.weekdays) + '</div>' +
       '<div class="field"><label class="inline-check"><input type="checkbox" data-bind="find.pref" data-rerender' + (f.pref ? ' checked' : '') + '> Indica una fascia oraria preferita</label>' +
       (f.pref ? '<div class="grid3" style="max-width:640px"><div class="field"><label>Dalle</label><input type="time" data-bind="find.prefFrom" value="' + esc(f.prefFrom || '') + '"></div>' +
@@ -65,7 +76,7 @@
     if (!f.weekdays || !f.weekdays.length) { f.error = 'Scegli almeno un giorno della settimana.'; FA.render(); return; }
     if (f.mode === 'attesa' && !f.cycle_id) { f.error = 'Scegli la richiesta dalla lista d’attesa.'; FA.render(); return; }
     const c = f.cycle_id ? A.ctx.cyc.get(f.cycle_id) : null;
-    f.results = E.searchCycle(A.ctx, { categoryId: f.category_id, duration: Number(f.duration), weekdays: f.weekdays, sessions: Number(f.sessions), from: f.from,
+    f.results = E.searchCycle(A.ctx, { categoryId: f.category_id, duration: Number(f.duration), weekdays: f.weekdays, sessions: c ? c.planned_sessions - (c.prior_sessions || 0) : remaining(f), from: f.from,
       prefFrom: f.pref ? f.prefFrom : null, prefTo: f.pref ? f.prefTo : null, prefStrict: f.pref && f.prefStrict, patientId: c ? c.patient_id : null, cycleId: c ? c.id : null, weeks: 16 });
     f.searchedAt = Date.now(); f.showAll = {};
     FA.render();
@@ -109,7 +120,7 @@
   };
   function reqPayload(f) {
     return { patient_name: (f.patient_name || '').trim(), category_id: f.category_id, priority: f.priority, request_type: f.request_type,
-      duration: Number(f.duration), planned_sessions: Number(f.sessions), weekdays: f.weekdays,
+      duration: Number(f.duration), planned_sessions: Number(f.sessions), prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays,
       preference: f.pref && f.prefFrom ? 'Preferenza ' + f.prefFrom + '–' + (f.prefTo || '') : '' };
   }
   FA.actions['find-book'] = el => {
@@ -241,8 +252,8 @@
       const c = ctx.cyc.get(f.cycle_id);
       if (c && f.loaded !== c.id) Object.assign(f, { loaded: c.id, category_id: c.category_id, duration: c.duration, sessions: c.planned_sessions, priority: c.priority, request_type: c.request_type });
     }
-    const dur = Number(f.duration), n = Number(f.sessions);
     const cyc = f.mode === 'attesa' && f.cycle_id ? ctx.cyc.get(f.cycle_id) : null;
+    const dur = Number(f.duration), n = cyc ? cyc.planned_sessions - (cyc.prior_sessions || 0) : remaining(f);
     const dates = f.weekdays.length ? E.cycleDates(ctx, f.day, f.weekdays, n) : [];
     const end = f.start ? E.fromMin(E.toMin(f.start) + dur) : '';
     const checks = f.start ? dates.map(d => ({ d, chk: E.checkSlot(ctx, f.th, d, f.start, end, { patientId: cyc ? cyc.patient_id : null, cycleId: cyc ? cyc.id : null }) })) : [];
@@ -255,12 +266,13 @@
         : '<div class="field"><label>Richiesta</label><select data-bind="qb.cycle_id" data-rerender><option value="">— scegli —</option>' + waiting.map(c => FA.option(c.id, '[' + c.priority + '] ' + FA.patName(c.patient_id) + ' · ' + FA.catName(c.category_id) + ' · ' + c.duration + ' min × ' + c.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
       '<div class="grid3"><div class="field"><label>Percorso (tra quelli di ' + esc(FA.thName(f.th)) + ')</label><select data-bind="qb.category_id" data-rerender' + (cyc ? ' disabled' : '') + '>' + cats.map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
       '<div class="field"><label>Priorità</label><select data-bind="qb.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>' +
-      '<div class="field"><label>Tipo di richiesta</label><select data-bind="qb.request_type">' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div></div>' +
+      '<div class="field"><label>Tipo di richiesta</label><select data-bind="qb.request_type" data-rerender>' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div></div>' +
       '<div class="grid3"><div class="field"><label>Ora di inizio</label><input type="time" step="300" data-bind="qb.start" data-rerender value="' + esc(f.start) + '"></div>' +
       '<div class="field"><label>Durata</label>' + (cyc ? '<div>' + dur + ' min</div>' : FA.seg('qb.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration)) + '</div>' +
       '<div class="field"><label>Sedute</label>' + (cyc ? '<div>' + n + '</div>' : FA.seg('qb.sessions', E.SESSION_PRESETS.map(x => [x, String(x)]), f.sessions)) + '</div></div>' +
+      (cyc ? (cyc.prior_sessions ? '<p class="small">Sedute già svolte prima dell’inserimento: ' + cyc.prior_sessions + '</p>' : '') : priorField('qb', f)) +
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('qb.weekdays', f.weekdays) + '</div>' +
-      (checks.length ? (bad.length ? '<div class="form-error">✗ ' + bad.length + ' date non disponibili: cambia ora, giorni o durata.</div>' : '<div class="form-note">✓ Tutte le ' + n + ' sedute sono disponibili (festività saltate).</div>') +
+      (checks.length ? (bad.length ? '<div class="form-error">✗ ' + bad.length + ' date non disponibili: cambia ora, giorni o durata.</div>' : '<div class="form-note">✓ Tutte le ' + n + ' sedute da prenotare sono disponibili (festività saltate).</div>') +
         '<div class="checks">' + checks.map(x => '<span class="chip ' + (x.chk ? 'bad' : 'blue') + '" title="' + esc(x.chk ? x.chk.msg : '') + '">' + (x.chk ? '✗ ' : '') + esc(E.fmtItDay(x.d)) + '</span>').join('') + '</div>' +
         (bad.length ? '<ul class="small">' + bad.slice(0, 4).map(x => '<li>' + esc(E.fmtItDay(x.d) + ': ' + x.chk.msg) + '</li>').join('') + '</ul>' : '') : '') +
       FA.errBox(f.error);
@@ -271,7 +283,8 @@
       let cycleId = f.cycle_id, version;
       if (f.mode === 'nuovo') {
         const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), category_id: f.category_id, priority: f.priority,
-          request_type: f.request_type, duration: Number(f.duration), planned_sessions: Number(f.sessions), weekdays: f.weekdays } }));
+          request_type: f.request_type, duration: Number(f.duration), planned_sessions: Number(f.sessions),
+          prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays } }));
         cycleId = r.cycle_id; version = 1; f.mode = 'attesa'; f.cycle_id = cycleId;
       } else version = A.ctx.cyc.get(cycleId).version;
       const c = A.ctx.cyc.get(cycleId);
@@ -420,7 +433,7 @@
       '</div></div>';
     if (c.status !== 'in_attesa') {
       h += '<div class="row" style="margin:10px 0">' +
-        '<span class="chip ok">Effettuate: ' + cnt.effettuate + '</span><span class="chip blue">Programmate: ' + cnt.programmate + '</span>' +
+        '<span class="chip ok">Effettuate: ' + cnt.effettuate + (cnt.precedenti ? ' (di cui ' + cnt.precedenti + ' prima dell’inserimento)' : '') + '</span><span class="chip blue">Programmate: ' + cnt.programmate + '</span>' +
         (cnt.trattenute ? '<span class="chip info">Posti mantenuti: ' + cnt.trattenute + '</span>' : '') +
         '<span class="chip warn">Assenze: ' + cnt.assenze + '</span><span class="chip grey">Annullate: ' + cnt.annullate + '</span>' +
         (cnt.recuperi ? '<span class="chip info">Recuperi: ' + cnt.recuperi + '</span>' : '') + (cnt.daRecuperare ? '<span class="chip warn">Da recuperare: ' + cnt.daRecuperare + '</span>' : '') +

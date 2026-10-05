@@ -421,3 +421,19 @@ test('backup e ripristino da parte del coordinatore', async () => {
   assert.equal(psql('select count(*) from appointments'), String(nAppt));
   assert.match(psql("select user_name || ' ' || action from audit_log order by id desc limit 1"), /Coordinatrice Prova ripristino/);
 });
+
+test('ciclo già in corso: si prenotano solo le sedute rimanenti, quelle già svolte contano come effettuate', async () => {
+  const ids = await team('cor', { A: [['mano', 'specifica']] });
+  const [d] = workdays(E.addDays(T0, 1), 1);
+  const r = await S.rpc(op1, 'create_request', { p: { patient_name: 'In corso ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 10, prior_sessions: 4,
+    request_type: 'continuazione', weekdays: [E.weekday(d)] } });
+  await expectError(S.rpc(op1, 'book_cycle', { p_cycle: r.cycle_id, p_version: 1, p_therapist: ids.A, p_start: '12:30', p_weekdays: [E.weekday(d)], p_dates: weekly(d, 10) }), 'FA_INPUT', /6 date/);
+  await S.rpc(op1, 'book_cycle', { p_cycle: r.cycle_id, p_version: 1, p_therapist: ids.A, p_start: '12:30', p_weekdays: [E.weekday(d)], p_dates: weekly(d, 6) });
+  const ctx = await ctxFor(op1, T0);
+  const c = E.cycleCounts(ctx, r.cycle_id);
+  assert.equal(c.effettuate, 4);
+  assert.equal(c.precedenti, 4);
+  assert.equal(c.programmate, 6);
+  assert.equal(c.mancanoDaProgrammare, 0);
+  await expectError(S.rpc(op1, 'create_request', { p: { patient_name: 'Troppe ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5, prior_sessions: 5 } }), null);
+});
