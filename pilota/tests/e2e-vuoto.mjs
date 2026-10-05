@@ -123,6 +123,28 @@ try {
   assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id join patients p on p.id=a.patient_id where a.day='${day}' and p.name='Paziente Prova'`), 'Verdi Marco');
   assert.equal(psql(`select count(*) from appointments where therapist_id='${anna}' and day > '${day}'`), '4', 'il resto del ciclo resta a Rossi Anna');
   ok('Assenza di Rossi Anna: il paziente passa a Verdi Marco allo stesso orario solo per quel giorno');
+  // collega "solo ambulatorio" inserito con lo schema di reparto: avviso e correzione
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Fisioterapisti")');
+  await page.click('button:has-text("Inserimento rapido")');
+  await page.fill('.modal textarea[data-bind="tb.names"]', 'Neri Paola');
+  await page.click('.modal button[data-act="seg"][data-val="ambulatorio"]');
+  await page.fill('.modal input[data-bind="tb.from"]', psql('select app.today()'));
+  await page.click('.modal button:has-text("Inserisci tutti")');
+  await page.waitForSelector('.modal .form-note:has-text("Inseriti 1")', { timeout: 15000 });
+  await page.click('.modal button:has-text("Chiudi")');
+  const neri = psql("select id from therapists where name='Neri Paola'");
+  assert.equal(psql(`select count(*) from shift_versions where therapist_id='${neri}' and week::text like '%reparto%'`), '0', 'solo ambulatorio: nessuna fascia di reparto');
+  // simuliamo un turno sbagliato inserito prima della correzione
+  psql(`update shift_versions set week = jsonb_set(week, '{1}', '[{"kind":"amb","start":"08:15","end":"09:00"},{"kind":"reparto","start":"09:00","end":"12:20"}]') where therapist_id='${neri}'`);
+  await page.click('button[data-act="refresh"]'); await page.waitForTimeout(1500);
+  await page.waitForSelector('.form-warn:has-text("solo ambulatorio")', { timeout: 10000 });
+  await page.click('button:has-text("Correggi: turno")');
+  await page.waitForTimeout(2500);
+  assert.equal(psql(`select week::text like '%reparto%' from shift_versions where therapist_id='${neri}' order by valid_from desc, created_at desc limit 1`), 'f');
+  assert.ok(!(await page.$('.form-warn:has-text("solo ambulatorio")')), 'avviso scomparso dopo la correzione');
+  ok('Collega “solo ambulatorio”: nessuna fascia di reparto; turno sbagliato segnalato e corretto da oggi');
+
   // account di un fisioterapista: modifica solo il proprio calendario
   await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');
   await page.evaluate(() => { location.hash = '#/config'; });

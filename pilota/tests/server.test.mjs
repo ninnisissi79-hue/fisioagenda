@@ -481,3 +481,21 @@ test('previsione dei cicli: ciclo n. di cicli previsti, ipotetica o confermata',
   assert.equal(psql(`select cycle_number||'/'||expected_cycles||'/'||expected_certain from cycles where id='${r.cycle_id}'`), '2/4/true');
   await expectError(S.rpc(op1, 'update_cycle_info', { p_cycle: r.cycle_id, p_version: 2, p: { expected_cycles: 1 } }), 'FA_INPUT', /non coerenti/);
 });
+
+test('programmatore e coordinatore: entrambi con accesso completo', async () => {
+  await ensureUser('prog@pilota.test', 'lettura', 'Programmatore Prova');
+  const uid = psql("select user_id from profiles where email='prog@pilota.test'");
+  await S.rpc(admin, 'admin_set_user', { p_user: uid, p_role: 'programmatore', p_active: true, p_full_name: 'Programmatore Prova', p_therapist: null });
+  const prog = await login('prog@pilota.test');
+  assert.equal((await S.rpc(prog, 'whoami', {})).role, 'programmatore');
+  await S.rpc(prog, 'admin_save_category', { p_id: 'prova_prog_' + RUN, p_name: 'Prova programmatore', p_active: true, p_sort: 99 });
+  const exp = await S.rpc(prog, 'admin_export', {});
+  assert.equal(exp.format, 'fisioagenda-pilota');
+  const prof = await prog.from('profiles').select('email');
+  assert.ok(prof.data.length >= 4, 'vede tutti gli account');
+  const rc = await prog.from('row_changes').select('id').limit(1);
+  assert.ok(!rc.error && rc.data.length === 1, 'vede il registro tecnico');
+  // il programmatore può gestire il coordinatore e viceversa
+  const coordId = psql("select user_id from profiles where email='coord@pilota.test'");
+  await S.rpc(prog, 'admin_set_user', { p_user: coordId, p_role: 'admin', p_active: true, p_full_name: 'Coordinatrice Prova', p_therapist: null });
+});

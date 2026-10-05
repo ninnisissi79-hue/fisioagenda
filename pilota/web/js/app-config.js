@@ -45,6 +45,7 @@
       '<div class="row"><button class="btn primary small" data-act="th-bulk"' + adminOnly() + '>Inserimento rapido (più colleghi)</button>' +
       '<button class="btn small" data-act="sk-matrix"' + adminOnly() + '>Tabella competenze</button>' +
       '<button class="btn small" data-act="th-edit" data-id=""' + adminOnly() + '>+ Nuovo fisioterapista</button></div></div>' +
+      ambFixBox() +
       '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Attività</th><th>Competenza specifica</th><th>Abilitato</th><th>Limite/giorno</th><th></th></tr></thead><tbody>' +
       FA.allTherapists().map(t => {
         const sk = A.ctx.skills.get(t.id) || new Map();
@@ -89,6 +90,40 @@
     catch (e) { f.error = e.message; FA.renderModal(); }
   };
 
+  /** Colleghi "solo ambulatorio" il cui turno in vigore (o futuro) contiene una fascia di reparto. */
+  function ambWithReparto() {
+    return FA.allTherapists().filter(t => t.active && t.activity === 'ambulatorio').filter(t => {
+      const vs = (A.ctx.shifts.get(t.id) || []).filter(v => v.valid_from >= (E.shiftFor(A.ctx, t.id, A.today) || {}).valid_from || v.valid_from > A.today);
+      return vs.some(v => Object.values(v.week || {}).some(day => (day || []).some(b => b.kind === 'reparto')));
+    });
+  }
+  FA.ambWithReparto = ambWithReparto;
+  function ambFixBox() {
+    const bad = ambWithReparto();
+    if (!bad.length) return '';
+    return '<div class="form-warn"><strong>' + bad.length + ' colleghi “solo ambulatorio” hanno una fascia di reparto nel turno:</strong> ' + esc(bad.map(t => t.name).join(', ')) +
+      '.<br><button class="btn small primary" data-act="amb-fix"' + adminSave() + '>Correggi: turno “Solo ambulatorio” da oggi</button> <span class="small">I turni precedenti restano nello storico; prima del salvataggio vedi gli appuntamenti coinvolti.</span></div>';
+  }
+  FA.actions['amb-fix'] = async () => {
+    const bad = ambWithReparto();
+    const week = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = d <= 5 ? TEMPLATES.ambulatorio.day.map(x => Object.assign({}, x)) : []; });
+    let conf = [];
+    try {
+      for (const t of bad) {
+        const r = await FA.rpc('admin_save_shift', { p_th: t.id, p_valid_from: A.today, p_week: week, p_note: 'Correzione: solo ambulatorio', p_dry_run: true });
+        conf = conf.concat(r.conflicts.map(c => Object.assign({ th: t.name }, c)));
+      }
+    } catch (e) { FA.toast('Verifica non riuscita: ' + e.message, 'bad'); return; }
+    const msg = 'Applico il turno “Solo ambulatorio” (8:15–14:40, pausa 12:20–12:40) da oggi a ' + bad.length + ' colleghi.\n' +
+      (conf.length ? conf.length + ' appuntamenti già prenotati non sarebbero compatibili e verranno segnalati da sistemare (non vengono spostati).' : 'Nessun appuntamento già prenotato diventa incompatibile.') + '\n\nConfermi?';
+    if (!confirm(msg)) return;
+    try {
+      await FA.save('Turni corretti', async () => {
+        for (const t of bad) await FA.rpc('admin_save_shift', { p_th: t.id, p_valid_from: A.today, p_week: week, p_note: 'Correzione: solo ambulatorio', p_dry_run: false });
+      });
+    } catch (e) { /* già segnalato */ }
+  };
+
   /* ---------------- inserimento rapido di più colleghi ---------------- */
   FA.actions['th-bulk'] = () => {
     A.ui.tb = { names: '', activity: 'ambulatorio_reparto', tpl: 'reparto8', from: A.today, done: null };
@@ -99,7 +134,8 @@
         return '<div class="field"><label>Nomi dei colleghi, uno per riga</label><textarea rows="10" data-bind="tb.names" placeholder="Rossi Anna\nVerdi Marco\n…">' + esc(f.names) + '</textarea>' +
           '<div class="help">' + names.length + ' nomi. Chi ha un’attività o un turno diverso lo correggi dopo dalla sua scheda.</div></div>' +
           '<div class="grid3"><div class="field"><label>Attività</label>' + FA.seg('tb.activity', [['ambulatorio', 'Solo ambulatorio'], ['ambulatorio_reparto', 'Ambulatorio e reparto']], f.activity) + '</div>' +
-          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select></div>' +
+          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).filter(([k]) => f.activity !== 'ambulatorio' || k === 'ambulatorio').map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select>' +
+          (f.activity === 'ambulatorio' ? '<div class="help">Solo ambulatorio: nessuna fascia di reparto.</div>' : '') + '</div>' +
           '<div class="field"><label>Turno in vigore dal</label><input type="date" data-bind="tb.from" value="' + esc(f.from) + '"></div></div>' +
           '<p class="muted small">Le competenze si assegnano subito dopo nella “Tabella competenze”.</p>' +
           (f.done ? '<div class="form-note">' + f.done + '</div>' : '') + FA.errBox(f.error);
@@ -113,15 +149,17 @@
     const todo = names.filter(n => !existing.has(n.toLowerCase()));
     if (!todo.length) { f.error = names.length ? 'Questi nomi sono già presenti.' : 'Scrivi almeno un nome.'; FA.renderModal(); return; }
     f.error = null;
+    // chi fa solo ambulatorio non va in reparto: schema ambulatoriale in ogni caso
+    const tpl = f.activity === 'ambulatorio' && f.tpl ? 'ambulatorio' : f.tpl;
     const week = {};
-    [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = f.tpl && d <= 5 ? TEMPLATES[f.tpl].day.map(x => Object.assign({}, x)) : []; });
+    [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = tpl && d <= 5 ? TEMPLATES[tpl].day.map(x => Object.assign({}, x)) : []; });
     const okNames = [], fail = [];
     try {
       await FA.save(todo.length + ' fisioterapisti', async () => {
         for (let i = 0; i < todo.length; i++) {
           try {
             const id = await FA.rpc('admin_save_therapist', { p: { name: todo[i], activity: f.activity, active: true, note: '', sort: FA.allTherapists().length + i + 1, skills: [] } });
-            if (f.tpl) await FA.rpc('admin_save_shift', { p_th: id, p_valid_from: f.from, p_week: week, p_note: 'Turno iniziale: ' + TEMPLATES[f.tpl].label, p_dry_run: false });
+            if (tpl) await FA.rpc('admin_save_shift', { p_th: id, p_valid_from: f.from, p_week: week, p_note: 'Turno iniziale: ' + TEMPLATES[tpl].label, p_dry_run: false });
             okNames.push(todo[i]);
           } catch (e) { fail.push(todo[i] + ': ' + e.message); }
         }
@@ -181,6 +219,7 @@
     return '<div class="row"><div class="field" style="min-width:280px"><label>Fisioterapista</label><select data-bind="shTh" data-rerender>' + FA.allTherapists().map(t => FA.option(t.id, t.name, th)).join('') + '</select></div>' +
       '<span class="grow"></span><button class="btn primary small" data-act="sh-new"' + adminOnly() + '>Nuovo turno con decorrenza…</button>' +
       '<button class="btn small" data-act="ov-new"' + adminOnly() + '>Variazione di un giorno…</button></div>' +
+      ambFixBox() +
       '<p class="muted small">Ogni collega ha il proprio turno, modificabile singolarmente (gli schemi pronti sono solo un punto di partenza). Un nuovo turno vale dalla data di decorrenza; i turni precedenti restano nello storico.</p>' +
       (cur ? '<h4>In vigore oggi (dal ' + E.fmtIt(cur.valid_from) + ')' + (cur.note ? ' · ' + esc(cur.note) : '') + '</h4>' + weekGrid(cur.week) : '<div class="form-warn">Nessun turno in vigore oggi.</div>') +
       future.map(v => '<h4 style="margin-top:14px">Dal ' + E.fmtIt(v.valid_from) + ' (programmato)' + (v.note ? ' · ' + esc(v.note) : '') + '</h4>' + weekGrid(v.week)).join('') +
@@ -197,6 +236,9 @@
     const cur = (A.ctx.shifts.get(th) || [])[0];
     const week = {};
     [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = cur ? (cur.week[String(d)] || []).map(b => Object.assign({}, b)) : []; });
+    const thr = A.ctx.th.get(th);
+    if (thr && thr.activity === 'ambulatorio' && Object.values(week).some(day => day.some(b => b.kind === 'reparto')))
+      [1, 2, 3, 4, 5].forEach(d => { week[d] = TEMPLATES.ambulatorio.day.map(x => Object.assign({}, x)); });
     A.ui.sh = { th, valid_from: E.addDays(A.today, 1), note: '', week, conflicts: null, checked: false };
     FA.openModal({ title: 'Nuovo turno di ' + FA.thName(th), wide: true, sticky: true,
       body() {
@@ -346,11 +388,11 @@
         if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name, therapist_id: p.therapist_id || '' });
         const f = FA.get(k);
         return '<tr><td><input type="text" data-bind="' + k + '.full_name" value="' + esc(f.full_name) + '"' + adminOnly() + '></td><td>' + esc(p.email) + '</td>' +
-          '<td><select data-bind="' + k + '.role" data-rerender' + adminOnly() + '>' + ['admin', 'operatore', 'fisioterapista', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select>' +
+          '<td><select data-bind="' + k + '.role" data-rerender' + adminOnly() + '>' + ['programmatore', 'admin', 'operatore', 'fisioterapista', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select>' +
           (f.role === 'fisioterapista' ? '<select style="margin-top:4px" data-bind="' + k + '.therapist_id"' + adminOnly() + '><option value="">— quale collega? —</option>' + FA.allTherapists().map(t => FA.option(t.id, t.name, f.therapist_id)).join('') + '</select>' : '') + '</td>' +
           '<td><input type="checkbox" data-bind="' + k + '.active"' + (f.active ? ' checked' : '') + adminOnly() + ' aria-label="Attivo"></td>' +
           '<td><button class="btn small" data-act="us-save" data-id="' + p.user_id + '"' + adminSave() + '>Salva</button></td></tr>';
-      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore e programmatore</strong> (accesso a tutto: configurazione, utenti, backup e tutti i calendari), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
+      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Programmatore</strong> e <strong>Coordinatore</strong> (entrambi accesso a tutto: configurazione, utenti, backup e tutti i calendari), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
   }
   FA.actions['us-save'] = async el => {
     const id = el.getAttribute('data-id'), f = FA.get('us.' + id);
