@@ -53,13 +53,19 @@
     const el = document.createElement('div');
     el.className = 'toast ' + (kind || '');
     el.textContent = msg;
-    document.getElementById('toast-root').appendChild(el);
+    const root = document.getElementById('toast-root');
+    root.appendChild(el);
+    while (root.children.length > 3) root.removeChild(root.firstChild);
     setTimeout(() => el.remove(), kind === 'bad' ? 7000 : 3500);
   };
 
   /* ---------------- finestre ---------------- */
   FA.openModal = function (def) { A.modal = def; renderModal(); };
-  FA.closeModal = function () { A.modal = null; renderModal(); };
+  FA.closeModal = function () {
+    const wasDrawer = A.modal && A.modal.drawer;
+    A.modal = null; renderModal();
+    if (wasDrawer) { A.ui.pd = null; render(); }
+  };
   // Se il browser genera eventi (change/blur) mentre la pagina viene ridisegnata, il nuovo disegno è rimandato.
   let painting = false;
   function guarded(fn) {
@@ -71,13 +77,16 @@
   }
   const renderModal = guarded(function () {
     const root = document.getElementById('modal-root');
+    document.body.classList.toggle('has-drawer', !!(A.modal && A.modal.drawer));
     if (!A.modal) { root.innerHTML = ''; return; }
     const m = A.modal;
     const focused = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute('data-bind') : null;
-    root.innerHTML = '<div class="modal-back" data-act="modal-back"><div class="modal ' + (m.wide ? 'wide' : '') + '" role="dialog" aria-modal="true" aria-label="' + esc(m.title) + '">' +
+    const inner = '<div class="modal ' + (m.wide ? 'wide' : '') + (m.drawer ? ' drawer' : '') + '" role="dialog" aria-modal="' + (m.drawer ? 'false' : 'true') + '" aria-label="' + esc(m.title) + '">' +
       '<div class="modal-head"><h3>' + esc(m.title) + '</h3><button class="x" data-act="close-modal" aria-label="Chiudi">×</button></div>' +
       '<div class="modal-body">' + m.body() + '</div>' +
-      (m.foot ? '<div class="modal-foot">' + m.foot() + '</div>' : '') + '</div></div>';
+      (m.foot ? '<div class="modal-foot">' + m.foot() + '</div>' : '') + '</div>';
+    // il pannello laterale lascia visibile e cliccabile il calendario
+    root.innerHTML = m.drawer ? '<div class="drawer-wrap">' + inner + '</div>' : '<div class="modal-back" data-act="modal-back">' + inner + '</div>';
     if (focused) { const el = root.querySelector('[data-bind="' + focused + '"]'); if (el) el.focus(); }
   });
   FA.renderModal = renderModal;
@@ -377,9 +386,30 @@
     ev.preventDefault();
     Promise.resolve(fn(el, ev)).catch(e => { console.error(e); });
   });
-  function bindValue(el) {
+  /** Orario scritto liberamente: 1220, 12.20, 12,20, 12 20, 12:20, 9 -> hh:mm. null se non valido. */
+  FA.normTime = function (v) {
+    v = String(v == null ? '' : v).trim();
+    if (!v) return '';
+    let h, m;
+    const p = v.match(/^(\d{1,2})\D+(\d{1,2})$/);
+    if (p) { h = +p[1]; m = p[2].length === 1 ? +p[2] * 10 : +p[2]; }
+    else if (/^\d{1,4}$/.test(v)) { if (v.length <= 2) { h = +v; m = 0; } else { h = +v.slice(0, v.length - 2); m = +v.slice(-2); } }
+    else return null;
+    if (h > 23 || m > 59) return null;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  };
+  function bindValue(el, final) {
     const path = el.getAttribute('data-bind');
     let v;
+    if (el.hasAttribute('data-time')) {
+      // mentre si scrive il campo non viene toccato; all'uscita l'orario viene normalizzato
+      if (!final) { FA.set(path, el.value); return path; }
+      const n = FA.normTime(el.value);
+      el.classList.toggle('bad', n === null);
+      if (n) el.value = n;
+      FA.set(path, n === null ? el.value : n);
+      return path;
+    }
     if (el.type === 'checkbox') {
       if (el.hasAttribute('data-multi')) {
         const cur = new Set(FA.get(path) || []);
@@ -400,7 +430,7 @@
   document.addEventListener('change', ev => {
     const el = ev.target.closest('[data-bind]');
     if (!el) return;
-    const path = bindValue(el);
+    const path = bindValue(el, true);
     const hook = el.getAttribute('data-on');
     if (hook && FA.actions[hook]) FA.actions[hook](el, ev, path);
     if (el.hasAttribute('data-rerender')) { if (A.modal && document.getElementById('modal-root').contains(el)) renderModal(); else render(); }

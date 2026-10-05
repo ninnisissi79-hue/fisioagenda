@@ -9,7 +9,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const TABLES = ['categories', 'therapists', 'therapist_skills', 'shift_versions', 'day_overrides', 'closures',
+  const TABLES = ['categories', 'therapists', 'therapist_skills', 'shift_versions', 'shift_templates', 'day_overrides', 'closures',
     'absences', 'patients', 'cycles', 'appointments', 'profiles'];
   const PAGE = 1000;
 
@@ -35,6 +35,7 @@
         if (t === 'therapist_skills') return q.order('therapist_id').order('category_id');
         if (t === 'day_overrides') return q.order('therapist_id').order('day');
         if (t === 'closures') return q.order('day');
+        if (t === 'shift_templates') return q.order('name');
         if (t === 'profiles') return q.order('user_id');
         return q.order('id');
       });

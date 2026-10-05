@@ -499,3 +499,47 @@ test('programmatore e coordinatore: entrambi con accesso completo', async () => 
   const coordId = psql("select user_id from profiles where email='coord@pilota.test'");
   await S.rpc(prog, 'admin_set_user', { p_user: coordId, p_role: 'admin', p_active: true, p_full_name: 'Coordinatrice Prova', p_therapist: null });
 });
+
+test('calendario flessibile: orari diversi per giorno, variazione dal … al …, orario per un periodo, schemi', async () => {
+  const ids = await team('flx', { A: [['mano', 'specifica']], B: [['mano', 'specifica']] });
+  let mon = E.addDays(T0, 1); while (E.weekday(mon) !== 1) mon = E.addDays(mon, 1);
+  // ciclo alla 4ª seduta di 10: lunedì 8:00, mercoledì 12:30, venerdì 8:00
+  const r = await S.rpc(op1, 'create_request', { p: { patient_name: 'Flessibile ' + RUN, category_id: 'mano', duration: 45, planned_sessions: 10, prior_sessions: 3, weekdays: [1, 3, 5] } });
+  const closures = new Set(psql("select coalesce(string_agg(day::text, ','), '') from closures").split(',').filter(Boolean));
+  const slots = []; let d = mon;
+  while (slots.length < 7) { const w = E.weekday(d); if ([1, 3, 5].includes(w) && !closures.has(d)) slots.push({ day: d, start: w === 3 ? '12:30' : '08:00' }); d = E.addDays(d, 1); }
+  await expectError(S.rpc(op1, 'book_cycle_slots', { p_cycle: r.cycle_id, p_version: 1, p_therapist: ids.A, p_slots: slots.slice(0, 6), p_weekdays: [1, 3, 5] }), 'FA_INPUT', /7 sedute/);
+  await S.rpc(op1, 'book_cycle_slots', { p_cycle: r.cycle_id, p_version: 1, p_therapist: ids.A, p_slots: slots, p_weekdays: [1, 3, 5] });
+  assert.equal(psql(`select string_agg(distinct extract(isodow from day)||'@'||to_char(start_time,'HH24:MI')||'-'||to_char(end_time,'HH24:MI'), ',' order by extract(isodow from day)||'@'||to_char(start_time,'HH24:MI')||'-'||to_char(end_time,'HH24:MI')) from appointments where cycle_id='${r.cycle_id}'`),
+    '1@08:00-08:45,3@12:30-13:15,5@08:00-08:45');
+  assert.equal(psql(`select weekday_times->>'3' from cycles where id='${r.cycle_id}'`), '12:30');
+  // durata libera ma valida
+  await expectError(S.rpc(op1, 'create_request', { p: { patient_name: 'Durata ' + RUN, category_id: 'mano', duration: 47, planned_sessions: 5 } }), null);
+  // dal secondo mercoledì in poi alle 13:00 con B (tutto o niente)
+  const wed2 = slots.filter(s => E.weekday(s.day) === 3)[1].day;
+  const ver = Number(psql(`select version from cycles where id='${r.cycle_id}'`));
+  const res = await S.rpc(op1, 'reschedule_range', { p_cycle: r.cycle_id, p_version: ver, p_from: wed2, p_to: null, p_therapist: ids.B, p_times: { 3: '13:00' }, p_note: '' });
+  assert.ok(res.moved >= 3);
+  assert.equal(psql(`select count(*) from appointments where cycle_id='${r.cycle_id}' and day >= '${wed2}' and therapist_id<>'${ids.B}'`), '0');
+  assert.equal(psql(`select string_agg(distinct to_char(start_time,'HH24:MI'), ',') from appointments where cycle_id='${r.cycle_id}' and day >= '${wed2}' and extract(isodow from day)=3`), '13:00');
+  assert.equal(psql(`select therapist_id from cycles where id='${r.cycle_id}'`), ids.B, 'da una data in poi: cambia anche il titolare');
+  // orario di A per un periodo, con ritorno automatico
+  const wk = { 1: [{ kind: 'segreteria', start: '08:00', end: '14:00' }], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+  const from = E.addDays(mon, 21), to = E.addDays(mon, 25);
+  await expectError(S.rpc(op1, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: '', p_dry_run: false }), 'FA_PERM');
+  const dry = await S.rpc(admin, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: '', p_dry_run: true });
+  assert.equal(dry.dry_run, true);
+  assert.equal(psql(`select count(*) from shift_versions where therapist_id='${ids.A}'`), '1', 'anteprima: nulla salvato');
+  await S.rpc(admin, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: 'periodo', p_dry_run: false });
+  assert.equal(psql(`select count(*) from shift_versions where therapist_id='${ids.A}'`), '3');
+  assert.match(psql(`select (week->'1')::text from shift_versions where therapist_id='${ids.A}' and valid_from='${E.addDays(to, 1)}'`), /"amb"/, 'dopo il periodo torna l’orario precedente');
+  await expectError(S.rpc(admin, 'admin_save_shift_range', { p_th: ids.A, p_from: E.addDays(from, -7), p_to: E.addDays(from, 2), p_week: wk, p_note: '', p_dry_run: false }), 'FA_INPUT', /già un cambio di orario/);
+  // tipi di fascia nuovi validati dal server; fasce sovrapposte rifiutate
+  await expectError(S.rpc(admin, 'admin_set_day_override', { p_th: ids.A, p_day: from, p_blocks: [{ kind: 'amb', start: '08:00', end: '10:00' }, { kind: 'briefing', start: '09:30', end: '10:00' }], p_note: '', p_dry_run: false }), 'FA_INPUT', /sovrapposte/);
+  await S.rpc(admin, 'admin_set_day_override', { p_th: ids.A, p_day: from, p_blocks: [{ kind: 'briefing', start: '08:00', end: '08:15' }, { kind: 'amb', start: '08:15', end: '10:00' }, { kind: 'recupero_ore', start: '10:00', end: '11:00' }], p_note: '', p_dry_run: false });
+  // schemi
+  const tid = await S.rpc(admin, 'admin_save_template', { p_id: null, p_name: 'Schema ' + RUN, p_week: wk, p_delete: false });
+  await expectError(S.rpc(op1, 'admin_save_template', { p_id: null, p_name: 'X', p_week: wk, p_delete: false }), 'FA_PERM');
+  assert.equal((await op1.from('shift_templates').select('name').eq('id', tid)).data[0].name, 'Schema ' + RUN, 'leggibile da tutti');
+  await S.rpc(admin, 'admin_save_template', { p_id: tid, p_name: '', p_week: {}, p_delete: true });
+});

@@ -81,8 +81,8 @@
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('find.weekdays', f.weekdays) + '</div>' +
       priorField('find', f) +
       '<div class="field"><label class="inline-check"><input type="checkbox" data-bind="find.pref" data-rerender' + (f.pref ? ' checked' : '') + '> Indica una fascia oraria preferita</label>' +
-      (f.pref ? '<div class="grid3" style="max-width:640px"><div class="field"><label>Dalle</label><input type="time" data-bind="find.prefFrom" value="' + esc(f.prefFrom || '') + '"></div>' +
-        '<div class="field"><label>Alle</label><input type="time" data-bind="find.prefTo" value="' + esc(f.prefTo || '') + '"></div>' +
+      (f.pref ? '<div class="grid3" style="max-width:640px"><div class="field"><label>Dalle</label><input type="text" inputmode="numeric" autocomplete="off" placeholder="hh:mm" data-time class="t-in" data-bind="find.prefFrom" value="' + esc(f.prefFrom || '') + '"></div>' +
+        '<div class="field"><label>Alle</label><input type="text" inputmode="numeric" autocomplete="off" placeholder="hh:mm" data-time class="t-in" data-bind="find.prefTo" value="' + esc(f.prefTo || '') + '"></div>' +
         '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="find.prefStrict"' + (f.prefStrict ? ' checked' : '') + '> Obbligatoria</label></div></div>' : '') + '</div>' +
       FA.errBox(f.error) + (f.info ? '<div class="form-note">' + f.info + '</div>' : '') +
       '<div class="row"><button class="btn primary" type="submit">Cerca disponibilità</button>' +
@@ -288,7 +288,7 @@
       '<div class="grid3"><div class="field"><label>Percorso (tra quelli di ' + esc(FA.thName(f.th)) + ')</label><select data-bind="qb.category_id" data-rerender' + (cyc ? ' disabled' : '') + '>' + cats.map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
       '<div class="field"><label>Priorità</label><select data-bind="qb.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>' +
       '<div class="field"><label>Tipo di richiesta</label><select data-bind="qb.request_type" data-rerender>' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div></div>' +
-      '<div class="grid3"><div class="field"><label>Ora di inizio</label><input type="time" step="300" data-bind="qb.start" data-rerender value="' + esc(f.start) + '"></div>' +
+      '<div class="grid3"><div class="field"><label>Ora di inizio</label><input type="text" inputmode="numeric" autocomplete="off" placeholder="hh:mm" data-time class="t-in" data-bind="qb.start" data-rerender value="' + esc(f.start) + '"></div>' +
       '<div class="field"><label>Durata</label>' + (cyc ? '<div>' + dur + ' min</div>' : FA.seg('qb.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration)) + '</div>' +
       '<div class="field"><label>Sedute</label>' + (cyc ? '<div>' + n + '</div>' : FA.seg('qb.sessions', E.SESSION_PRESETS.map(x => [x, String(x)]), f.sessions)) + '</div></div>' +
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('qb.weekdays', f.weekdays) + '</div>' +
@@ -469,13 +469,41 @@
           '<div class="help">Una seduta non effettuata non è conteggiata come trattamento svolto. Il recupero si programma subito dopo.</div></div>' : '') +
         '<div class="field"><label>Nota</label><input type="text" data-bind="am.out.note" value="' + esc(o.note || '') + '"></div></div>';
     }
-    if (am.mode === 'sposta') h += '<div class="panel">' + pickBlock(am, a, cyc, 'Nuovo giorno, ora o fisioterapista') +
-      '<p class="small muted">Cambia solo questa seduta: le altre sedute del ciclo restano invariate. Per modificare le sedute future usa la scheda del paziente.</p></div>';
+    if (am.mode === 'sposta') {
+      if (!am.scope) am.scope = 'solo';
+      h += '<div class="panel"><div class="field"><label>Cosa cambiare</label>' + FA.seg('am.scope', [['solo', 'Solo questa seduta'], ['successive', 'Questa e le successive'], ['intervallo', 'Dal … al …']], am.scope) + '</div>';
+      if (am.scope === 'solo') h += pickBlock(am, a, cyc, 'Nuovo giorno, ora o fisioterapista') + '<p class="small muted">Le altre sedute del ciclo restano invariate.</p>';
+      else h += rangeBlock(am, a, cyc);
+      h += '</div>';
+    }
     if (am.mode === 'recupero') h += '<div class="panel">' + pickBlock(am, a, cyc, 'Data e ora del recupero') + '</div>';
     return h + FA.errBox(am.error);
   }
+  /** variazione di orario/fisioterapista per più sedute del ciclo (stessi giorni) */
+  function rangeBlock(am, a, cyc) {
+    const r = am.rg || (am.rg = { th: a.therapist_id, time: a.start_time, all: false, to: E.addDays(a.day, 28) });
+    const wd = E.weekday(a.day);
+    const list = (A.ctx.byCycle.get(a.cycle_id) || []).filter(x => x.status === 'programmata' && x.day >= a.day && (am.scope === 'successive' || x.day <= r.to));
+    const t = FA.normTime(r.time);
+    const ign = new Set(list.map(x => x.id));
+    const rows = list.map(x => {
+      const st = t && (r.all || E.weekday(x.day) === wd) ? t : x.start_time;
+      const en = E.fromMin(E.toMin(st) + (E.toMin(x.end_time) - E.toMin(x.start_time)));
+      return { x, st, chk: E.checkSlot(A.ctx, r.th, x.day, st, en, { patientId: x.patient_id, ignoreId: x.id, ignoreIds: ign, cycleId: x.cycle_id }) };
+    });
+    am.rgOk = !!t && rows.length > 0 && rows.every(z => !z.chk);
+    am.rgRows = rows;
+    return '<div class="grid3"><div class="field"><label>Nuovo orario del ' + E.WD_LONG[wd] + '</label>' + FA.timeField('am.rg.time', r.time, ' data-rerender') + '</div>' +
+      '<div class="field"><label>Fisioterapista</label><select data-bind="am.rg.th" data-rerender>' + thOptions(cyc.category_id, r.th) + '</select></div>' +
+      (am.scope === 'intervallo' ? '<div class="field"><label>Fino al (compreso)</label><input type="date" data-bind="am.rg.to" data-rerender value="' + esc(r.to) + '" min="' + a.day + '"></div>' : '<div></div>') + '</div>' +
+      '<label class="inline-check"><input type="checkbox" data-bind="am.rg.all" data-rerender' + (r.all ? ' checked' : '') + '> Stesso orario anche negli altri giorni del ciclo</label>' +
+      '<ul class="small" style="margin-top:8px">' + rows.map(z => '<li>' + (z.chk ? '✗ ' : '✓ ') + esc(E.fmtItDay(z.x.day)) + ' ' + z.x.start_time + ' → ' + z.st + (z.chk ? ' — ' + esc(z.chk.msg) : '') + '</li>').join('') + '</ul>' +
+      '<p class="small muted">' + rows.length + ' sedute coinvolte; i giorni restano gli stessi. Lo storico conserva tutte le modifiche.</p>';
+  }
   function apptFoot() {
     const am = A.ui.am;
+    if (am.mode === 'sposta' && am.scope && am.scope !== 'solo')
+      return '<button class="btn" data-act="close-modal">Chiudi</button><button class="btn primary" data-act="am-range"' + (am.rgOk ? FA.saveDisabled() : ' disabled') + '>Applica alle ' + (am.rgRows ? am.rgRows.length : 0) + ' sedute</button>';
     const btn = !am.mode ? '' : am.mode === 'esito' ? 'am-outcome' : am.mode === 'sposta' ? 'am-move' : 'am-recover';
     const label = { 'am-outcome': 'Salva esito', 'am-move': 'Sposta la seduta', 'am-recover': 'Prenota il recupero' }[btn];
     return '<button class="btn" data-act="close-modal">Chiudi</button>' + (btn ? '<button class="btn primary" data-act="' + btn + '"' + FA.saveDisabled() + '>' + (A.saving ? 'Salvataggio…' : label) + '</button>' : '');
@@ -488,6 +516,16 @@
         () => FA.rpc('register_outcome', { p_id: a.id, p_version: a.version, p_status: status, p_cancel_by: status === 'annullata' ? 'paziente' : null, p_to_recover: k === 'assente_rec', p_note: '' }));
       if (k === 'assente_rec') { am.mode = 'recupero'; am.pick = { day: a.day >= A.today ? E.addDays(a.day, 1) : A.today, th: a.therapist_id, start: '' }; am.error = null; FA.renderModal(); }
       else FA.closeModal();
+    } catch (e) { am.error = e.message; FA.renderModal(); }
+  };
+  FA.actions['am-range'] = async () => {
+    const am = A.ui.am, a = A.ctx.appt.get(am.id), c = A.ctx.cyc.get(a.cycle_id), r = am.rg;
+    const t = FA.normTime(r.time), times = {};
+    (r.all ? (c.weekdays || []) : [E.weekday(a.day)]).forEach(w => { times[w] = t; });
+    try {
+      await FA.save('Sedute aggiornate', () => FA.rpc('reschedule_range', { p_cycle: c.id, p_version: c.version, p_from: a.day, p_to: am.scope === 'intervallo' ? r.to : null,
+        p_therapist: r.th, p_times: times, p_note: '' }));
+      FA.closeModal();
     } catch (e) { am.error = e.message; FA.renderModal(); }
   };
   FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.error = null; FA.renderModal(); };

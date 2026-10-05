@@ -177,8 +177,9 @@
       if (real.length + extra.length >= th.max_daily) return { code: 'alternativa', ref: extra[0].ref, msg: 'Limite giornaliero di ' + th.name + ' già raggiunto da un\'altra proposta: sono alternative.' };
     }
     if (o.reserve !== false) {
+      const cst = c => hhmm((c.weekday_times || {})[String(weekday(day))]) || c.start_time;
       const c = (ctx.activeCyclesByTh.get(thId) || []).find(c => c.id !== o.cycleId && c.forecast !== 'conclusione_confermata' && c.start_time &&
-        (c.weekdays || []).includes(weekday(day)) && overlaps(toMin(c.start_time), toMin(c.start_time) + c.duration, s, e) &&
+        (c.weekdays || []).includes(weekday(day)) && overlaps(toMin(cst(c)), toMin(cst(c)) + c.duration, s, e) &&
         ctx.lastByCycle.has(c.id) && day > ctx.lastByCycle.get(c.id));
       if (c) return { code: 'probabile', cycleId: c.id, msg: 'Posto solo probabile: si libera se il ciclo di ' + patientName(ctx, c.patient_id) + ' si conclude (previsione: ' + FORECAST[c.forecast].toLowerCase() + '). Non è una disponibilità certa.' };
     }

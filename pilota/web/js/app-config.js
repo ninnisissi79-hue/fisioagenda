@@ -21,8 +21,8 @@
   function blocksEditor(path, blocks) {
     return (blocks || []).map((b, i) => '<div class="blk-edit">' +
       '<select data-bind="' + path + '.' + i + '.kind" aria-label="Tipo">' + KINDS.map(([k, l]) => FA.option(k, l, b.kind)).join('') + '</select>' +
-      '<input type="time" data-bind="' + path + '.' + i + '.start" value="' + esc(E.hhmm(b.start)) + '" aria-label="Inizio">' +
-      '<input type="time" data-bind="' + path + '.' + i + '.end" value="' + esc(E.hhmm(b.end)) + '" aria-label="Fine">' +
+      '<input type="text" inputmode="numeric" autocomplete="off" placeholder="hh:mm" data-time class="t-in" data-bind="' + path + '.' + i + '.start" value="' + esc(E.hhmm(b.start)) + '" aria-label="Inizio">' +
+      '<input type="text" inputmode="numeric" autocomplete="off" placeholder="hh:mm" data-time class="t-in" data-bind="' + path + '.' + i + '.end" value="' + esc(E.hhmm(b.end)) + '" aria-label="Fine">' +
       '<input type="number" min="1" placeholder="max" data-bind="' + path + '.' + i + '.max" value="' + esc(b.max == null ? '' : b.max) + '" aria-label="Massimo pazienti" title="Massimo pazienti nella fascia (facoltativo)">' +
       '<button class="btn small" data-act="blk-del" data-path="' + path + '" data-i="' + i + '" aria-label="Rimuovi fascia">✕</button></div>').join('') +
       '<button class="btn small" data-act="blk-add" data-path="' + path + '">+ fascia</button>';
