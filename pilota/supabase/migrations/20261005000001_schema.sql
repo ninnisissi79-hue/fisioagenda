@@ -341,8 +341,9 @@ begin
 end $$;
 
 alter table public.profiles enable row level security;
+-- ognuno vede il proprio profilo; l'elenco completo (email dei colleghi) solo il coordinatore
 create policy lettura on public.profiles for select to authenticated
-  using (user_id = auth.uid() or app.is_reader());
+  using (user_id = auth.uid() or app.my_role() = 'admin');
 revoke insert, update, delete, truncate on public.profiles from anon, authenticated;
 revoke all on public.profiles from anon;
 

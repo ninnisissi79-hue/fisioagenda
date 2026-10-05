@@ -298,9 +298,9 @@
   }
 
   /** Appuntamenti toccati da un'assenza (tra le date indicate). */
-  function affectedByAbsence(ctx, abs, untilDay) {
+  function affectedByAbsence(ctx, abs, untilDay, o) {
     const last = abs.end_date || abs.plan_until || untilDay;
-    return (ctx.data.appointments || []).filter(a => a.therapist_id === abs.therapist_id && (a.status === 'programmata' || a.status === 'trattenuta') &&
+    return (ctx.data.appointments || []).filter(a => a.therapist_id === abs.therapist_id && a.status === (o && o.status || 'programmata') &&
       a.day >= abs.start_date && a.day <= last && a.day >= ctx.today &&
       (!abs.start_time || overlaps(toMin(abs.start_time), toMin(abs.end_time), toMin(a.start_time), toMin(a.end_time))))
       .sort((a, b) => (a.day + a.start_time) < (b.day + b.start_time) ? -1 : 1);
@@ -366,8 +366,8 @@
       }
       const list = [...found.values()].sort((a, b) => (a.status === b.status ? 0 : a.status === 'certo' ? -1 : 1) ||
         (a.inPref === b.inPref ? 0 : a.inPref ? -1 : 1) || (a.firstDate < b.firstDate ? -1 : a.firstDate > b.firstDate ? 1 : 0) || toMin(a.start) - toMin(b.start));
-      list.filter(x => x.status === 'certo').slice(0, 4).forEach(x => out.push(x));
-      list.filter(x => x.status === 'probabile').slice(0, 3).forEach(x => out.push(x));
+      list.filter(x => x.status === 'certo').slice(0, 2).forEach(x => out.push(x));
+      list.filter(x => x.status === 'probabile').slice(0, 2).forEach(x => out.push(x));
     });
     out.sort((a, b) => (LEVEL_RANK[a.level] - LEVEL_RANK[b.level]) || (a.status === b.status ? 0 : a.status === 'certo' ? -1 : 1) ||
       (a.inPref === b.inPref ? 0 : a.inPref ? -1 : 1) || (a.firstDate < b.firstDate ? -1 : a.firstDate > b.firstDate ? 1 : 0) || toMin(a.start) - toMin(b.start));

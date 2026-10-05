@@ -1,3 +1,5 @@
+> **Nuovo: versione pilota condivisa (multiutente)** nella cartella [`pilota/`](pilota/README.md), progetto separato con archivio centrale, account personali e solo pazienti fittizi. Questa demo v3 resta invariata.
+
 # FisioAgenda — demo (versione semplice v3)
 
 > **Versione 3 (branch `fisioagenda-semplice-v3`)**: parte dalla prima versione semplice e aggiunge **soltanto** i percorsi *Mano* e *Chirurgia della mano / postoperatorio*, la **categoria di priorità** (U – Urgente, B – Breve, D – Differibile, P – Programmabile, Non indicata) e il **tipo di richiesta** (Prima seduta, Continuazione ciclo). Niente date di prescrizione, scadenze, conteggi dei termini, fisiatri o campi amministrativi.

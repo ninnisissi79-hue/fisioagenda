@@ -1,0 +1,334 @@
+/*
+ * FisioAgenda pilota — configurazione del servizio (solo coordinatore per le modifiche),
+ * utenti, backup/ripristino e storico delle modifiche.
+ */
+(function () {
+  'use strict';
+  const FA = window.FA, E = FA.E, A = FA.state, esc = FA.esc;
+  const KINDS = [['amb', 'Ambulatorio (prenotabile)'], ['reparto', 'Reparto'], ['pausa', 'Pausa'], ['documentazione', 'Documentazione'], ['preparazione', 'Preparazione'], ['altro', 'Altra attività']];
+  const adminOnly = () => FA.isAdmin() ? '' : ' disabled title="Solo il coordinatore può modificare la configurazione"';
+  const adminSave = () => FA.isAdmin() ? FA.saveDisabled() : ' disabled';
+
+  function blocksSummary(blocks) {
+    if (!blocks || !blocks.length) return '<div class="muted small">Non in servizio</div>';
+    return blocks.slice().sort((a, b) => a.start < b.start ? -1 : 1).map(b => '<div class="blk ' + (b.kind === 'amb' ? 'amb' : 'other') + '">' + esc(E.hhmm(b.start)) + '–' + esc(E.hhmm(b.end)) + ' ' + esc(E.BLOCK[b.kind]) + (b.max ? ' · max ' + b.max + ' paz.' : '') + '</div>').join('');
+  }
+  function weekGrid(week) {
+    return '<div class="week-grid">' + [1, 2, 3, 4, 5, 6, 7].map(d => '<div class="week-day"><h4>' + E.WD_LONG[d] + '</h4>' + blocksSummary(week[String(d)] || []) + '</div>').join('') + '</div>';
+  }
+  function blocksEditor(path, blocks) {
+    return (blocks || []).map((b, i) => '<div class="blk-edit">' +
+      '<select data-bind="' + path + '.' + i + '.kind" aria-label="Tipo">' + KINDS.map(([k, l]) => FA.option(k, l, b.kind)).join('') + '</select>' +
+      '<input type="time" data-bind="' + path + '.' + i + '.start" value="' + esc(E.hhmm(b.start)) + '" aria-label="Inizio">' +
+      '<input type="time" data-bind="' + path + '.' + i + '.end" value="' + esc(E.hhmm(b.end)) + '" aria-label="Fine">' +
+      '<input type="number" min="1" placeholder="max" data-bind="' + path + '.' + i + '.max" value="' + esc(b.max == null ? '' : b.max) + '" aria-label="Massimo pazienti" title="Massimo pazienti nella fascia (facoltativo)">' +
+      '<button class="btn small" data-act="blk-del" data-path="' + path + '" data-i="' + i + '" aria-label="Rimuovi fascia">✕</button></div>').join('') +
+      '<button class="btn small" data-act="blk-add" data-path="' + path + '">+ fascia</button>';
+  }
+  const listAt = path => { let v = FA.get(path); if (!Array.isArray(v)) { v = v && typeof v === 'object' ? Object.values(v) : []; FA.set(path, v); } return v; };
+  FA.actions['blk-add'] = el => { const p = el.getAttribute('data-path'); const l = listAt(p); const last = l[l.length - 1]; l.push({ kind: 'amb', start: last ? last.end : '08:00', end: '', max: null }); FA.renderModal(); };
+  FA.actions['blk-del'] = el => { const p = el.getAttribute('data-path'); listAt(p).splice(Number(el.getAttribute('data-i')), 1); FA.renderModal(); };
+  const cleanBlocks = l => (Array.isArray(l) ? l : Object.values(l || {})).filter(b => b && b.start && b.end)
+    .map(b => ({ kind: b.kind, start: E.hhmm(b.start), end: E.hhmm(b.end), max: b.max === '' || b.max == null ? null : Number(b.max) }))
+    .sort((a, b) => a.start < b.start ? -1 : 1);
+  function conflictsBox(conf) {
+    if (!conf) return '';
+    if (!conf.length) return '<div class="form-note">✓ Nessun appuntamento già prenotato diventa incompatibile.</div>';
+    return '<div class="form-warn"><strong>' + conf.length + ' appuntamenti già prenotati diventano incompatibili.</strong> Non vengono spostati: dopo il salvataggio restano segnalati “da sistemare”.<ul class="small">' +
+      conf.map(c => '<li>' + esc(E.fmtItDay(c.day) + ' ' + E.hhmm(c.start_time) + ' · ' + c.patient) + ' — ' + esc(c.message) + '</li>').join('') + '</ul></div>';
+  }
+
+  /* ---------------- fisioterapisti ---------------- */
+  function therapistsTab() {
+    const cats = FA.categories();
+    return '<div class="row between"><p class="muted">' + FA.allTherapists().length + ' fisioterapisti. Competenze: ★ specifica (proposto per primo) oppure abilitato.</p>' +
+      '<button class="btn primary small" data-act="th-edit" data-id=""' + adminOnly() + '>+ Nuovo fisioterapista</button></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Attività</th><th>Competenza specifica</th><th>Abilitato</th><th>Limite/giorno</th><th></th></tr></thead><tbody>' +
+      FA.allTherapists().map(t => {
+        const sk = A.ctx.skills.get(t.id) || new Map();
+        const spec = cats.filter(c => sk.get(c.id) === 'specifica').map(c => c.name), ab = cats.filter(c => sk.get(c.id) === 'abilitato').map(c => c.name);
+        return '<tr><td><strong>' + esc(t.name) + '</strong>' + (t.active ? '' : ' <span class="chip grey">non attivo</span>') + (t.note ? '<br><span class="small muted">' + esc(t.note) + '</span>' : '') + '</td>' +
+          '<td>' + (t.activity === 'ambulatorio' ? 'Solo ambulatorio' : 'Ambulatorio e reparto') + '</td><td class="small">' + esc(spec.join(', ') || '—') + '</td><td class="small">' + esc(ab.join(', ') || '—') + '</td>' +
+          '<td>' + (t.max_daily || '—') + '</td><td class="nowrap"><button class="btn small" data-act="th-edit" data-id="' + t.id + '">' + (FA.isAdmin() ? 'Modifica' : 'Dettagli') + '</button> ' +
+          '<button class="btn small" data-act="cfg-shift-of" data-id="' + t.id + '">Turno</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  FA.actions['th-edit'] = el => {
+    const id = el.getAttribute('data-id');
+    const t = id ? A.ctx.th.get(id) : null;
+    const sk = {};
+    FA.categories().forEach(c => { sk[c.id] = (t && E.skillLevel(A.ctx, t.id, c.id)) || ''; });
+    A.ui.te = { id: t ? t.id : '', version: t ? t.version : null, name: t ? t.name : '', activity: t ? t.activity : 'ambulatorio_reparto', max_daily: t && t.max_daily ? t.max_daily : '', active: t ? t.active : true, note: t ? t.note : '', sort: t ? t.sort : 100, skills: sk };
+    FA.openModal({ title: t ? 'Fisioterapista: ' + t.name : 'Nuovo fisioterapista', wide: true,
+      body() {
+        const f = A.ui.te;
+        return '<div class="grid2"><div class="field"><label>Nome</label><input type="text" data-bind="te.name" value="' + esc(f.name) + '"' + adminOnly() + '></div>' +
+          '<div class="field"><label>Attività</label>' + FA.seg('te.activity', [['ambulatorio', 'Solo ambulatorio'], ['ambulatorio_reparto', 'Ambulatorio e reparto']], f.activity) + '</div></div>' +
+          '<div class="grid3"><div class="field"><label>Limite pazienti al giorno (facoltativo)</label><input type="number" min="1" max="30" data-bind="te.max_daily" value="' + esc(f.max_daily) + '"' + adminOnly() + '></div>' +
+          '<div class="field"><label>Nota</label><input type="text" data-bind="te.note" value="' + esc(f.note) + '"' + adminOnly() + '></div>' +
+          '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="te.active"' + (f.active ? ' checked' : '') + adminOnly() + '> Attivo</label></div></div>' +
+          '<h4>Competenze e percorsi trattabili</h4><div class="table-wrap"><table><tbody>' + FA.categories().map(c => '<tr><td>' + esc(c.name) + '</td><td style="width:240px"><select data-bind="te.skills.' + c.id + '"' + adminOnly() + '>' +
+            FA.option('', 'Non abilitato', f.skills[c.id]) + FA.option('abilitato', 'Abilitato', f.skills[c.id]) + FA.option('specifica', '★ Competenza specifica', f.skills[c.id]) + '</select></td></tr>').join('') + '</tbody></table></div>' +
+          (f.id ? '' : '<p class="muted small">Dopo il salvataggio definisci il turno settimanale nella scheda “Turni”.</p>') + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Chiudi</button>' + (FA.isAdmin() ? '<button class="btn primary" data-act="th-save"' + adminSave() + '>Salva</button>' : '') });
+  };
+  FA.actions['th-save'] = async () => {
+    const f = A.ui.te;
+    if (!f.name.trim()) { f.error = 'Il nome è obbligatorio.'; FA.renderModal(); return; }
+    const p = { name: f.name, activity: f.activity, max_daily: f.max_daily === '' || f.max_daily == null ? '' : String(f.max_daily), active: !!f.active, note: f.note, sort: f.sort,
+      skills: Object.entries(f.skills).filter(([, l]) => l).map(([category_id, level]) => ({ category_id, level })) };
+    if (f.id) { p.id = f.id; p.version = f.version; }
+    try { await FA.save('Scheda del fisioterapista', () => FA.rpc('admin_save_therapist', { p })); FA.closeModal(); }
+    catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+
+  /* ---------------- turni ---------------- */
+  FA.actions['cfg-shift-of'] = el => { A.ui.cfgTab = 'turni'; A.ui.shTh = el.getAttribute('data-id'); FA.go('config'); FA.render(); };
+  function shiftsTab() {
+    const th = A.ui.shTh || (FA.allTherapists()[0] || {}).id;
+    A.ui.shTh = th;
+    const versions = (A.ctx.shifts.get(th) || []);
+    const cur = E.shiftFor(A.ctx, th, A.today);
+    const future = versions.filter(v => v.valid_from > A.today);
+    return '<div class="row"><div class="field" style="min-width:280px"><label>Fisioterapista</label><select data-bind="shTh" data-rerender>' + FA.allTherapists().map(t => FA.option(t.id, t.name, th)).join('') + '</select></div>' +
+      '<span class="grow"></span><button class="btn primary small" data-act="sh-new"' + adminOnly() + '>Nuovo turno con decorrenza…</button>' +
+      '<button class="btn small" data-act="ov-new"' + adminOnly() + '>Variazione di un giorno…</button></div>' +
+      '<p class="muted small">Ogni collega ha il proprio turno: gli orari dei dati di esempio sono indicativi e modificabili singolarmente. Un nuovo turno vale dalla data di decorrenza; i turni precedenti restano nello storico.</p>' +
+      (cur ? '<h4>In vigore oggi (dal ' + E.fmtIt(cur.valid_from) + ')' + (cur.note ? ' · ' + esc(cur.note) : '') + '</h4>' + weekGrid(cur.week) : '<div class="form-warn">Nessun turno in vigore oggi.</div>') +
+      future.map(v => '<h4 style="margin-top:14px">Dal ' + E.fmtIt(v.valid_from) + ' (programmato)' + (v.note ? ' · ' + esc(v.note) : '') + '</h4>' + weekGrid(v.week)).join('') +
+      '<h4 style="margin-top:14px">Storico dei turni</h4><ul class="list">' + versions.map(v => '<li>Dal ' + E.fmtIt(v.valid_from) + ' · ' + esc(v.note || '') + ' <span class="muted small">(registrato il ' + new Date(v.created_at).toLocaleDateString('it-IT') + ')</span></li>').join('') + '</ul>' +
+      overridesList(th);
+  }
+  function overridesList(th) {
+    const ov = (A.data.day_overrides || []).filter(o => o.therapist_id === th && o.day >= A.today).sort((a, b) => a.day < b.day ? -1 : 1);
+    return '<h4 style="margin-top:14px">Variazioni giornaliere</h4>' + (ov.length ? '<ul class="list">' + ov.map(o => '<li class="todo-item"><div><strong>' + esc(FA.dayLabel(o.day)) + '</strong> ' + (o.note ? '· ' + esc(o.note) : '') + blocksSummary(o.blocks) + '</div>' +
+      '<div><button class="btn small" data-act="ov-edit" data-day="' + o.day + '"' + adminOnly() + '>Modifica</button></div></li>').join('') + '</ul>' : '<p class="muted small">Nessuna variazione.</p>');
+  }
+  FA.actions['sh-new'] = () => {
+    const th = A.ui.shTh;
+    const cur = (A.ctx.shifts.get(th) || [])[0];
+    const week = {};
+    [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = cur ? (cur.week[String(d)] || []).map(b => Object.assign({}, b)) : []; });
+    A.ui.sh = { th, valid_from: E.addDays(A.today, 1), note: '', week, conflicts: null, checked: false };
+    FA.openModal({ title: 'Nuovo turno di ' + FA.thName(th), wide: true, sticky: true,
+      body() {
+        const f = A.ui.sh;
+        return '<div class="grid2"><div class="field"><label>In vigore dal</label><input type="date" min="' + A.today + '" data-bind="sh.valid_from" value="' + esc(f.valid_from) + '"></div>' +
+          '<div class="field"><label>Nota</label><input type="text" data-bind="sh.note" value="' + esc(f.note) + '"></div></div>' +
+          '<p class="small muted">Fasce: solo “Ambulatorio” è prenotabile. Reparto, pausa, documentazione e preparazione sono protette. “max” limita i pazienti in quella fascia.</p>' +
+          '<button class="btn small" data-act="sh-copy">Copia il lunedì su martedì–venerdì</button>' +
+          [1, 2, 3, 4, 5, 6, 7].map(d => '<div class="week-day" style="margin-top:8px"><h4>' + E.WD_LONG[d] + '</h4>' + blocksEditor('sh.week.' + d, listAt('sh.week.' + d)) + '</div>').join('') +
+          conflictsBox(f.conflicts) + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn" data-act="sh-check"' + adminSave() + '>Verifica appuntamenti coinvolti</button>' +
+        '<button class="btn primary" data-act="sh-save"' + (A.ui.sh.checked ? adminSave() : ' disabled title="Prima verifica gli appuntamenti coinvolti"') + '>Salva il nuovo turno</button>' });
+  };
+  FA.actions['sh-copy'] = () => { const f = A.ui.sh; const mon = listAt('sh.week.1'); [2, 3, 4, 5].forEach(d => { f.week[d] = mon.map(b => Object.assign({}, b)); }); f.checked = false; FA.renderModal(); };
+  function weekPayload(f) { const w = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { w[d] = cleanBlocks(f.week[d]); }); return w; }
+  FA.actions['sh-check'] = async () => {
+    const f = A.ui.sh; f.error = null;
+    try { const r = await FA.rpc('admin_save_shift', { p_th: f.th, p_valid_from: f.valid_from, p_week: weekPayload(f), p_note: f.note, p_dry_run: true }); f.conflicts = r.conflicts; f.checked = true; }
+    catch (e) { f.error = e.message; f.checked = false; }
+    FA.renderModal();
+  };
+  FA.actions['sh-save'] = async () => {
+    const f = A.ui.sh;
+    try {
+      const r = await FA.save('Nuovo turno', () => FA.rpc('admin_save_shift', { p_th: f.th, p_valid_from: f.valid_from, p_week: weekPayload(f), p_note: f.note, p_dry_run: false }));
+      FA.closeModal();
+      if (r.conflicts.length) FA.toast(r.conflicts.length + ' appuntamenti incompatibili segnalati in “Da sistemare”');
+    } catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+  function openOverride(day) {
+    const th = A.ui.shTh;
+    const existing = (A.data.day_overrides || []).find(o => o.therapist_id === th && o.day === day);
+    A.ui.ov = { th, day, note: existing ? existing.note : '', blocks: E.dayBlocks(A.ctx, th, day).map(b => Object.assign({}, b)), exists: !!existing, conflicts: null, checked: false };
+    FA.openModal({ title: 'Variazione giornaliera di ' + FA.thName(th), wide: true, sticky: true,
+      body() {
+        const f = A.ui.ov;
+        return '<div class="grid2"><div class="field"><label>Giorno</label><input type="date" min="' + A.today + '" data-bind="ov.day" data-on="ov-day" value="' + esc(f.day) + '"></div>' +
+          '<div class="field"><label>Nota</label><input type="text" data-bind="ov.note" value="' + esc(f.note) + '"></div></div>' +
+          '<p class="small muted">Le fasce sostituiscono il turno solo per questo giorno. Per un’assenza usa “Assenze”.</p>' + blocksEditor('ov.blocks', listAt('ov.blocks')) + conflictsBox(f.conflicts) + FA.errBox(f.error);
+      },
+      foot: () => (A.ui.ov.exists ? '<button class="btn danger" data-act="ov-remove"' + adminSave() + '>Rimuovi variazione</button>' : '') + '<span class="grow"></span><button class="btn" data-act="close-modal">Annulla</button>' +
+        '<button class="btn" data-act="ov-check"' + adminSave() + '>Verifica</button><button class="btn primary" data-act="ov-save"' + (A.ui.ov.checked ? adminSave() : ' disabled') + '>Salva</button>' });
+  }
+  FA.actions['ov-new'] = () => openOverride(E.addDays(A.today, 1));
+  FA.actions['ov-edit'] = el => openOverride(el.getAttribute('data-day'));
+  FA.actions['ov-day'] = () => { const f = A.ui.ov; f.blocks = E.dayBlocks(A.ctx, f.th, f.day).map(b => Object.assign({}, b)); f.checked = false; f.conflicts = null; FA.renderModal(); };
+  FA.actions['ov-check'] = async () => {
+    const f = A.ui.ov; f.error = null;
+    try { const r = await FA.rpc('admin_set_day_override', { p_th: f.th, p_day: f.day, p_blocks: cleanBlocks(f.blocks), p_note: f.note, p_dry_run: true }); f.conflicts = r.conflicts; f.checked = true; }
+    catch (e) { f.error = e.message; }
+    FA.renderModal();
+  };
+  FA.actions['ov-save'] = async () => {
+    const f = A.ui.ov;
+    try { await FA.save('Variazione giornaliera', () => FA.rpc('admin_set_day_override', { p_th: f.th, p_day: f.day, p_blocks: cleanBlocks(f.blocks), p_note: f.note, p_dry_run: false })); FA.closeModal(); }
+    catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+  FA.actions['ov-remove'] = async () => {
+    const f = A.ui.ov;
+    try { await FA.save('Variazione rimossa', () => FA.rpc('admin_set_day_override', { p_th: f.th, p_day: f.day, p_blocks: null, p_note: '', p_dry_run: false })); FA.closeModal(); }
+    catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+
+  /* ---------------- assenze (elenco completo) ---------------- */
+  function absencesTab() {
+    const list = (A.data.absences || []).slice().sort((a, b) => a.start_date < b.start_date ? 1 : -1);
+    return '<p class="muted">Ferie, malattie e permessi. Per un’assenza imprevista usa <a href="#/assenze">Assenze</a>: trova anche i sostituti.</p>' +
+      '<div class="table-wrap"><table><thead><tr><th>Fisioterapista</th><th>Periodo</th><th>Motivo</th><th>Stato</th><th></th></tr></thead><tbody>' +
+      list.map(a => '<tr><td>' + esc(FA.thName(a.therapist_id)) + '</td><td>' + esc(FA.absPeriod(a)) + '</td><td>' + esc(E.ABSENCE_KIND[a.kind]) + (a.note ? '<br><span class="small muted">' + esc(a.note) + '</span>' : '') + '</td>' +
+        '<td>' + (a.cancelled ? '<span class="chip grey">annullata</span>' : a.end_date && a.end_date < A.today ? '<span class="chip grey">conclusa</span>' : '<span class="chip warn">in corso / prevista</span>') + '</td>' +
+        '<td class="nowrap">' + (a.cancelled ? '' : '<button class="btn small" data-act="abs-edit" data-id="' + a.id + '"' + FA.disabledIfReadOnly() + '>Modifica</button> <button class="btn small" data-act="abs-plan" data-id="' + a.id + '">Sostituti</button>') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+
+  /* ---------------- percorsi e chiusure ---------------- */
+  function categoriesTab() {
+    const cats = [...A.ctx.cat.values()].sort((a, b) => a.sort - b.sort);
+    return '<div class="row between"><p class="muted">Percorsi (categorie organizzative modificabili).</p><button class="btn small primary" data-act="cat-edit" data-id=""' + adminOnly() + '>+ Nuovo percorso</button></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Codice</th><th>Nome</th><th>Ordine</th><th>Stato</th><th></th></tr></thead><tbody>' +
+      cats.map(c => '<tr><td><code>' + esc(c.id) + '</code></td><td>' + esc(c.name) + '</td><td>' + c.sort + '</td><td>' + (c.active ? '<span class="chip ok">attivo</span>' : '<span class="chip grey">non attivo</span>') + '</td>' +
+        '<td><button class="btn small" data-act="cat-edit" data-id="' + esc(c.id) + '"' + adminOnly() + '>Modifica</button></td></tr>').join('') + '</tbody></table></div>';
+  }
+  FA.actions['cat-edit'] = el => {
+    const c = A.ctx.cat.get(el.getAttribute('data-id'));
+    A.ui.ce = { isNew: !c, id: c ? c.id : '', name: c ? c.name : '', active: c ? c.active : true, sort: c ? c.sort : 50 };
+    FA.openModal({ title: c ? 'Percorso' : 'Nuovo percorso',
+      body: () => '<div class="field"><label>Codice (breve, senza spazi)</label><input type="text" data-bind="ce.id" value="' + esc(A.ui.ce.id) + '"' + (A.ui.ce.isNew ? '' : ' disabled') + '></div>' +
+        '<div class="field"><label>Nome</label><input type="text" data-bind="ce.name" value="' + esc(A.ui.ce.name) + '"></div>' +
+        '<div class="grid2"><div class="field"><label>Ordine</label><input type="number" data-num data-bind="ce.sort" value="' + esc(A.ui.ce.sort) + '"></div>' +
+        '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="ce.active"' + (A.ui.ce.active ? ' checked' : '') + '> Attivo</label></div></div>' + FA.errBox(A.ui.ce.error),
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="cat-save"' + adminSave() + '>Salva</button>' });
+  };
+  FA.actions['cat-save'] = async () => {
+    const f = A.ui.ce;
+    try { await FA.save('Percorso', () => FA.rpc('admin_save_category', { p_id: f.id.trim(), p_name: f.name, p_active: !!f.active, p_sort: Number(f.sort) || 0 })); FA.closeModal(); }
+    catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+  function closuresTab() {
+    const list = (A.data.closures || []).filter(c => c.day >= E.addDays(A.today, -30)).sort((a, b) => a.day < b.day ? -1 : 1);
+    const f = A.ui.cl || (A.ui.cl = { day: '', label: '' });
+    return '<p class="muted">Festività e chiusure: le date vengono saltate nei cicli. Il Santo Patrono non è inserito: aggiungilo se serve.</p>' +
+      '<form class="row" data-submit="cl-add"><input type="date" style="max-width:180px" data-bind="cl.day" value="' + esc(f.day) + '"' + adminOnly() + '><input type="text" style="max-width:320px" placeholder="Descrizione" data-bind="cl.label" value="' + esc(f.label) + '"' + adminOnly() + '>' +
+      '<button class="btn small primary" type="submit"' + adminSave() + '>Aggiungi chiusura</button></form>' + FA.errBox(f.error) +
+      '<ul class="list">' + list.map(c => '<li class="todo-item"><div>' + esc(FA.dayLabel(c.day)) + ' — ' + esc(c.label) + '</div><div><button class="btn small" data-act="cl-del" data-day="' + c.day + '"' + adminOnly() + '>Elimina</button></div></li>').join('') + '</ul>';
+  }
+  FA.actions['cl-add'] = async () => {
+    const f = A.ui.cl;
+    if (!f.day || !f.label) { f.error = 'Indica data e descrizione.'; FA.render(); return; }
+    try { await FA.save('Chiusura', () => FA.rpc('admin_save_closure', { p_day: f.day, p_label: f.label, p_delete: false })); A.ui.cl = null; FA.render(); }
+    catch (e) { f.error = e.message; FA.render(); }
+  };
+  FA.actions['cl-del'] = async el => {
+    if (!confirm('Eliminare la chiusura?')) return;
+    try { await FA.save('Chiusura eliminata', () => FA.rpc('admin_save_closure', { p_day: el.getAttribute('data-day'), p_label: '', p_delete: true })); } catch (e) { /* già segnalato */ }
+  };
+
+  /* ---------------- utenti ---------------- */
+  function usersTab() {
+    const list = (A.data.profiles || []).slice().sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
+    return '<div class="form-note"><strong>Come aggiungere un collega:</strong> nel pannello di Supabase apri <em>Authentication → Users → Add user → Send invitation</em> (oppure “Create new user”). ' +
+      'Il nuovo account compare qui in <em>sola consultazione</em>: assegna il ruolo. La registrazione libera è disattivata.</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Attivo</th><th></th></tr></thead><tbody>' +
+      list.map(p => {
+        const k = 'us.' + p.user_id;
+        if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name });
+        const f = FA.get(k);
+        return '<tr><td><input type="text" data-bind="' + k + '.full_name" value="' + esc(f.full_name) + '"' + adminOnly() + '></td><td>' + esc(p.email) + '</td>' +
+          '<td><select data-bind="' + k + '.role"' + adminOnly() + '>' + ['admin', 'operatore', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select></td>' +
+          '<td><input type="checkbox" data-bind="' + k + '.active"' + (f.active ? ' checked' : '') + adminOnly() + ' aria-label="Attivo"></td>' +
+          '<td><button class="btn small" data-act="us-save" data-id="' + p.user_id + '"' + adminSave() + '>Salva</button></td></tr>';
+      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore</strong> (tutto, compresa la configurazione), <strong>Operatore</strong> (agenda, assenze, pazienti), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
+  }
+  FA.actions['us-save'] = async el => {
+    const id = el.getAttribute('data-id'), f = FA.get('us.' + id);
+    try { await FA.save('Utente', () => FA.rpc('admin_set_user', { p_user: id, p_role: f.role, p_active: !!f.active, p_full_name: f.full_name || '' })); A.ui.us = null; FA.render(); }
+    catch (e) { A.ui.us = null; FA.render(); }
+  };
+
+  /* ---------------- backup ---------------- */
+  function download(name, obj) {
+    const blob = new Blob([JSON.stringify(obj, null, 1)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  function backupTab() {
+    const f = A.ui.bk || (A.ui.bk = {});
+    return '<div class="panel"><h3>Scarica un backup</h3><p>Salva sul computer una copia completa dei dati del servizio (fisioterapisti, turni, assenze, pazienti fittizi, cicli, appuntamenti, storico). Consigliato almeno una volta alla settimana e prima di modifiche importanti.</p>' +
+      '<button class="btn primary" data-act="bk-export"' + adminSave() + '>Scarica backup (.json)</button></div>' +
+      '<div class="panel"><h3>Ripristina da un backup</h3><p class="form-warn">Il ripristino <strong>sostituisce tutti i dati attuali</strong> per tutti i colleghi. Prima del ripristino viene scaricato automaticamente un backup dello stato attuale. Gli account e lo storico restano.</p>' +
+      '<div class="field"><label for="bk-file">File di backup</label><input id="bk-file" type="file" accept=".json,application/json" data-act-change="bk-file"' + adminOnly() + '></div>' +
+      (f.file ? '<div class="form-note">Backup del ' + esc(new Date(f.file.exported_at).toLocaleString('it-IT')) + ' (' + esc(f.file.exported_by || '') + '): ' + f.file.therapists.length + ' fisioterapisti, ' +
+        f.file.patients.length + ' pazienti, ' + f.file.cycles.length + ' cicli, ' + f.file.appointments.length + ' appuntamenti.</div>' +
+        '<div class="field" style="max-width:320px"><label>Per confermare scrivi RIPRISTINA</label><input type="text" data-bind="bk.confirm" value="' + esc(f.confirm || '') + '"></div>' +
+        '<button class="btn danger" data-act="bk-restore"' + adminSave() + '>Ripristina</button>' : '') + FA.errBox(f.error) + '</div>' +
+      '<p class="muted small">Procedura completa (anche da riga di comando) nel file ISTRUZIONI-PILOTA.md.</p>';
+  }
+  FA.actions['bk-export'] = async () => {
+    try { const data = await FA.rpc('admin_export', {}); download('fisioagenda-backup-' + stamp() + '.json', data); FA.toast('Backup scaricato', 'ok'); }
+    catch (e) { FA.toast('Backup non riuscito: ' + e.message, 'bad'); }
+  };
+  document.addEventListener('change', async ev => {
+    if (!ev.target.matches('[data-act-change="bk-file"]')) return;
+    const f = A.ui.bk || (A.ui.bk = {});
+    f.error = null; f.file = null;
+    const file = ev.target.files[0];
+    if (!file) return;
+    try {
+      const obj = JSON.parse(await file.text());
+      if (obj.format !== 'fisioagenda-pilota') throw new Error('Il file non è un backup di FisioAgenda pilota.');
+      f.file = obj;
+    } catch (e) { f.error = e.message; }
+    FA.render();
+  });
+  FA.actions['bk-restore'] = async () => {
+    const f = A.ui.bk;
+    if (f.confirm !== 'RIPRISTINA') { f.error = 'Scrivi RIPRISTINA per confermare.'; FA.render(); return; }
+    try {
+      const current = await FA.rpc('admin_export', {});
+      download('fisioagenda-prima-del-ripristino-' + stamp() + '.json', current);
+      const counts = await FA.save('Ripristino', () => FA.rpc('admin_restore', { p: f.file, p_confirm: 'RIPRISTINA' }));
+      A.ui.bk = { info: counts };
+      FA.render();
+    } catch (e) { f.error = e.message; FA.render(); }
+  };
+
+  /* ---------------- vista ---------------- */
+  const TABS = [['fisio', 'Fisioterapisti'], ['turni', 'Turni e variazioni'], ['assenze', 'Ferie e assenze'], ['percorsi', 'Percorsi'], ['chiusure', 'Festività e chiusure'], ['utenti', 'Utenti'], ['backup', 'Backup']];
+  FA.actions['cfg-tab'] = el => { A.ui.cfgTab = el.getAttribute('data-t'); FA.render(); };
+  FA.views.config = {
+    render() {
+      const t = A.ui.cfgTab || 'fisio';
+      const body = { fisio: therapistsTab, turni: shiftsTab, assenze: absencesTab, percorsi: categoriesTab, chiusure: closuresTab, utenti: usersTab, backup: backupTab }[t]();
+      return '<h2>Configurazione del servizio</h2>' + (FA.isAdmin() ? '' : '<div class="form-note">Consultazione: solo il coordinatore può modificare la configurazione.</div>') +
+        '<div class="tabs">' + TABS.filter(([k]) => FA.isAdmin() || (k !== 'utenti' && k !== 'backup')).map(([k, l]) => '<button class="' + (t === k ? 'on' : '') + '" data-act="cfg-tab" data-t="' + k + '">' + esc(l) + '</button>').join('') + '</div>' +
+        '<div class="panel">' + body + '</div>';
+    }
+  };
+
+  /* ---------------- storico ---------------- */
+  FA.views.storico = {
+    enter() { load(); },
+    render() {
+      const s = A.ui.log || {};
+      const q = (s.q || '').toLowerCase();
+      const rows = (s.rows || []).filter(r => !q || (r.summary + ' ' + r.user_name).toLowerCase().includes(q));
+      return '<h2>Storico delle modifiche</h2><div class="panel"><div class="row"><input type="text" style="max-width:360px" placeholder="Cerca (nome, paziente, azione…)" data-bind="log.q" data-rerender value="' + esc(s.q || '') + '">' +
+        '<button class="btn small" data-act="log-reload">Aggiorna</button><span class="muted small">Ultime ' + (s.rows ? s.rows.length : 0) + ' operazioni. Chi, cosa e quando.</span></div>' +
+        (s.error ? FA.errBox(s.error) : '') + '<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Chi</th><th>Cosa</th></tr></thead><tbody>' +
+        rows.map(r => '<tr><td class="nowrap small">' + esc(new Date(r.at).toLocaleString('it-IT')) + '</td><td>' + esc(r.user_name) + '</td><td>' + esc(r.summary) + '</td></tr>').join('') +
+        '</tbody></table></div></div>';
+    }
+  };
+  async function load() {
+    A.ui.log = A.ui.log || {};
+    try { A.ui.log.rows = await FA.S.loadAudit(A.sb, 500); A.ui.log.error = null; } catch (e) { A.ui.log.error = e.message; }
+    if (A.view === 'storico') FA.render();
+  }
+  FA.actions['log-reload'] = () => load();
+})();
