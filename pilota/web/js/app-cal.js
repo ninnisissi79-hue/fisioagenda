@@ -173,6 +173,11 @@
     if (n === 0) g.day = A.today; else { let d = E.addDays(g.day, n); while (E.weekday(d) >= 6) d = E.addDays(d, n > 0 ? 1 : -1); g.day = d; }
     FA.render();
   };
+  function freeSlot(th, day, from, to, extra) {
+    const can = FA.canEdit() && day >= A.today;
+    return '<div class="slot free' + (can ? ' appt' : '') + '"' + (can ? ' data-act="ag-book" data-th="' + th + '" data-day="' + day + '" data-start="' + from + '" data-end="' + to + '" role="button" tabindex="0" title="Prenota un paziente in questo posto"' : '') +
+      '><span class="t">' + from + '–' + to + '</span><span>libero' + extra + (can ? ' · <strong>+ prenota</strong>' : '') + '</span></div>';
+  }
   function agendaView() {
     const g = agState(), ctx = A.ctx, d = g.day;
     const issues = new Map(A.issues.map(i => [i.appointment_id, i]));
@@ -194,10 +199,10 @@
         let cur = E.toMin(b.start);
         const inside = appts.filter(a => E.OCCUPYING.has(a.status) && E.toMin(a.start_time) >= E.toMin(b.start) && E.toMin(a.end_time) <= E.toMin(b.end));
         inside.forEach(a => {
-          if (E.toMin(a.start_time) - cur >= 30) items.push({ s: E.fromMin(cur), html: '<div class="slot free"><span class="t">' + E.fromMin(cur) + '–' + a.start_time + '</span><span>libero</span></div>' });
+          if (E.toMin(a.start_time) - cur >= 30) items.push({ s: E.fromMin(cur), html: freeSlot(t.id, d, E.fromMin(cur), a.start_time, '') });
           cur = Math.max(cur, E.toMin(a.end_time));
         });
-        if (E.toMin(b.end) - cur >= 30) items.push({ s: E.fromMin(cur), html: '<div class="slot free"><span class="t">' + E.fromMin(cur) + '–' + b.end + '</span><span>libero' + (b.max ? ' (max ' + b.max + ' paz.)' : '') + '</span></div>' });
+        if (E.toMin(b.end) - cur >= 30) items.push({ s: E.fromMin(cur), html: freeSlot(t.id, d, E.fromMin(cur), b.end, b.max ? ' (max ' + b.max + ' paz.)' : '') });
       });
       appts.forEach(a => {
         const cyc = ctx.cyc.get(a.cycle_id);
@@ -217,6 +222,67 @@
     return html + '</div>';
   }
   FA.views.agenda = { render: agendaView, enter(params) { if (params[0]) agState().day = params[0]; } };
+
+  /* ---- prenotazione diretta in un posto scelto dall'agenda ---- */
+  FA.actions['ag-book'] = el => {
+    const th = el.getAttribute('data-th');
+    const cats = FA.categories().filter(c => E.skillLevel(A.ctx, th, c.id));
+    const day = el.getAttribute('data-day');
+    A.ui.qb = { th, day, start: el.getAttribute('data-start'), mode: 'nuovo', name: '', cycle_id: '', category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id,
+      duration: 30, sessions: 10, weekdays: [E.weekday(day)], priority: 'NI', request_type: 'prima' };
+    FA.openModal({ title: 'Prenota con ' + FA.thName(th), wide: true, live: true, body: qbBody,
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="qb-save"' + (A.ui.qb.okAll ? FA.saveDisabled() : ' disabled') + '>' + (A.saving ? 'Salvataggio…' : 'Conferma e salva') + '</button>' });
+  };
+  function qbBody() {
+    const f = A.ui.qb, ctx = A.ctx;
+    const cats = FA.categories().filter(c => E.skillLevel(ctx, f.th, c.id));
+    const waiting = (A.data.cycles || []).filter(c => c.status === 'in_attesa' && E.skillLevel(ctx, f.th, c.category_id));
+    if (f.mode === 'attesa' && f.cycle_id) {
+      const c = ctx.cyc.get(f.cycle_id);
+      if (c && f.loaded !== c.id) Object.assign(f, { loaded: c.id, category_id: c.category_id, duration: c.duration, sessions: c.planned_sessions, priority: c.priority, request_type: c.request_type });
+    }
+    const dur = Number(f.duration), n = Number(f.sessions);
+    const cyc = f.mode === 'attesa' && f.cycle_id ? ctx.cyc.get(f.cycle_id) : null;
+    const dates = f.weekdays.length ? E.cycleDates(ctx, f.day, f.weekdays, n) : [];
+    const end = f.start ? E.fromMin(E.toMin(f.start) + dur) : '';
+    const checks = f.start ? dates.map(d => ({ d, chk: E.checkSlot(ctx, f.th, d, f.start, end, { patientId: cyc ? cyc.patient_id : null, cycleId: cyc ? cyc.id : null }) })) : [];
+    f.dates = dates;
+    f.okAll = !!f.start && checks.length === n && checks.every(x => !x.chk) && (f.mode === 'nuovo' ? !!(f.name || '').trim() : !!f.cycle_id) && !!f.category_id;
+    const bad = checks.filter(x => x.chk);
+    return '<p>Primo appuntamento: <strong>' + esc(FA.dayLabel(f.day)) + '</strong> con <strong>' + esc(FA.thName(f.th)) + '</strong>. Stesso orario e stesso collega per tutte le sedute.</p>' +
+      '<div class="field"><label>Paziente</label>' + FA.seg('qb.mode', [['nuovo', 'Nuovo paziente (fittizio)'], ['attesa', 'Dalla lista d’attesa']], f.mode) + '</div>' +
+      (f.mode === 'nuovo' ? '<div class="field" style="max-width:420px"><label>Nome (fittizio)</label><input type="text" data-bind="qb.name" data-rerender value="' + esc(f.name) + '" placeholder="es. Bianchi L."></div>'
+        : '<div class="field"><label>Richiesta</label><select data-bind="qb.cycle_id" data-rerender><option value="">— scegli —</option>' + waiting.map(c => FA.option(c.id, '[' + c.priority + '] ' + FA.patName(c.patient_id) + ' · ' + FA.catName(c.category_id) + ' · ' + c.duration + ' min × ' + c.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
+      '<div class="grid3"><div class="field"><label>Percorso (tra quelli di ' + esc(FA.thName(f.th)) + ')</label><select data-bind="qb.category_id" data-rerender' + (cyc ? ' disabled' : '') + '>' + cats.map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
+      '<div class="field"><label>Priorità</label><select data-bind="qb.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>' +
+      '<div class="field"><label>Tipo di richiesta</label><select data-bind="qb.request_type">' + Object.entries(E.REQUEST).map(([k, l]) => FA.option(k, l, f.request_type)).join('') + '</select></div></div>' +
+      '<div class="grid3"><div class="field"><label>Ora di inizio</label><input type="time" step="300" data-bind="qb.start" data-rerender value="' + esc(f.start) + '"></div>' +
+      '<div class="field"><label>Durata</label>' + (cyc ? '<div>' + dur + ' min</div>' : FA.seg('qb.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration)) + '</div>' +
+      '<div class="field"><label>Sedute</label>' + (cyc ? '<div>' + n + '</div>' : FA.seg('qb.sessions', E.SESSION_PRESETS.map(x => [x, String(x)]), f.sessions)) + '</div></div>' +
+      '<div class="field"><label>Giorni della settimana</label>' + wdChecks('qb.weekdays', f.weekdays) + '</div>' +
+      (checks.length ? (bad.length ? '<div class="form-error">✗ ' + bad.length + ' date non disponibili: cambia ora, giorni o durata.</div>' : '<div class="form-note">✓ Tutte le ' + n + ' sedute sono disponibili (festività saltate).</div>') +
+        '<div class="checks">' + checks.map(x => '<span class="chip ' + (x.chk ? 'bad' : 'blue') + '" title="' + esc(x.chk ? x.chk.msg : '') + '">' + (x.chk ? '✗ ' : '') + esc(E.fmtItDay(x.d)) + '</span>').join('') + '</div>' +
+        (bad.length ? '<ul class="small">' + bad.slice(0, 4).map(x => '<li>' + esc(E.fmtItDay(x.d) + ': ' + x.chk.msg) + '</li>').join('') + '</ul>' : '') : '') +
+      FA.errBox(f.error);
+  }
+  FA.actions['qb-save'] = async () => {
+    const f = A.ui.qb;
+    try {
+      let cycleId = f.cycle_id, version;
+      if (f.mode === 'nuovo') {
+        const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), category_id: f.category_id, priority: f.priority,
+          request_type: f.request_type, duration: Number(f.duration), planned_sessions: Number(f.sessions), weekdays: f.weekdays } }));
+        cycleId = r.cycle_id; version = 1; f.mode = 'attesa'; f.cycle_id = cycleId;
+      } else version = A.ctx.cyc.get(cycleId).version;
+      const c = A.ctx.cyc.get(cycleId);
+      await FA.save('Prenotazione', () => FA.rpc('book_cycle', { p_cycle: cycleId, p_version: version, p_therapist: f.th, p_start: f.start, p_weekdays: f.weekdays, p_dates: f.dates }));
+      FA.closeModal();
+      FA.go('paziente', c.patient_id);
+    } catch (e) {
+      f.error = e.message + (f.cycle_id ? ' La richiesta è comunque salvata in lista d’attesa: puoi riprovare.' : '');
+      FA.renderModal();
+    }
+  };
 
   /* ======================= APPUNTAMENTO ======================= */
   function pickBlock(am, a, cyc, title) {
@@ -313,7 +379,7 @@
     const pats = (A.data.patients || []).filter(p => !q || p.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
     const cyclesBy = new Map();
     (A.data.cycles || []).forEach(c => { if (!cyclesBy.has(c.patient_id)) cyclesBy.set(c.patient_id, []); cyclesBy.get(c.patient_id).push(c); });
-    return '<h2>Pazienti e cicli</h2><div class="panel"><div class="field" style="max-width:420px"><label for="pq">Cerca per nome</label><input id="pq" type="text" data-bind="pq" data-rerender value="' + esc(A.ui.pq || '') + '" placeholder="es. Rossi"></div>' +
+    return '<div class="row between"><h2>Pazienti e cicli</h2><div class="row"><a class="btn primary small" href="#/trova">+ Nuovo paziente (trova posto)</a><a class="btn small" href="#/agenda">Prenota da un posto libero in agenda</a></div></div><div class="panel"><div class="field" style="max-width:420px"><label for="pq">Cerca per nome</label><input id="pq" type="text" data-bind="pq" data-rerender value="' + esc(A.ui.pq || '') + '" placeholder="es. Rossi"></div>' +
       '<div class="table-wrap"><table><thead><tr><th>Paziente</th><th>Cicli</th><th>Prossima seduta</th></tr></thead><tbody>' +
       pats.slice(0, 300).map(p => {
         const cs = cyclesBy.get(p.id) || [];

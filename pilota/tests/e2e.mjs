@@ -160,12 +160,15 @@ try {
   await wp.check('.modal input[data-bind="am.out.to_recover"]');
   await wp.click('.modal button:has-text("Salva esito")');
   await wp.waitForSelector('.modal h4:has-text("recupero")', { timeout: 15000 });
-  const recDay = E.addDays(psql(`select day from appointments where id='${firstAppt}'`), 1);
-  let d = recDay; while (E.weekday(d) >= 6 || psql(`select count(*) from closures where day='${d}'`) !== '0') d = E.addDays(d, 1);
-  await wp.fill('.modal input[data-bind="am.pick.day"]', d);
-  await wp.dispatchEvent('.modal input[data-bind="am.pick.day"]', 'change');
-  await wp.waitForTimeout(300);
-  const times = await wp.$$eval('.modal select[data-bind="am.pick.start"] option', os => os.map(o => o.value).filter(Boolean));
+  let d = psql(`select day from appointments where id='${firstAppt}'`), times = [];
+  for (let tries = 0; tries < 15 && !times.length; tries++) {
+    d = E.addDays(d, 1);
+    while (E.weekday(d) >= 6 || psql(`select count(*) from closures where day='${d}'`) !== '0') d = E.addDays(d, 1);
+    await wp.fill('.modal input[data-bind="am.pick.day"]', d);
+    await wp.dispatchEvent('.modal input[data-bind="am.pick.day"]', 'change');
+    await wp.waitForTimeout(250);
+    times = await wp.$$eval('.modal select[data-bind="am.pick.start"] option', os => os.map(o => o.value).filter(Boolean));
+  }
   assert.ok(times.length > 0, 'orari liberi proposti per il recupero');
   await wp.selectOption('.modal select[data-bind="am.pick.start"]', times[0]);
   await wp.waitForTimeout(200);
@@ -271,6 +274,41 @@ try {
     assert.match(await text(pc, 'main'), /Federico Serra/);
     ok('Cambio turno con decorrenza: conflitti mostrati prima del salvataggio e poi segnalati da sistemare; storico conservato');
   } else ok('Cambio turno con decorrenza salvato con storico (nessun conflitto nei dati demo)');
+
+  // ---------------------------------------------------------------- nuovo collega con turno copiato, prenotazione in un posto scelto
+  await go(pc, '#/config');
+  await pc.click('.tabs button:has-text("Fisioterapisti")');
+  await pc.click('button:has-text("+ Nuovo fisioterapista")');
+  await pc.fill('.modal input[data-bind="te.name"]', 'Collega Nuovo ' + RUN);
+  await pc.selectOption('.modal select[data-bind="te.skills.mano"]', 'specifica');
+  await pc.click('.modal button:has-text("Salva")');
+  await pc.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  await pc.waitForSelector('button:has-text("Nuovo turno con decorrenza")');
+  await pc.click('button:has-text("Nuovo turno con decorrenza")');
+  await pc.selectOption('.modal select[data-bind="sh.from_th"]', { label: 'Alessia Villa' });
+  await pc.fill('.modal input[data-bind="sh.valid_from"]', today);
+  await pc.click('.modal button:has-text("Verifica appuntamenti coinvolti")');
+  await pc.waitForSelector('.modal .form-note:has-text("Nessun appuntamento")', { timeout: 15000 });
+  await pc.click('.modal button:has-text("Salva il nuovo turno")');
+  await pc.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(psql(`select count(*) from shift_versions s join therapists t on t.id=s.therapist_id where t.name='Collega Nuovo ${RUN}'`), '1');
+  ok('Nuovo collega inserito dall’app con competenze e turno copiato da un altro collega');
+  const newTh = psql(`select id from therapists where name='Collega Nuovo ${RUN}'`);
+  let bookDay = E.addDays(today, 1); while (E.weekday(bookDay) >= 6 || psql(`select count(*) from closures where day='${bookDay}'`) !== '0') bookDay = E.addDays(bookDay, 1);
+  await go(pc, '#/agenda/' + bookDay);
+  await pc.selectOption('select[data-bind="ag.th"]', newTh);
+  await pc.waitForTimeout(300);
+  await pc.click('[data-act="ag-book"] >> nth=0');
+  await pc.waitForSelector('.modal');
+  await pc.fill('.modal input[data-bind="qb.name"]', 'Scelto ' + RUN);
+  await pc.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
+  await pc.click('.modal button[data-act="seg"][data-val="5"]');
+  await pc.waitForSelector('.modal .form-note:has-text("Tutte le 5 sedute")', { timeout: 10000 });
+  await pc.click('.modal button:has-text("Conferma e salva")');
+  await pc.waitForSelector('h2:has-text("Scelto")', { timeout: 15000 });
+  assert.match(await text(pc, 'main'), /Programmate: 5/);
+  assert.equal(psql(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='Scelto ${RUN}' and a.therapist_id='${newTh}' and a.status='programmata'`), '5');
+  ok('Paziente fittizio prenotato direttamente in un posto libero scelto dall’agenda');
 
   // ---------------------------------------------------------------- connessione assente
   await p1.context().setOffline(true);

@@ -79,7 +79,11 @@
     const p = { name: f.name, activity: f.activity, max_daily: f.max_daily === '' || f.max_daily == null ? '' : String(f.max_daily), active: !!f.active, note: f.note, sort: f.sort,
       skills: Object.entries(f.skills).filter(([, l]) => l).map(([category_id, level]) => ({ category_id, level })) };
     if (f.id) { p.id = f.id; p.version = f.version; }
-    try { await FA.save('Scheda del fisioterapista', () => FA.rpc('admin_save_therapist', { p })); FA.closeModal(); }
+    try {
+      const id = await FA.save('Scheda del fisioterapista', () => FA.rpc('admin_save_therapist', { p }));
+      FA.closeModal();
+      if (!f.id) { A.ui.cfgTab = 'turni'; A.ui.shTh = id; FA.render(); FA.toast('Ora definisci il turno del nuovo collega (puoi partire da quello di un altro)'); }
+    }
     catch (e) { f.error = e.message; FA.renderModal(); }
   };
 
@@ -117,12 +121,19 @@
         return '<div class="grid2"><div class="field"><label>In vigore dal</label><input type="date" min="' + A.today + '" data-bind="sh.valid_from" value="' + esc(f.valid_from) + '"></div>' +
           '<div class="field"><label>Nota</label><input type="text" data-bind="sh.note" value="' + esc(f.note) + '"></div></div>' +
           '<p class="small muted">Fasce: solo “Ambulatorio” è prenotabile. Reparto, pausa, documentazione e preparazione sono protette. “max” limita i pazienti in quella fascia.</p>' +
-          '<button class="btn small" data-act="sh-copy">Copia il lunedì su martedì–venerdì</button>' +
+          '<div class="row"><button class="btn small" data-act="sh-copy">Copia il lunedì su martedì–venerdì</button>' +
+          '<select style="max-width:300px;min-height:34px" data-bind="sh.from_th" data-on="sh-copy-th"><option value="">Parti dal turno di un collega…</option>' +
+          FA.allTherapists().filter(t => t.id !== f.th && (A.ctx.shifts.get(t.id) || []).length).map(t => FA.option(t.id, t.name, f.from_th)).join('') + '</select></div>' +
           [1, 2, 3, 4, 5, 6, 7].map(d => '<div class="week-day" style="margin-top:8px"><h4>' + E.WD_LONG[d] + '</h4>' + blocksEditor('sh.week.' + d, listAt('sh.week.' + d)) + '</div>').join('') +
           conflictsBox(f.conflicts) + FA.errBox(f.error);
       },
       foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn" data-act="sh-check"' + adminSave() + '>Verifica appuntamenti coinvolti</button>' +
         '<button class="btn primary" data-act="sh-save"' + (A.ui.sh.checked ? adminSave() : ' disabled title="Prima verifica gli appuntamenti coinvolti"') + '>Salva il nuovo turno</button>' });
+  };
+  FA.actions['sh-copy-th'] = () => {
+    const f = A.ui.sh; const v = E.shiftFor(A.ctx, f.from_th, A.today) || (A.ctx.shifts.get(f.from_th) || [])[0];
+    if (v) [1, 2, 3, 4, 5, 6, 7].forEach(d => { f.week[d] = (v.week[String(d)] || []).map(b => Object.assign({}, b)); });
+    f.checked = false; FA.renderModal();
   };
   FA.actions['sh-copy'] = () => { const f = A.ui.sh; const mon = listAt('sh.week.1'); [2, 3, 4, 5].forEach(d => { f.week[d] = mon.map(b => Object.assign({}, b)); }); f.checked = false; FA.renderModal(); };
   function weekPayload(f) { const w = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { w[d] = cleanBlocks(f.week[d]); }); return w; }

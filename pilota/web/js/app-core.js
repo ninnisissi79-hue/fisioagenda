@@ -56,7 +56,16 @@
   /* ---------------- finestre ---------------- */
   FA.openModal = function (def) { A.modal = def; renderModal(); };
   FA.closeModal = function () { A.modal = null; renderModal(); };
-  function renderModal() {
+  // Se il browser genera eventi (change/blur) mentre la pagina viene ridisegnata, il nuovo disegno è rimandato.
+  let painting = false;
+  function guarded(fn) {
+    return function (...args) {
+      if (painting) { setTimeout(() => fn.apply(null, args), 0); return; }
+      painting = true;
+      try { fn.apply(null, args); } finally { painting = false; }
+    };
+  }
+  const renderModal = guarded(function () {
     const root = document.getElementById('modal-root');
     if (!A.modal) { root.innerHTML = ''; return; }
     const m = A.modal;
@@ -66,7 +75,7 @@
       '<div class="modal-body">' + m.body() + '</div>' +
       (m.foot ? '<div class="modal-foot">' + m.foot() + '</div>' : '') + '</div></div>';
     if (focused) { const el = root.querySelector('[data-bind="' + focused + '"]'); if (el) el.focus(); }
-  }
+  });
   FA.renderModal = renderModal;
 
   /* ---------------- salvataggio sul server ---------------- */
@@ -316,7 +325,7 @@
     return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'button';
   }
   let pending = false;
-  function render(soft) {
+  const render = guarded(function (soft) {
     const root = document.getElementById('app');
     if (!A.sb) { root.innerHTML = '<main><div class="panel form-error">Impossibile avviare: libreria di collegamento non caricata.</div></main>'; return; }
     if (!A.me) { root.innerHTML = '<main>' + loginView() + '</main>'; return; }
@@ -335,7 +344,7 @@
     root.innerHTML = header() + '<main>' + body + '</main>';
     if (soft) window.scrollTo(0, y);
     if (focusBind) { const el = root.querySelector('[data-bind="' + focusBind + '"]'); if (el) el.focus(); }
-  }
+  });
   FA.render = render;
   document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if (!isTyping()) render(true); }, 50); });
 
