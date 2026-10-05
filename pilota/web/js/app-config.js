@@ -350,7 +350,7 @@
           (f.role === 'fisioterapista' ? '<select style="margin-top:4px" data-bind="' + k + '.therapist_id"' + adminOnly() + '><option value="">— quale collega? —</option>' + FA.allTherapists().map(t => FA.option(t.id, t.name, f.therapist_id)).join('') + '</select>' : '') + '</td>' +
           '<td><input type="checkbox" data-bind="' + k + '.active"' + (f.active ? ' checked' : '') + adminOnly() + ' aria-label="Attivo"></td>' +
           '<td><button class="btn small" data-act="us-save" data-id="' + p.user_id + '"' + adminSave() + '>Salva</button></td></tr>';
-      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore</strong> (tutto, compresa la configurazione), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
+      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore e programmatore</strong> (accesso a tutto: configurazione, utenti, backup e tutti i calendari), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
   }
   FA.actions['us-save'] = async el => {
     const id = el.getAttribute('data-id'), f = FA.get('us.' + id);

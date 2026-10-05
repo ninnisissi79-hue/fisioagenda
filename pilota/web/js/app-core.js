@@ -15,7 +15,7 @@
   /* ---------------- utilità ---------------- */
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   FA.esc = esc;
-  FA.roleLabel = r => ({ admin: 'Coordinatore', operatore: 'Segreteria / operatore', fisioterapista: 'Fisioterapista', lettura: 'Sola consultazione' }[r] || '—');
+  FA.roleLabel = r => ({ admin: 'Coordinatore e programmatore', operatore: 'Segreteria / operatore', fisioterapista: 'Fisioterapista', lettura: 'Sola consultazione' }[r] || '—');
   FA.canEdit = () => !!A.me && ['admin', 'operatore', 'fisioterapista'].includes(A.me.role);
   FA.isFisio = () => !!A.me && A.me.role === 'fisioterapista';
   /** Può modificare il calendario di questo fisioterapista? (il fisioterapista solo il proprio; segreteria e coordinatore tutti) */
