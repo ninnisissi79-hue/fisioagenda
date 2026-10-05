@@ -87,6 +87,54 @@
     } catch (e) { f.error = e.message; FA.render(); }
   };
 
+  /* ---------------- nuova assenza da qualunque pagina (ferie, permessi, malattia) ---------------- */
+  FA.openAbsenceNew = function (thId) {
+    const own = FA.activeTherapists().filter(t => FA.canEditTh(t.id));
+    A.ui.an = { therapist_id: thId || (own.length === 1 ? own[0].id : ''), kind: 'ferie', from: E.addDays(A.today, 1), to: '', unknown: false, plan_until: '',
+      span: 'intera', start_time: '', end_time: '', note: '' };
+    FA.openModal({ title: 'Registra ferie, permesso o malattia', wide: true, live: true,
+      body() {
+        const f = A.ui.an;
+        return '<div class="grid2"><div class="field"><label>Fisioterapista</label><select data-bind="an.therapist_id"><option value="">— scegli —</option>' +
+          own.map(t => FA.option(t.id, t.name, f.therapist_id)).join('') + '</select></div>' +
+          '<div class="field"><label>Motivo</label>' + FA.seg('an.kind', Object.entries(E.ABSENCE_KIND), f.kind) + '</div></div>' +
+          '<div class="grid3"><div class="field"><label>Dal</label><input type="date" data-bind="an.from" value="' + esc(f.from) + '"></div>' +
+          (f.unknown ? '<div class="field"><label>Organizza le sostituzioni fino al</label><input type="date" data-bind="an.plan_until" value="' + esc(f.plan_until) + '"></div>'
+            : '<div class="field"><label>Al (compreso; vuoto = un solo giorno)</label><input type="date" data-bind="an.to" value="' + esc(f.to) + '"></div>') +
+          '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="an.unknown" data-rerender' + (f.unknown ? ' checked' : '') + '> Rientro non noto</label></div></div>' +
+          '<div class="field">' + FA.seg('an.span', [['intera', 'Giornata intera'], ['fascia', 'Fascia oraria (es. permesso di qualche ora)']], f.span) + '</div>' +
+          (f.span === 'fascia' ? '<div class="grid3" style="max-width:520px"><div class="field"><label>Dalle</label><input type="time" data-bind="an.start_time" value="' + esc(f.start_time) + '"></div><div class="field"><label>Alle</label><input type="time" data-bind="an.end_time" value="' + esc(f.end_time) + '"></div></div>' : '') +
+          '<div class="field"><label>Nota (facoltativa)</label><input type="text" data-bind="an.note" value="' + esc(f.note) + '"></div>' +
+          '<p class="small muted">Da quando è salvata, il collega non viene più proposto per pazienti o sostituzioni in quei giorni (o in quella fascia). Se ha già pazienti, li trovi in “Da sistemare” con i sostituti proposti.</p>' + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="an-save"' + FA.saveDisabled() + '>' + (A.saving ? 'Salvataggio…' : 'Salva') + '</button>' });
+  };
+  FA.actions['abs-new'] = el => FA.openAbsenceNew(el.getAttribute('data-th') || '');
+  FA.actions['an-save'] = async () => {
+    const f = A.ui.an; f.error = null;
+    if (!f.therapist_id) { f.error = 'Scegli il fisioterapista.'; FA.renderModal(); return; }
+    if (!f.from) { f.error = 'Indica la data di inizio.'; FA.renderModal(); return; }
+    const p = { therapist_id: f.therapist_id, kind: f.kind, start_date: f.from, note: f.note || '' };
+    if (f.unknown) {
+      if (!f.plan_until) { f.error = 'Rientro non noto: indica fino a quando organizzare le sostituzioni.'; FA.renderModal(); return; }
+      p.end_date = null; p.plan_until = f.plan_until;
+    } else {
+      p.end_date = f.to || f.from;
+      if (p.end_date < p.start_date) { f.error = 'La data finale precede quella iniziale.'; FA.renderModal(); return; }
+    }
+    if (f.span === 'fascia') {
+      if (!f.start_time || !f.end_time || f.end_time <= f.start_time) { f.error = 'Indica una fascia oraria valida.'; FA.renderModal(); return; }
+      p.start_time = f.start_time; p.end_time = f.end_time;
+    }
+    try {
+      const abs = await FA.save(E.ABSENCE_KIND[f.kind] + ' registrata', () => FA.rpc('save_absence', { p }));
+      const saved = (A.data.absences || []).find(x => x.id === abs.id) || abs;
+      const n = E.affectedByAbsence(A.ctx, E.normalize({ absences: [saved] }).absences[0]).length;
+      FA.closeModal();
+      if (n) FA.go('assenze', 'piano', abs.id);
+    } catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+
   /* ---------------- modifica / annullamento di un'assenza ---------------- */
   FA.actions['abs-edit'] = el => {
     const a = (A.data.absences || []).find(x => x.id === el.getAttribute('data-id'));

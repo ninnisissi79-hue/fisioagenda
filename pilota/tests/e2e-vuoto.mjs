@@ -204,6 +204,82 @@ try {
   await page.waitForTimeout(500);
   await page.screenshot({ path: '/tmp/claude-0/wk-anna.png', fullPage: true });
 
+  // ferie e permessi da Configurazione e dal calendario
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Ferie e assenze")');
+  await page.click('button:has-text("+ Registra ferie, permesso o malattia")');
+  await page.waitForSelector('.modal');
+  const fFrom = E.addDays(wday, 14);
+  await page.selectOption('.modal select[data-bind="an.therapist_id"]', verdi);
+  await page.fill('.modal input[data-bind="an.from"]', fFrom);
+  await page.fill('.modal input[data-bind="an.to"]', E.addDays(fFrom, 4));
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForTimeout(2000);
+  assert.equal(psql(`select kind||' '||start_date||' '||end_date from absences where therapist_id='${verdi}' and start_date='${fFrom}'`), `ferie ${fFrom} ${E.addDays(fFrom, 4)}`);
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [anna, fFrom]);
+  await page.waitForSelector('button:has-text("Ferie / permesso / malattia")');
+  await page.click('button:has-text("Ferie / permesso / malattia")');
+  await page.click('.modal button[data-act="seg"][data-val="permesso"]');
+  await page.fill('.modal input[data-bind="an.from"]', fFrom);
+  await page.click('.modal button[data-act="seg"][data-val="fascia"]');
+  await page.fill('.modal input[data-bind="an.start_time"]', '12:40');
+  await page.fill('.modal input[data-bind="an.end_time"]', '14:40');
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForTimeout(2000);
+  assert.equal(psql(`select kind||' '||to_char(start_time,'HH24:MI') from absences where therapist_id='${anna}' and start_date='${fFrom}'`), 'permesso 12:40');
+  ok('Ferie (più giorni) da Configurazione e permesso a ore dal calendario del collega');
+  // attività e turni di tutti in una tabella
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Fisioterapisti")');
+  await page.click('button:has-text("Attività e turni")');
+  const bianchi = psql("select id from therapists where name='Bianchi Luca'");
+  await page.selectOption(`.modal select[data-bind="am2.rows.${verdi}.activity"]`, 'ambulatorio');
+  await page.selectOption(`.modal select[data-bind="am2.rows.${bianchi}.schema"]`, 'reparto8');
+  await page.click('.modal button:has-text("Verifica appuntamenti coinvolti")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento"), .modal .form-warn', { timeout: 15000 });
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 20000 });
+  assert.equal(psql(`select activity from therapists where id='${verdi}'`), 'ambulatorio');
+  assert.equal(psql(`select week::text like '%reparto%' from shift_versions where therapist_id='${bianchi}' order by valid_from desc, created_at desc limit 1`), 't');
+  assert.ok(Number(psql(`select count(*) from therapist_skills where therapist_id='${verdi}'`)) >= 1, 'competenze conservate');
+  ok('Tabella “Attività e turni”: attività cambiata e schema di turno applicato, competenze conservate');
+
+  // orari modificati direttamente nel calendario: "Reparto" diventa "Ambulatorio"
+  let ed = E.addDays(psql('select app.today()'), 1); while (E.weekday(ed) >= 6 || psql(`select count(*) from closures where day='${ed}'`) !== '0') ed = E.addDays(ed, 1);
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [bianchi, ed]);
+  await page.waitForSelector('button:has-text("Modifica orari")');
+  await page.click('button:has-text("Modifica orari")');
+  await page.click(`.wk-blk.edit[data-day="${ed}"]:has-text("Reparto")`);
+  await page.waitForSelector('.modal');
+  const kinds = await page.$$eval('.modal select[data-bind^="de.blocks."][data-bind$=".kind"]', ss => ss.map(x => x.value));
+  const ri = kinds.indexOf('reparto');
+  await page.selectOption(`.modal select[data-bind="de.blocks.${ri}.kind"]`, 'amb');
+  await page.click('.modal button[data-act="seg"][data-val="settimanale"]');
+  await page.click('.modal button:has-text("Verifica")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento"), .modal .form-warn', { timeout: 15000 });
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  const wdk = String(E.weekday(ed));
+  assert.equal(psql(`select (week->'${wdk}')::text like '%reparto%' from shift_versions where therapist_id='${bianchi}' order by valid_from desc, created_at desc limit 1`), 'f');
+  assert.equal(psql(`select (week->'${wdk === '1' ? '2' : '1'}')::text like '%reparto%' from shift_versions where therapist_id='${bianchi}' order by valid_from desc, created_at desc limit 1`), 't', 'gli altri giorni della settimana non cambiano');
+  // solo un giorno: variazione giornaliera
+  const ed2 = E.addDays(ed, 7);
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [bianchi, ed2]);
+  await page.waitForTimeout(500);
+  const other = (await page.$$eval('.wk-blk.edit', els => els.filter(e => e.textContent.includes('Reparto')).map(e => e.getAttribute('data-day'))))[0];
+  await page.click(`.wk-blk.edit[data-day="${other}"]:has-text("Reparto")`);
+  const kinds2 = await page.$$eval('.modal select[data-bind^="de.blocks."][data-bind$=".kind"]', ss => ss.map(x => x.value));
+  await page.selectOption(`.modal select[data-bind="de.blocks.${kinds2.indexOf('reparto')}.kind"]`, 'amb');
+  await page.click('.modal button:has-text("Verifica")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento"), .modal .form-warn', { timeout: 15000 });
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(psql(`select blocks::text like '%reparto%' from day_overrides where therapist_id='${bianchi}' and day='${other}'`), 'f');
+  await page.waitForSelector(`.wk-head:has-text("variato")`, { timeout: 10000 });
+  await page.click('button:has-text("Fine modifica orari")');
+  assert.ok((await page.$$(`.wk-free.act[data-day="${other}"]`)).length > 0, 'il giorno variato è prenotabile');
+  ok('Calendario modificabile direttamente: “Reparto” trasformato in “Ambulatorio” per tutti quei giorni della settimana o per un solo giorno');
+
   // account di un fisioterapista: modifica solo il proprio calendario
   await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');
   await page.evaluate(() => { location.hash = '#/config'; });

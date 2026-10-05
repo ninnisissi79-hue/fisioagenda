@@ -241,3 +241,7 @@ tr.clickable:hover td { background: #f6f9fd; }
 .wk-closed { background: rgba(91, 100, 114, .18); color: var(--prot); font-weight: 700; z-index: 3; }
 .wk-other { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
 .wk-other .chip { cursor: pointer; text-align: left; white-space: normal; }
+.wk-amb.edit, .wk-blk.edit { cursor: pointer; outline: 1px dashed var(--primary); outline-offset: -2px; z-index: 1; }
+.wk-amb.edit span { color: var(--ok); font-weight: 600; }
+.wk-amb.edit:hover, .wk-blk.edit:hover { background: var(--primary-soft); }
+.wk-head[data-act] { cursor: pointer; }

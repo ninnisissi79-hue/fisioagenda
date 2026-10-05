@@ -339,6 +339,7 @@
     const y = t => (E.toMin(t) - minS) * PX;
     const box = (s, e, cls, inner, attrs) => '<div class="' + cls + '" style="top:' + y(s) + 'px;height:' + Math.max(14, y(e) - y(s) - 1) + 'px"' + (attrs || '') + '>' + inner + '</div>';
     const can = FA.canEditTh(thId);
+    const edit = FA.isAdmin() && !!A.ui.wkEdit;
     let ruler = '<div class="wk-ruler" style="height:' + H + 'px">';
     for (let m = minS; m <= maxE; m += 30) ruler += '<div class="wk-tick' + (m % 60 ? ' half' : '') + '" style="top:' + (m - minS) * PX + 'px">' + (m % 60 ? '' : E.fromMin(m)) + '</div>';
     ruler += '</div>';
@@ -350,11 +351,14 @@
       const other = appts.filter(a => !E.OCCUPYING.has(a.status) && a.status !== 'spostata' && a.status !== 'liberata');
       let inner = '';
       const closed = ctx.closures.get(d);
+      const deAttr = ' data-act="de-open" data-th="' + thId + '" data-day="' + d + '" role="button" tabindex="0" title="Modifica l’orario di questa giornata"';
       blocks.forEach(b => {
-        inner += b.kind === 'amb' ? box(b.start, b.end, 'wk-amb', '') : box(b.start, b.end, 'wk-blk', '<span>' + esc(E.BLOCK[b.kind]) + '</span>');
+        inner += b.kind === 'amb' ? box(b.start, b.end, 'wk-amb' + (edit ? ' edit' : ''), edit ? '<span>Ambulatorio ' + b.start + '–' + b.end + ' ✎</span>' : '', edit ? deAttr : '')
+          : box(b.start, b.end, 'wk-blk' + (edit ? ' edit' : ''), '<span>' + esc(E.BLOCK[b.kind]) + (edit ? ' ' + b.start + '–' + b.end + ' ✎' : '') + '</span>', edit ? deAttr : '');
       });
+      if (edit && !blocks.length) inner += '<div class="wk-free act" style="top:0;height:60px"' + deAttr + '>+ Imposta l’orario di questo giorno</div>';
       // spazi liberi: ambulatorio meno pazienti e assenze (durata flessibile: si sceglie ora e durata)
-      if (!closed) blocks.filter(b => b.kind === 'amb').forEach(b => {
+      if (!closed && !edit) blocks.filter(b => b.kind === 'amb').forEach(b => {
         const busy = occ.map(a => [E.toMin(a.start_time), E.toMin(a.end_time)])
           .concat(abs.map(x => x.start_time ? [E.toMin(x.start_time), E.toMin(x.end_time)] : [0, 24 * 60])).sort((p, q) => p[0] - q[0]);
         let cur = E.toMin(b.start); const end = E.toMin(b.end);
@@ -381,23 +385,28 @@
           '<div class="wk-abs" style="top:0;height:' + H + 'px">Assente tutto il giorno (' + esc(E.ABSENCE_KIND[x.kind]) + ')' + (x.end_date ? '' : ' · rientro non noto') + '</div>';
       });
       if (closed) inner += '<div class="wk-closed" style="top:0;height:' + H + 'px">Chiuso: ' + esc(closed) + '</div>';
-      return '<div class="wk-day' + (d === A.today ? ' today' : '') + '"><div class="wk-head">' + esc(E.fmtItDay(d)) + '</div>' +
+      return '<div class="wk-day' + (d === A.today ? ' today' : '') + '"><div class="wk-head"' + (edit ? deAttr : '') + '>' + esc(E.fmtItDay(d)) + (edit ? ' ✎' : '') +
+        (ctx.overrides.get(thId + '|' + d) ? ' <span class="chip info" title="Orario modificato solo per questo giorno">variato</span>' : '') + '</div>' +
         '<div class="wk-col" style="height:' + H + 'px">' + inner + '</div>' +
         (other.length ? '<div class="wk-other">' + other.map(a => '<button class="chip ' + (a.status === 'da_riprogrammare' ? 'bad' : 'grey') + '" data-act="open-appt" data-id="' + a.id + '">' +
           a.start_time + ' ' + esc(FA.patName(a.patient_id)) + ' · ' + esc(E.STATUS[a.status]) + ((a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by ? ' · da recuperare' : '') + '</button>').join('') + '</div>' : '') + '</div>';
     }).join('');
-    return '<div class="row between"><h2>Calendario di ' + esc(th.name) + '</h2><a class="btn small" href="#/agenda/' + days[0] + '">Agenda di tutti</a></div>' +
+    return '<div class="row between"><h2>Calendario di ' + esc(th.name) + '</h2><div class="row">' +
+      (can ? '<button class="btn small" data-act="abs-new" data-th="' + thId + '">Ferie / permesso / malattia</button>' : '') +
+      (FA.isAdmin() ? '<button class="btn small ' + (A.ui.wkEdit ? 'primary' : '') + '" data-act="wk-edit">' + (A.ui.wkEdit ? '✓ Fine modifica orari' : '✎ Modifica orari') + '</button>' : '') +
+      '<a class="btn small" href="#/agenda/' + days[0] + '">Agenda di tutti</a></div></div>' +
       '<div class="panel"><div class="row">' +
       '<select style="max-width:260px" data-bind="wkTh" data-on="wk-th">' + FA.activeTherapists().map(t => FA.option(t.id, t.name + (FA.canEditTh(t.id) ? '' : ' (consultazione)'), thId)).join('') + '</select>' +
       '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + E.addDays(mon, -7) + '">◀ Settimana prima</button>' +
       '<button class="btn small" data-act="wk-today" data-th="' + thId + '">Questa settimana</button>' +
       '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + E.addDays(mon, 7) + '">Settimana dopo ▶</button>' +
       '<strong>' + E.fmtIt(days[0]) + ' – ' + E.fmtIt(days[days.length - 1]) + '</strong></div>' +
-      '<p class="small muted" style="margin:6px 0 0">' + (can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (scegli ora e durata: occupa solo il tempo della sua seduta); clicca un paziente per segnare effettuata, assenza, recupero o spostarlo.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p></div>' +
+      '<p class="small muted" style="margin:6px 0 0">' + (edit ? '<strong>Modifica orari:</strong> clicca una fascia o l’intestazione di un giorno per cambiare tipo e orari (solo quel giorno, tutti quei giorni della settimana o tutti i giorni lavorativi). Le fasce “Ambulatorio” sono quelle prenotabili.' : can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (scegli ora e durata: occupa solo il tempo della sua seduta); clicca un paziente per segnare effettuata, assenza, recupero o spostarlo.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p></div>' +
       '<div class="wk-grid" style="grid-template-columns:52px repeat(' + days.length + ', minmax(140px, 1fr))"><div><div class="wk-head">&nbsp;</div>' + ruler + '</div>' + cols + '</div>';
   }
   FA.views.calendario = { render: weekView };
   FA.actions['wk-th'] = el => { const p = (A.params[1] || A.today); FA.go('calendario', el.value, p); };
+  FA.actions['wk-edit'] = () => { A.ui.wkEdit = !A.ui.wkEdit; FA.render(); };
   FA.actions['wk-today'] = el => FA.go('calendario', el.getAttribute('data-th'), A.today);
 
   /* ======================= APPUNTAMENTO ======================= */
