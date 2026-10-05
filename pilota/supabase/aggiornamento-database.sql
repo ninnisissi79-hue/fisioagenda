@@ -113,7 +113,8 @@ grant execute on function public.close_cycle(uuid, int, text, date) to authentic
 -- ---------------- ruoli ----------------
 alter table public.profiles add column if not exists therapist_id uuid references public.therapists(id) on delete set null;
 alter table public.profiles drop constraint if exists profiles_role_check;
-alter table public.profiles add constraint profiles_role_check check (role in ('admin', 'operatore', 'fisioterapista', 'lettura'));
+-- (comprende già 'programmatore', così il file si può rieseguire anche dopo l'aggiornamento successivo)
+alter table public.profiles add constraint profiles_role_check check (role in ('programmatore', 'admin', 'operatore', 'fisioterapista', 'lettura'));
 
 -- 'operatore' come livello minimo = chiunque possa modificare qualcosa (il fisioterapista solo il proprio calendario)
 create or replace function app.require_role(p_min text) returns void
