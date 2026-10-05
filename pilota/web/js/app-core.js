@@ -15,8 +15,12 @@
   /* ---------------- utilità ---------------- */
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   FA.esc = esc;
-  FA.roleLabel = r => ({ admin: 'Coordinatore', operatore: 'Operatore', lettura: 'Sola consultazione' }[r] || '—');
-  FA.canEdit = () => !!A.me && (A.me.role === 'admin' || A.me.role === 'operatore');
+  FA.roleLabel = r => ({ admin: 'Coordinatore', operatore: 'Segreteria / operatore', fisioterapista: 'Fisioterapista', lettura: 'Sola consultazione' }[r] || '—');
+  FA.canEdit = () => !!A.me && ['admin', 'operatore', 'fisioterapista'].includes(A.me.role);
+  FA.isFisio = () => !!A.me && A.me.role === 'fisioterapista';
+  /** Può modificare il calendario di questo fisioterapista? (il fisioterapista solo il proprio; segreteria e coordinatore tutti) */
+  FA.canEditTh = thId => FA.canEdit() && (!FA.isFisio() || !thId || thId === A.me.therapist_id);
+  FA.ownOnly = () => FA.isFisio() ? '<p class="muted small">Puoi modificare solo il tuo calendario. Per i colleghi rivolgiti alla segreteria o al coordinatore.</p>' : '';
   FA.isAdmin = () => !!A.me && A.me.role === 'admin';
   FA.prio = p => '<span class="prio ' + esc(p) + '" title="' + esc(E.PRIORITY[p]) + '">' + esc(p === 'NI' ? '–' : p) + '</span>';
   FA.statusChip = a => {
@@ -314,7 +318,8 @@
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
       '</div><nav class="nav">' + NAV.map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
-      '<div class="pilot-banner">Versione pilota: <strong>solo pazienti fittizi</strong>, non inserire dati reali.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') + '</div>' +
+      '<div class="pilot-banner">Versione pilota: <strong>solo pazienti fittizi</strong>, non inserire dati reali.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
+        (FA.isFisio() ? ' Puoi modificare <strong>solo il tuo calendario</strong>' + (A.me.therapist_id ? (A.ctx ? ' (' + esc(FA.thName(A.me.therapist_id)) + ')' : '') : ' — account non ancora collegato al tuo nome: chiedi al coordinatore') + '.' : '') + '</div>' +
       (A.online ? '' : '<div class="net-banner" role="alert">Connessione assente: puoi consultare i dati già caricati, ma nessuna modifica può essere salvata finché la connessione non torna.</div>') +
       (A.loadError && A.online ? '<div class="net-banner" role="alert">Aggiornamento dei dati non riuscito: ' + esc(A.loadError.message) + ' <button class="btn small" data-act="refresh">Riprova</button></div>' : '');
   }

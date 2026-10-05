@@ -23,7 +23,8 @@
   function step1() {
     const f = absForm();
     const ro = !FA.canEdit();
-    const th = FA.activeTherapists();
+    const th = FA.activeTherapists().filter(t => FA.canEditTh(t.id));
+    if (FA.isFisio() && th.length === 1 && !f.therapist_id) f.therapist_id = th[0].id;
     const current = (A.data.absences || []).filter(a => !a.cancelled && (!a.end_date || a.end_date >= A.today))
       .sort((a, b) => a.start_date < b.start_date ? -1 : 1);
     return '<h2>Assenza di un fisioterapista</h2>' +
@@ -191,7 +192,8 @@
       });
       html += '<div class="sticky-foot"><span>' + rows.length + ' appuntamenti · ' +
         (nBad ? '<span class="chip bad">' + nBad + ' da correggere' + (nAlt ? ' (' + nAlt + ' alternative sullo stesso posto)' : '') + '</span>' : '<span class="chip ok">✓ tutte le scelte sono compatibili</span>') + '</span><span class="grow"></span>' +
-        '<button class="btn primary" data-act="plan-review" data-id="' + abs.id + '"' + (nBad || !FA.canEdit() || !A.online ? ' disabled' : '') + '>Rivedi e conferma</button></div></div>';
+        '<button class="btn primary" data-act="plan-review" data-id="' + abs.id + '"' + (nBad || !FA.canEdit() || FA.isFisio() || !A.online ? ' disabled' : '') + '>Rivedi e conferma</button>' +
+        (FA.isFisio() ? '<span class="small muted">Le sostituzioni sui calendari dei colleghi le conferma la segreteria o il coordinatore.</span>' : '') + '</div></div>';
     }
     if (P.lastResult) html += '<div class="panel">' + P.lastResult + '</div>';
     if (done.length || resched.length) {

@@ -338,22 +338,23 @@
   /* ---------------- utenti ---------------- */
   function usersTab() {
     const list = (A.data.profiles || []).slice().sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
-    return '<div class="form-note"><strong>Come aggiungere un collega:</strong> nel pannello di Supabase apri <em>Authentication → Users → Add user → Send invitation</em> (oppure “Create new user”). ' +
+    return '<div class="form-note"><strong>Come aggiungere un collega:</strong> nel pannello di Supabase apri <em>Authentication → Users → Add user → Create new user</em> con password temporanea e “Auto Confirm User”. ' +
       'Il nuovo account compare qui in <em>sola consultazione</em>: assegna il ruolo. La registrazione libera è disattivata.</div>' +
       '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Attivo</th><th></th></tr></thead><tbody>' +
       list.map(p => {
         const k = 'us.' + p.user_id;
-        if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name });
+        if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name, therapist_id: p.therapist_id || '' });
         const f = FA.get(k);
         return '<tr><td><input type="text" data-bind="' + k + '.full_name" value="' + esc(f.full_name) + '"' + adminOnly() + '></td><td>' + esc(p.email) + '</td>' +
-          '<td><select data-bind="' + k + '.role"' + adminOnly() + '>' + ['admin', 'operatore', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select></td>' +
+          '<td><select data-bind="' + k + '.role" data-rerender' + adminOnly() + '>' + ['admin', 'operatore', 'fisioterapista', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select>' +
+          (f.role === 'fisioterapista' ? '<select style="margin-top:4px" data-bind="' + k + '.therapist_id"' + adminOnly() + '><option value="">— quale collega? —</option>' + FA.allTherapists().map(t => FA.option(t.id, t.name, f.therapist_id)).join('') + '</select>' : '') + '</td>' +
           '<td><input type="checkbox" data-bind="' + k + '.active"' + (f.active ? ' checked' : '') + adminOnly() + ' aria-label="Attivo"></td>' +
           '<td><button class="btn small" data-act="us-save" data-id="' + p.user_id + '"' + adminSave() + '>Salva</button></td></tr>';
-      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore</strong> (tutto, compresa la configurazione), <strong>Operatore</strong> (agenda, assenze, pazienti), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
+      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Coordinatore</strong> (tutto, compresa la configurazione), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
   }
   FA.actions['us-save'] = async el => {
     const id = el.getAttribute('data-id'), f = FA.get('us.' + id);
-    try { await FA.save('Utente', () => FA.rpc('admin_set_user', { p_user: id, p_role: f.role, p_active: !!f.active, p_full_name: f.full_name || '' })); A.ui.us = null; FA.render(); }
+    try { await FA.save('Utente', () => FA.rpc('admin_set_user', { p_user: id, p_role: f.role, p_active: !!f.active, p_full_name: f.full_name || '', p_therapist: f.role === 'fisioterapista' && f.therapist_id ? f.therapist_id : null })); A.ui.us = null; FA.render(); }
     catch (e) { A.ui.us = null; FA.render(); }
   };
 

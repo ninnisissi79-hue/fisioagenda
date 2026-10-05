@@ -8,7 +8,7 @@
   const eligibleTherapists = catId => FA.activeTherapists().map(t => ({ t, level: E.skillLevel(A.ctx, t.id, catId) }))
     .filter(x => x.level).sort((a, b) => (a.level === b.level ? 0 : a.level === 'specifica' ? -1 : 1) || a.t.name.localeCompare(b.t.name));
   const thOptions = (catId, cur) => {
-    const l = eligibleTherapists(catId);
+    const l = eligibleTherapists(catId).filter(x => FA.canEditTh(x.t.id));
     const spec = l.filter(x => x.level === 'specifica'), ab = l.filter(x => x.level !== 'specifica');
     return (spec.length ? '<optgroup label="★ Competenza specifica">' + spec.map(x => FA.option(x.t.id, x.t.name, cur)).join('') + '</optgroup>' : '') +
       (ab.length ? '<optgroup label="Altri abilitati">' + ab.map(x => FA.option(x.t.id, x.t.name, cur)).join('') + '</optgroup>' : '');
@@ -18,12 +18,33 @@
 
   /** Ciclo già iniziato: sedute svolte prima dell'inserimento (si prenotano solo le rimanenti). */
   function priorField(path, f) {
-    if (f.request_type !== 'continuazione') { f.prior = 0; return ''; }
+    if (f.request_type !== 'continuazione') { f.prior = 0; f.started = ''; return cycleForecastFields(path, f); }
     const n = Number(f.sessions || f.planned || 10);
+    // "Iniziato il": le sedute già svolte si calcolano dai giorni della settimana, saltando le festività
+    if (f.started && f.started < A.today && (f.weekdays || []).length) {
+      let k = 0;
+      for (let d = f.started; d < A.today; d = E.addDays(d, 1)) if (f.weekdays.includes(E.weekday(d)) && !A.ctx.closures.has(d)) k++;
+      f.prior = Math.min(k, n - 1);
+    }
     if (!(Number(f.prior) >= 0) || Number(f.prior) >= n) f.prior = 0;
-    return '<div class="field" style="max-width:520px"><label>Sedute già svolte (ciclo in corso)</label><input type="number" min="0" max="' + (n - 1) + '" data-num data-bind="' + path + '.prior" data-rerender value="' + esc(f.prior || 0) + '">' +
-      '<div class="help">Contate come effettuate. Si prenotano solo le ' + (n - (Number(f.prior) || 0)) + ' sedute rimanenti.</div></div>';
+    return '<div class="grid2" style="max-width:720px"><div class="field"><label>Iniziato il (prima seduta reale)</label><input type="date" max="' + A.today + '" data-bind="' + path + '.started" data-rerender value="' + esc(f.started || '') + '">' +
+      '<div class="help">Calcola da solo le sedute già svolte nei giorni scelti qui sotto.</div></div>' +
+      '<div class="field"><label>Sedute già svolte</label><input type="number" min="0" max="' + (n - 1) + '" data-num data-bind="' + path + '.prior" data-rerender value="' + esc(f.prior || 0) + '"' + (f.started ? ' disabled' : '') + '>' +
+      '<div class="help">Contate come effettuate. Si prenotano solo le ' + (n - (Number(f.prior) || 0)) + ' sedute rimanenti.</div></div></div>' + cycleForecastFields(path, f);
   }
+  /** Ciclo n. X di Y previsti, ipotetica o confermata. */
+  function cycleForecastFields(path, f) {
+    if (f.cycle_number == null) f.cycle_number = 1;
+    const nums = [1, 2, 3, 4, 5, 6];
+    if (f.expected_cycles && Number(f.expected_cycles) < Number(f.cycle_number)) f.expected_cycles = '';
+    return '<div class="grid3" style="max-width:720px"><div class="field"><label>Questo è il ciclo n.</label><select data-bind="' + path + '.cycle_number" data-rerender>' + nums.map(n => FA.option(n, String(n), f.cycle_number)).join('') + '</select></div>' +
+      '<div class="field"><label>Cicli previsti in totale</label><select data-bind="' + path + '.expected_cycles" data-rerender>' + FA.option('', 'Non indicato', f.expected_cycles) +
+      nums.filter(n => n >= Number(f.cycle_number)).map(n => FA.option(n, String(n), f.expected_cycles)).join('') + '</select></div>' +
+      (f.expected_cycles ? '<div class="field"><label>Previsione</label>' + FA.seg(path + '.expected_certain', [['false', 'Ipotetica'], ['true', 'Confermata']], String(!!(f.expected_certain === true || f.expected_certain === 'true'))) + '</div>' : '') + '</div>';
+  }
+  const cyclePayload = f => ({ cycle_number: Number(f.cycle_number) || 1, expected_cycles: f.expected_cycles ? Number(f.expected_cycles) : '',
+    expected_certain: f.expected_certain === true || f.expected_certain === 'true' });
+  FA.cycleForecastText = c => 'Ciclo ' + (c.cycle_number || 1) + (c.expected_cycles ? ' di ' + c.expected_cycles + ' previsti (' + (c.expected_certain ? 'confermato' : 'ipotetico') + ')' : '');
   const remaining = f => Number(f.sessions) - (f.request_type === 'continuazione' ? (Number(f.prior) || 0) : 0);
 
   /* ======================= TROVA POSTO ======================= */
@@ -57,8 +78,8 @@
       '<div class="grid3"><div class="field"><label>Durata della seduta</label>' + FA.seg('find.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration) + '</div>' +
       '<div class="field"><label>Sedute del ciclo</label>' + FA.seg('find.sessions', E.SESSION_PRESETS.map(n => [n, String(n)]), f.sessions) + '</div>' +
       '<div class="field"><label for="f-from">A partire dal</label><input id="f-from" type="date" data-bind="find.from" value="' + esc(f.from || A.today) + '" min="' + A.today + '"></div></div>' +
-      priorField('find', f) +
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('find.weekdays', f.weekdays) + '</div>' +
+      priorField('find', f) +
       '<div class="field"><label class="inline-check"><input type="checkbox" data-bind="find.pref" data-rerender' + (f.pref ? ' checked' : '') + '> Indica una fascia oraria preferita</label>' +
       (f.pref ? '<div class="grid3" style="max-width:640px"><div class="field"><label>Dalle</label><input type="time" data-bind="find.prefFrom" value="' + esc(f.prefFrom || '') + '"></div>' +
         '<div class="field"><label>Alle</label><input type="time" data-bind="find.prefTo" value="' + esc(f.prefTo || '') + '"></div>' +
@@ -94,7 +115,7 @@
         '<td>' + esc(f.weekdays.map(d => E.WD_SHORT[d]).join('-')) + '<br><span class="small muted">dal ' + E.fmtIt(o.firstDate) + ' al ' + E.fmtIt(o.lastDate) + '</span></td>' +
         '<td>' + (certain ? '<span class="chip ok">✓ Certo' + (o.firstDate <= soon ? ' · disponibile subito' : ' · dal ' + E.fmtItDay(o.firstDate)) + '</span>'
           : '<span class="chip warn">? Probabile · non prenotabile</span><div class="small">Dipende dalla conclusione di: ' + esc(deps.join(', ')) + '</div>') + '</td>' +
-        '<td class="nowrap">' + (certain ? '<button class="btn small primary" data-act="find-book" data-i="' + i + '"' + FA.saveDisabled() + '>Prenota…</button>' : '') + '</td></tr>';
+        '<td class="nowrap">' + (certain && FA.canEditTh(o.therapist_id) ? '<button class="btn small primary" data-act="find-book" data-i="' + i + '"' + FA.saveDisabled() + '>Prenota…</button>' : '') + '</td></tr>';
     };
     const spec = r.map((o, i) => [o, i]).filter(([o]) => o.level === 'specifica');
     const ab = r.map((o, i) => [o, i]).filter(([o]) => o.level !== 'specifica');
@@ -120,7 +141,7 @@
   };
   function reqPayload(f) {
     return { patient_name: (f.patient_name || '').trim(), category_id: f.category_id, priority: f.priority, request_type: f.request_type,
-      duration: Number(f.duration), planned_sessions: Number(f.sessions), prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays,
+      duration: Number(f.duration), planned_sessions: Number(f.sessions), prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays, ...cyclePayload(f),
       preference: f.pref && f.prefFrom ? 'Preferenza ' + f.prefFrom + '–' + (f.prefTo || '') : '' };
   }
   FA.actions['find-book'] = el => {
@@ -185,7 +206,7 @@
     FA.render();
   };
   function freeSlot(th, day, from, to, extra) {
-    const can = FA.canEdit() && day >= A.today;
+    const can = FA.canEditTh(th) && day >= A.today;
     return '<div class="slot free' + (can ? ' appt' : '') + '"' + (can ? ' data-act="ag-book" data-th="' + th + '" data-day="' + day + '" data-start="' + from + '" data-end="' + to + '" role="button" tabindex="0" title="Prenota un paziente in questo posto"' : '') +
       '><span class="t">' + from + '–' + to + '</span><span>libero' + extra + (can ? ' · <strong>+ prenota</strong>' : '') + '</span></div>';
   }
@@ -270,8 +291,8 @@
       '<div class="grid3"><div class="field"><label>Ora di inizio</label><input type="time" step="300" data-bind="qb.start" data-rerender value="' + esc(f.start) + '"></div>' +
       '<div class="field"><label>Durata</label>' + (cyc ? '<div>' + dur + ' min</div>' : FA.seg('qb.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration)) + '</div>' +
       '<div class="field"><label>Sedute</label>' + (cyc ? '<div>' + n + '</div>' : FA.seg('qb.sessions', E.SESSION_PRESETS.map(x => [x, String(x)]), f.sessions)) + '</div></div>' +
-      (cyc ? (cyc.prior_sessions ? '<p class="small">Sedute già svolte prima dell’inserimento: ' + cyc.prior_sessions + '</p>' : '') : priorField('qb', f)) +
       '<div class="field"><label>Giorni della settimana</label>' + wdChecks('qb.weekdays', f.weekdays) + '</div>' +
+      (cyc ? (cyc.prior_sessions ? '<p class="small">Sedute già svolte prima dell’inserimento: ' + cyc.prior_sessions + '</p>' : '') : priorField('qb', f)) +
       (checks.length ? (bad.length ? '<div class="form-error">✗ ' + bad.length + ' date non disponibili: cambia ora, giorni o durata.</div>' : '<div class="form-note">✓ Tutte le ' + n + ' sedute da prenotare sono disponibili (festività saltate).</div>') +
         '<div class="checks">' + checks.map(x => '<span class="chip ' + (x.chk ? 'bad' : 'blue') + '" title="' + esc(x.chk ? x.chk.msg : '') + '">' + (x.chk ? '✗ ' : '') + esc(E.fmtItDay(x.d)) + '</span>').join('') + '</div>' +
         (bad.length ? '<ul class="small">' + bad.slice(0, 4).map(x => '<li>' + esc(E.fmtItDay(x.d) + ': ' + x.chk.msg) + '</li>').join('') + '</ul>' : '') : '') +
@@ -284,7 +305,7 @@
       if (f.mode === 'nuovo') {
         const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), category_id: f.category_id, priority: f.priority,
           request_type: f.request_type, duration: Number(f.duration), planned_sessions: Number(f.sessions),
-          prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays } }));
+          prior_sessions: f.request_type === 'continuazione' ? Number(f.prior) || 0 : 0, weekdays: f.weekdays, ...cyclePayload(f) } }));
         cycleId = r.cycle_id; version = 1; f.mode = 'attesa'; f.cycle_id = cycleId;
       } else version = A.ctx.cyc.get(cycleId).version;
       const c = A.ctx.cyc.get(cycleId);
@@ -331,6 +352,7 @@
       (a.reason ? '<p class="small">Motivo: ' + esc(a.reason) + '</p>' : '') + (a.note ? '<p class="small">Nota: ' + esc(a.note) + '</p>' : '') +
       iss.map(i => '<div class="form-error">⚠ ' + esc(i.message) + '</div>').join('');
     if (!FA.canEdit()) return h + '<p class="muted">Profilo di sola consultazione.</p>';
+    if (!FA.canEditTh(a.therapist_id)) return h + FA.ownOnly();
     const canOutcome = ['programmata', 'effettuata', 'assente', 'annullata'].includes(a.status) && !a.recovered_by;
     const canMove = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const canRecover = (a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by && cyc.status === 'attivo';
@@ -417,9 +439,9 @@
     const ctx = A.ctx, cnt = E.cycleCounts(ctx, c.id);
     const appts = (ctx.byCycle.get(c.id) || []);
     const stChip = '<span class="chip ' + ({ attivo: 'ok', sospeso: 'warn', chiuso: 'grey', in_attesa: 'blue' }[c.status]) + '">' + esc(E.CYCLE_STATUS[c.status]) + '</span>';
-    const ro = FA.disabledIfReadOnly();
+    const ro = FA.canEditTh(c.therapist_id) ? '' : ' disabled title="Puoi modificare solo il tuo calendario"';
     let h = '<div class="panel" id="cy-' + c.id + '"><div class="row between"><div><h3 style="margin:0">' + esc(FA.catName(c.category_id)) + ' ' + stChip + ' ' + FA.prio(c.priority) + '</h3>' +
-      '<div class="muted small">' + esc(E.REQUEST[c.request_type]) + ' · ' + c.duration + ' min · ' + c.planned_sessions + ' sedute previste' +
+      '<div class="muted small">' + esc(E.REQUEST[c.request_type]) + ' · ' + esc(FA.cycleForecastText(c)) + ' · ' + c.duration + ' min · ' + c.planned_sessions + ' sedute previste' +
       (c.therapist_id ? ' · titolare <strong>' + esc(FA.thName(c.therapist_id)) + '</strong>' : '') + (c.start_time ? ' · ' + esc((c.weekdays || []).map(d => E.WD_SHORT[d]).join('-')) + ' alle ' + c.start_time : '') + '</div>' +
       (c.status === 'sospeso' ? '<div class="form-warn" style="margin-top:6px">Sospeso dal ' + E.fmtIt(c.suspended_from) + ' · ' + esc(E.SUSPENSION[c.suspension_reason] || '') + (c.suspension_note ? ' (' + esc(c.suspension_note) + ')' : '') +
         ' · posti ' + (c.suspension_keep ? 'mantenuti, rivalutazione il ' + E.fmtIt(c.review_date) : 'liberati') + '</div>' : '') +
@@ -471,7 +493,8 @@
   FA.actions['cy-info'] = el => {
     const c = A.ctx.cyc.get(el.getAttribute('data-id'));
     A.ui.ci = { id: c.id, version: c.version, priority: c.priority, request_type: c.request_type, planned_sessions: c.planned_sessions, note: c.note, preference: c.preference,
-      duration: c.duration, category_id: c.category_id, weekdays: (c.weekdays || []).slice(), waiting: c.status === 'in_attesa' };
+      duration: c.duration, category_id: c.category_id, weekdays: (c.weekdays || []).slice(), waiting: c.status === 'in_attesa',
+      cycle_number: c.cycle_number || 1, expected_cycles: c.expected_cycles || '', expected_certain: !!c.expected_certain };
     FA.openModal({ title: 'Dati del ciclo',
       body() {
         const f = A.ui.ci;
@@ -481,6 +504,7 @@
           (f.waiting ? '<div class="grid2"><div class="field"><label>Percorso</label><select data-bind="ci.category_id">' + FA.categories().map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
             '<div class="field"><label>Durata</label>' + FA.seg('ci.duration', E.DURATIONS.map(d => [d, d + ' min']), f.duration) + '</div></div>' +
             '<div class="field"><label>Giorni preferiti</label>' + wdChecks('ci.weekdays', f.weekdays) + '</div>' : '') +
+          cycleForecastFields('ci', f) +
           '<div class="field"><label>Preferenze</label><input type="text" data-bind="ci.preference" value="' + esc(f.preference || '') + '"></div>' +
           '<div class="field"><label>Nota</label><input type="text" data-bind="ci.note" value="' + esc(f.note || '') + '"></div>' +
           '<p class="muted small">Priorità e tipo di richiesta non modificano gli appuntamenti già prenotati.</p>' + FA.errBox(f.error);
@@ -489,7 +513,7 @@
   };
   FA.actions['cy-info-save'] = async () => {
     const f = A.ui.ci;
-    const p = { priority: f.priority, request_type: f.request_type, planned_sessions: Number(f.planned_sessions), note: f.note || '', preference: f.preference || '' };
+    const p = { priority: f.priority, request_type: f.request_type, planned_sessions: Number(f.planned_sessions), note: f.note || '', preference: f.preference || '', ...cyclePayload(f) };
     if (f.waiting) Object.assign(p, { category_id: f.category_id, duration: Number(f.duration), weekdays: f.weekdays });
     try { await FA.save('Dati del ciclo', () => FA.rpc('update_cycle_info', { p_cycle: f.id, p_version: f.version, p })); FA.closeModal(); }
     catch (e) { f.error = e.message; FA.renderModal(); }

@@ -437,3 +437,47 @@ test('ciclo già in corso: si prenotano solo le sedute rimanenti, quelle già sv
   assert.equal(c.mancanoDaProgrammare, 0);
   await expectError(S.rpc(op1, 'create_request', { p: { patient_name: 'Troppe ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5, prior_sessions: 5 } }), null);
 });
+
+test('ruolo fisioterapista: modifica solo il proprio calendario; segreteria e coordinatore tutti', async () => {
+  const ids = await team('ruo', { A: [['mano', 'specifica']], B: [['mano', 'specifica']] });
+  await ensureUser('fisio@pilota.test', 'fisioterapista', 'Fisio Uno');
+  const fisio = await login('fisio@pilota.test');
+  // account non ancora collegato a un fisioterapista: nessuna modifica
+  const [d] = workdays(E.addDays(T0, 1), 1);
+  await expectError(S.rpc(fisio, 'create_request', { p: { patient_name: 'Senza link ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } }), 'FA_PERM', /non è collegato/);
+  const r0 = await S.rpc(op1, 'create_request', { p: { patient_name: 'Proprio ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+  await expectError(S.rpc(fisio, 'book_cycle', { p_cycle: r0.cycle_id, p_version: 1, p_therapist: ids.A, p_start: '08:00', p_weekdays: [E.weekday(d)], p_dates: weekly(d, 5) }), 'FA_PERM', /non è collegato/);
+  // il coordinatore collega l'account al fisioterapista A
+  const uid = psql("select user_id from profiles where email='fisio@pilota.test'");
+  await expectError(S.rpc(admin, 'admin_set_user', { p_user: uid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Uno', p_therapist: null }), 'FA_INPUT', /quale collega/);
+  await S.rpc(admin, 'admin_set_user', { p_user: uid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Uno', p_therapist: ids.A });
+  const fis = await login('fisio@pilota.test');
+  assert.equal((await S.rpc(fis, 'whoami', {})).therapist_id, ids.A);
+  // proprio calendario: sì
+  await S.rpc(fis, 'book_cycle', { p_cycle: r0.cycle_id, p_version: 1, p_therapist: ids.A, p_start: '08:00', p_weekdays: [E.weekday(d)], p_dates: weekly(d, 5) });
+  const own = apptOf(r0.cycle_id, d);
+  await S.rpc(fis, 'move_appointment', { p_id: own.id, p_version: own.version, p_therapist: ids.A, p_day: d, p_start: '08:30', p_note: '' });
+  await S.rpc(fis, 'save_absence', { p: { therapist_id: ids.A, kind: 'permesso', start_date: E.addDays(d, 60), end_date: E.addDays(d, 60) } });
+  // calendario di un collega: no
+  const r1 = await S.rpc(fis, 'create_request', { p: { patient_name: 'Altrui ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+  await expectError(S.rpc(fis, 'book_cycle', { p_cycle: r1.cycle_id, p_version: 1, p_therapist: ids.B, p_start: '09:00', p_weekdays: [E.weekday(d)], p_dates: weekly(d, 5) }), 'FA_PERM', /solo il tuo calendario/);
+  const moved = apptOf(r0.cycle_id, d);
+  await expectError(S.rpc(fis, 'move_appointment', { p_id: moved.id, p_version: moved.version, p_therapist: ids.B, p_day: d, p_start: '10:00', p_note: '' }), 'FA_PERM');
+  await expectError(S.rpc(fis, 'save_absence', { p: { therapist_id: ids.B, kind: 'ferie', start_date: d, end_date: d } }), 'FA_PERM');
+  await expectError(S.rpc(fis, 'apply_substitutions', { p_items: [{ appointment_id: moved.id, version: moved.version, action: 'sostituisci', therapist_id: ids.B, start_time: '08:30', kind: 'singola' }] }), 'FA_PERM');
+  const rb = await book(op1, { name: 'Di B', cat: 'mano', th: ids.B, start: '11:00', dates: weekly(d, 5) });
+  const ab = apptOf(rb.cycle_id, d);
+  await expectError(S.rpc(fis, 'register_outcome', { p_id: ab.id, p_version: ab.version, p_status: 'assente', p_to_recover: true }), 'FA_PERM');
+  await expectError(S.rpc(fis, 'admin_save_shift', { p_th: ids.A, p_valid_from: E.addDays(T0, 30), p_week: WEEK, p_note: '', p_dry_run: false }), 'FA_PERM', /coordinatore/);
+  // la segreteria (operatore) modifica qualunque calendario
+  await S.rpc(op2, 'move_appointment', { p_id: moved.id, p_version: moved.version, p_therapist: ids.B, p_day: d, p_start: '08:30', p_note: 'segreteria' });
+});
+
+test('previsione dei cicli: ciclo n. di cicli previsti, ipotetica o confermata', async () => {
+  const r = await S.rpc(op1, 'create_request', { p: { patient_name: 'Previsione ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 10,
+    cycle_number: 2, expected_cycles: 3, expected_certain: false } });
+  assert.equal(psql(`select cycle_number||'/'||expected_cycles||'/'||expected_certain from cycles where id='${r.cycle_id}'`), '2/3/false');
+  await S.rpc(op1, 'update_cycle_info', { p_cycle: r.cycle_id, p_version: 1, p: { expected_cycles: 4, expected_certain: true } });
+  assert.equal(psql(`select cycle_number||'/'||expected_cycles||'/'||expected_certain from cycles where id='${r.cycle_id}'`), '2/4/true');
+  await expectError(S.rpc(op1, 'update_cycle_info', { p_cycle: r.cycle_id, p_version: 2, p: { expected_cycles: 1 } }), 'FA_INPUT', /non coerenti/);
+});

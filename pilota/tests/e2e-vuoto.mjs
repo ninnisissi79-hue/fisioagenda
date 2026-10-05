@@ -92,15 +92,20 @@ try {
   await page.fill('.modal input[data-bind="qb.name"]', 'Paziente In Corso');
   await page.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
   await page.selectOption('.modal select[data-bind="qb.request_type"]', 'continuazione');
-  await page.fill('.modal input[data-bind="qb.prior"]', '3');
-  await page.dispatchEvent('.modal input[data-bind="qb.prior"]', 'change');
-  await page.waitForSelector('.modal .form-note:has-text("Tutte le 7 sedute")', { timeout: 10000 });
+  const started = E.addDays(day, -21);
+  await page.fill('.modal input[data-bind="qb.started"]', started);
+  await page.dispatchEvent('.modal input[data-bind="qb.started"]', 'change');
+  await page.selectOption('.modal select[data-bind="qb.expected_cycles"]', '2');
+  const t0 = psql('select app.today()');
+  let k = 0; for (let x = started; x < t0; x = E.addDays(x, 1)) if (E.weekday(x) === E.weekday(day) && psql(`select count(*) from closures where day='${x}'`) === '0') k++;
+  await page.waitForSelector(`.modal .form-note:has-text("Tutte le ${10 - k} sedute")`, { timeout: 10000 });
   await page.click('.modal button:has-text("Conferma e salva")');
   await page.waitForSelector('h2:has-text("Paziente In Corso")', { timeout: 15000 });
   const sheet = await page.textContent('main');
-  assert.match(sheet, /Effettuate: 3 \(di cui 3 prima dell’inserimento\)/);
-  assert.match(sheet, /Programmate: 7/);
-  ok('Ciclo già in corso: 3 sedute già svolte contate come effettuate, prenotate solo le 7 rimanenti');
+  assert.match(sheet, new RegExp('Effettuate: ' + k + ' \\(di cui ' + k + ' prima dell’inserimento\\)'));
+  assert.match(sheet, new RegExp('Programmate: ' + (10 - k)));
+  assert.match(sheet, /Ciclo 1 di 2 previsti \(ipotetico\)/);
+  ok('Ciclo iniziato prima di oggi: dalla data di inizio l’app conta le sedute già svolte e prenota solo le rimanenti; previsione 1 di 2 cicli (ipotetica)');
 
   // assenza del fisioterapista e sostituzione
   await page.evaluate(() => { location.hash = '#/oggi'; });
@@ -118,6 +123,29 @@ try {
   assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id join patients p on p.id=a.patient_id where a.day='${day}' and p.name='Paziente Prova'`), 'Verdi Marco');
   assert.equal(psql(`select count(*) from appointments where therapist_id='${anna}' and day > '${day}'`), '4', 'il resto del ciclo resta a Rossi Anna');
   ok('Assenza di Rossi Anna: il paziente passa a Verdi Marco allo stesso orario solo per quel giorno');
+  // account di un fisioterapista: modifica solo il proprio calendario
+  await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Utenti")');
+  const fuid = psql("select user_id from profiles where email='fisio@pilota.test'");
+  await page.selectOption(`select[data-bind="us.${fuid}.role"]`, 'fisioterapista');
+  await page.selectOption(`select[data-bind="us.${fuid}.therapist_id"]`, anna);
+  await page.click(`button[data-act="us-save"][data-id="${fuid}"]`);
+  await page.waitForTimeout(1500);
+  assert.equal(psql(`select role||'/'||therapist_id from profiles where user_id='${fuid}'`), 'fisioterapista/' + anna);
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const pf = await ctx2.newPage(); pf.on('pageerror', e => errors.push('fisio: ' + e.message));
+  await pf.goto(`http://localhost:${PORT}/#/agenda/${day}`);
+  await pf.fill('#em', 'fisio@pilota.test'); await pf.fill('#pw', PASSWORD); await pf.click('button[type=submit]');
+  await pf.waitForSelector('.agenda-grid', { timeout: 20000 });
+  assert.match(await pf.textContent('.pilot-banner'), /solo il tuo calendario/);
+  const cards = await pf.$$eval('.th-card', cs => cs.map(c => ({ name: c.querySelector('h4 span').textContent, book: !!c.querySelector('[data-act="ag-book"]') })));
+  assert.ok(cards.find(c => c.name === 'Rossi Anna').book, 'prenota sul proprio calendario');
+  assert.ok(!cards.filter(c => c.name !== 'Rossi Anna').some(c => c.book), 'nessun "+ prenota" sui colleghi');
+  await pf.click('.th-card:has-text("Verdi Marco") .slot.appt[data-act="open-appt"] >> nth=0');
+  await pf.waitForSelector('.modal');
+  assert.match(await pf.textContent('.modal'), /Puoi modificare solo il tuo calendario/);
+  ok('Account fisioterapista collegato a Rossi Anna: modifica solo il proprio calendario, vede quelli dei colleghi');
   assert.deepEqual(errors, []);
   ok('Nessun errore JavaScript');
   console.log('\nProva da archivio vuoto riuscita.');
