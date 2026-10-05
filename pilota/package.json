@@ -11,7 +11,8 @@
     "test": "node --test tests/engine.test.mjs",
     "test:server": "node --test --test-concurrency=1 tests/server.test.mjs",
     "test:e2e": "node tests/e2e.mjs",
-    "build": "node tools/build.mjs"
+    "build": "node tools/build.mjs",
+    "test:e2e-vuoto": "node tests/e2e-vuoto.mjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.117.2",

@@ -98,7 +98,7 @@
     return '<div class="row"><div class="field" style="min-width:280px"><label>Fisioterapista</label><select data-bind="shTh" data-rerender>' + FA.allTherapists().map(t => FA.option(t.id, t.name, th)).join('') + '</select></div>' +
       '<span class="grow"></span><button class="btn primary small" data-act="sh-new"' + adminOnly() + '>Nuovo turno con decorrenza…</button>' +
       '<button class="btn small" data-act="ov-new"' + adminOnly() + '>Variazione di un giorno…</button></div>' +
-      '<p class="muted small">Ogni collega ha il proprio turno: gli orari dei dati di esempio sono indicativi e modificabili singolarmente. Un nuovo turno vale dalla data di decorrenza; i turni precedenti restano nello storico.</p>' +
+      '<p class="muted small">Ogni collega ha il proprio turno, modificabile singolarmente (gli schemi pronti sono solo un punto di partenza). Un nuovo turno vale dalla data di decorrenza; i turni precedenti restano nello storico.</p>' +
       (cur ? '<h4>In vigore oggi (dal ' + E.fmtIt(cur.valid_from) + ')' + (cur.note ? ' · ' + esc(cur.note) : '') + '</h4>' + weekGrid(cur.week) : '<div class="form-warn">Nessun turno in vigore oggi.</div>') +
       future.map(v => '<h4 style="margin-top:14px">Dal ' + E.fmtIt(v.valid_from) + ' (programmato)' + (v.note ? ' · ' + esc(v.note) : '') + '</h4>' + weekGrid(v.week)).join('') +
       '<h4 style="margin-top:14px">Storico dei turni</h4><ul class="list">' + versions.map(v => '<li>Dal ' + E.fmtIt(v.valid_from) + ' · ' + esc(v.note || '') + ' <span class="muted small">(registrato il ' + new Date(v.created_at).toLocaleDateString('it-IT') + ')</span></li>').join('') + '</ul>' +
