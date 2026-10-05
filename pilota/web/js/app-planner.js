@@ -188,6 +188,7 @@
 
   /* ---------------- disegno con il puntatore ---------------- */
   let drag = null;
+  FA.gestureActive = () => !!drag;
   const snapM = (m, step) => Math.round(m / step) * step;
   /** minuto sotto il puntatore: si aggancia ai bordi delle fasce vicine (entro 6′), altrimenti alla griglia (15′, Alt = 5′) */
   function pointerMin(col, clientY, step, edges) {
@@ -253,6 +254,7 @@
     if (!drag) return;
     const d = drag; drag = null;
     if (d.el) d.el.remove();
+    setTimeout(FA.flushPending, 0);
     const P = A.ui.pt;
     let blocks = viewBlocks(d.th, d.d);
     if (!d.moved) {

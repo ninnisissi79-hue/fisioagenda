@@ -348,6 +348,8 @@
       return;
     }
     if (soft && isTyping() && root.contains(document.activeElement)) { pending = true; renderHeaderOnly(); return; }
+    // mentre si trascina sul calendario i dati arrivati dagli altri si mostrano al rilascio
+    if (soft && FA.gestureActive && FA.gestureActive()) { pending = true; renderHeaderOnly(); return; }
     pending = false;
     const view = FA.views[A.view] || FA.views.oggi;
     let body;
@@ -360,6 +362,7 @@
     if (focusBind) { const el = root.querySelector('[data-bind="' + focusBind + '"]'); if (el) el.focus(); }
   });
   FA.render = render;
+  FA.flushPending = () => { if (pending) render(true); };
   document.addEventListener('focusout', () => { if (pending) setTimeout(() => { if (!isTyping()) render(true); }, 50); });
 
   /* ---------------- navigazione ---------------- */

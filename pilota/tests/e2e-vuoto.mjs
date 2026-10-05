@@ -221,6 +221,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 1500 });
   await page.click('button:has-text("✎ Orario")');
   await page.waitForSelector('.wk-col.paint');
+  await page.waitForTimeout(1500);                                     // lascia arrivare gli aggiornamenti in tempo reale dei salvataggi precedenti
   async function colInfo(d) { const col = await page.$(`.wk-col.paint[data-day="${d}"]`); const bb = await col.boundingBox(); const min = Number(await col.getAttribute('data-min')); return { bb, y: t => bb.y + (E.toMin(t) - min) * 1.25 + 1 }; }
   async function dragOn(d, from, to) { const c = await colInfo(d); await page.mouse.move(c.bb.x + c.bb.width / 2, c.y(from)); await page.mouse.down(); await page.mouse.move(c.bb.x + c.bb.width / 2, c.y(to), { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(120); }
   async function clickAt(d, t) { const c = await colInfo(d); await page.mouse.click(c.bb.x + c.bb.width / 2, c.y(t)); await page.waitForTimeout(120); }

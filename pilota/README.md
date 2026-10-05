@@ -39,7 +39,7 @@ Browser (PC/tablet)  ──HTTPS──▶  Supabase (piano gratuito)
 Verifiche su un'installazione **locale completa** di Supabase (stessi componenti del servizio online, avviati con Docker): database, login, permessi e tempo reale **reali**, non simulati. Non è ancora stato verificato sul progetto online, che va creato (vedi sotto).
 
 - `npm test`: **10 test del motore**, senza server. Turni individuali, distribuzione tra più sostituti, nessun sostituto, cambio orario, alternative, assenza parziale o senza rientro, posti probabili, festività, conteggi.
-- `npm run test:server`: **16 test sul server**:
+- `npm run test:server`: **21 test sul server** (tra cui ruolo fisioterapista, previsione dei cicli, programmatore, ciclo già in corso, calendario flessibile):
   - permessi (sola consultazione, operatore che tenta modifiche riservate, scrittura diretta sulle tabelle, utente non autenticato, account disattivato);
   - **prenotazione simultanea dello stesso posto** da parte di due utenti, ripetuta tre volte;
   - modifiche contemporanee;
@@ -56,7 +56,8 @@ Verifiche su un'installazione **locale completa** di Supabase (stessi componenti
   - posto solo probabile;
   - tempo reale;
   - backup e ripristino.
-- `npm run test:e2e`: **18 prove nel browser** con tre colleghi collegati insieme. Comprende la stessa prenotazione confermata da due utenti nello stesso momento, l'aggiornamento visibile senza ricaricare, la mancanza di connessione e il layout su tablet 1024×768.
+- `node tests/e2e-vuoto.mjs`: **15 prove nel browser partendo da archivio vuoto** (inserimento colleghi, turni dipinti sul calendario con orari precisi, paziente dal calendario, variazioni per periodo, recupero, account fisioterapista).
+- `npm run test:e2e`: **20 prove nel browser** con tre colleghi collegati insieme. Comprende la stessa prenotazione confermata da due utenti nello stesso momento, l'aggiornamento visibile senza ricaricare, la mancanza di connessione e il layout su tablet 1024×768.
 
 ## Cosa resta da fare (da parte tua)
 

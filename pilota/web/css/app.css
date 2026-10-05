@@ -190,7 +190,7 @@ tr.clickable:hover td { background: #f6f9fd; }
 .modal-body { padding: 16px 18px; }
 .modal-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .x { border: 0; background: transparent; font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 4px 8px; }
-#toast-root { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+#toast-root { pointer-events: none; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .toast { background: #13283f; color: #fff; padding: 10px 18px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-weight: 600; max-width: 90vw; }
 .toast.ok { background: var(--ok); }
 .toast.bad { background: var(--bad); }
