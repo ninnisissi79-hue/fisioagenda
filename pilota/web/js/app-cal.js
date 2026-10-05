@@ -354,9 +354,9 @@
       const deAttr = ' data-act="de-open" data-th="' + thId + '" data-day="' + d + '" role="button" tabindex="0" title="Modifica l’orario di questa giornata"';
       blocks.forEach(b => {
         inner += b.kind === 'amb' ? box(b.start, b.end, 'wk-amb' + (edit ? ' edit' : ''), edit ? '<span>Ambulatorio ' + b.start + '–' + b.end + ' ✎</span>' : '', edit ? deAttr : '')
-          : box(b.start, b.end, 'wk-blk' + (edit ? ' edit' : ''), '<span>' + esc(E.BLOCK[b.kind]) + (edit ? ' ' + b.start + '–' + b.end + ' ✎' : '') + '</span>', edit ? deAttr : '');
+          : box(b.start, b.end, 'wk-blk k-' + b.kind + (edit ? ' edit' : ''), '<span>' + esc(E.BLOCK[b.kind]) + (edit ? ' ' + b.start + '–' + b.end + ' ✎' : '') + '</span>', edit ? deAttr : '');
       });
-      if (edit && !blocks.length) inner += '<div class="wk-free act" style="top:0;height:60px"' + deAttr + '>+ Imposta l’orario di questo giorno</div>';
+      if (edit && !blocks.length) inner += '<div class="wk-empty">Nessuna fascia: clicca all’ora desiderata per aggiungerne una</div>';
       // spazi liberi: ambulatorio meno pazienti e assenze (durata flessibile: si sceglie ora e durata)
       if (!closed && !edit) blocks.filter(b => b.kind === 'amb').forEach(b => {
         const busy = occ.map(a => [E.toMin(a.start_time), E.toMin(a.end_time)])
@@ -387,13 +387,14 @@
       if (closed) inner += '<div class="wk-closed" style="top:0;height:' + H + 'px">Chiuso: ' + esc(closed) + '</div>';
       return '<div class="wk-day' + (d === A.today ? ' today' : '') + '"><div class="wk-head"' + (edit ? deAttr : '') + '>' + esc(E.fmtItDay(d)) + (edit ? ' ✎' : '') +
         (ctx.overrides.get(thId + '|' + d) ? ' <span class="chip info" title="Orario modificato solo per questo giorno">variato</span>' : '') + '</div>' +
-        '<div class="wk-col" style="height:' + H + 'px">' + inner + '</div>' +
+        '<div class="wk-col' + (edit ? ' edit' : '') + '" style="height:' + H + 'px"' + (edit ? ' data-act="de-at" data-th="' + thId + '" data-day="' + d + '" data-min="' + minS + '" data-px="' + PX + '" title="Clicca per aggiungere una fascia a quest’ora"' : '') + '>' + inner + '</div>' +
         (other.length ? '<div class="wk-other">' + other.map(a => '<button class="chip ' + (a.status === 'da_riprogrammare' ? 'bad' : 'grey') + '" data-act="open-appt" data-id="' + a.id + '">' +
           a.start_time + ' ' + esc(FA.patName(a.patient_id)) + ' · ' + esc(E.STATUS[a.status]) + ((a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by ? ' · da recuperare' : '') + '</button>').join('') + '</div>' : '') + '</div>';
     }).join('');
     return '<div class="row between"><h2>Calendario di ' + esc(th.name) + '</h2><div class="row">' +
       (can ? '<button class="btn small" data-act="abs-new" data-th="' + thId + '">Ferie / permesso / malattia</button>' : '') +
       (FA.isAdmin() ? '<button class="btn small ' + (A.ui.wkEdit ? 'primary' : '') + '" data-act="wk-edit">' + (A.ui.wkEdit ? '✓ Fine modifica orari' : '✎ Modifica orari') + '</button>' : '') +
+      (FA.isAdmin() && A.ui.wkEdit ? '<button class="btn small danger" data-act="wk-clear" data-th="' + thId + '">Svuota l’orario settimanale da oggi</button>' : '') +
       '<a class="btn small" href="#/agenda/' + days[0] + '">Agenda di tutti</a></div></div>' +
       '<div class="panel"><div class="row">' +
       '<select style="max-width:260px" data-bind="wkTh" data-on="wk-th">' + FA.activeTherapists().map(t => FA.option(t.id, t.name + (FA.canEditTh(t.id) ? '' : ' (consultazione)'), thId)).join('') + '</select>' +
@@ -401,7 +402,7 @@
       '<button class="btn small" data-act="wk-today" data-th="' + thId + '">Questa settimana</button>' +
       '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + E.addDays(mon, 7) + '">Settimana dopo ▶</button>' +
       '<strong>' + E.fmtIt(days[0]) + ' – ' + E.fmtIt(days[days.length - 1]) + '</strong></div>' +
-      '<p class="small muted" style="margin:6px 0 0">' + (edit ? '<strong>Modifica orari:</strong> clicca una fascia o l’intestazione di un giorno per cambiare tipo e orari (solo quel giorno, tutti quei giorni della settimana o tutti i giorni lavorativi). Le fasce “Ambulatorio” sono quelle prenotabili.' : can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (scegli ora e durata: occupa solo il tempo della sua seduta); clicca un paziente per segnare effettuata, assenza, recupero o spostarlo.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p></div>' +
+      '<p class="small muted" style="margin:6px 0 0">' + (edit ? '<strong>Modifica orari:</strong> clicca un punto vuoto per aggiungere una fascia a quell’ora, oppure una fascia esistente per cambiarla: ambulatorio (pazienti), reparto, pausa, cartelle/adempimenti, segreteria, corso obbligatorio, permesso a ore, recupero ore, briefing. Vale per quel giorno, per tutti quei giorni della settimana o per tutti i giorni lavorativi.' : can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (scegli ora e durata: occupa solo il tempo della sua seduta); clicca un paziente per segnare effettuata, assenza, recupero o spostarlo.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p></div>' +
       '<div class="wk-grid" style="grid-template-columns:52px repeat(' + days.length + ', minmax(140px, 1fr))"><div><div class="wk-head">&nbsp;</div>' + ruler + '</div>' + cols + '</div>';
   }
   FA.views.calendario = { render: weekView };

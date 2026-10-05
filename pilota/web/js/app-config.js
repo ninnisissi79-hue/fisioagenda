@@ -5,7 +5,9 @@
 (function () {
   'use strict';
   const FA = window.FA, E = FA.E, A = FA.state, esc = FA.esc;
-  const KINDS = [['amb', 'Ambulatorio (prenotabile)'], ['reparto', 'Reparto'], ['pausa', 'Pausa'], ['documentazione', 'Documentazione'], ['preparazione', 'Preparazione'], ['altro', 'Altra attività']];
+  const KINDS = [['amb', 'Ambulatorio (pazienti)'], ['reparto', 'Reparto'], ['pausa', 'Pausa'], ['documentazione', 'Cartelle / adempimenti burocratici'],
+    ['segreteria', 'Segreteria'], ['corso', 'Corso obbligatorio'], ['permesso_ore', 'Permesso a ore'], ['recupero_ore', 'Recupero ore'], ['briefing', 'Briefing'],
+    ['preparazione', 'Preparazione'], ['altro', 'Altra attività']];
   const adminOnly = () => FA.isAdmin() ? '' : ' disabled title="Solo il coordinatore può modificare la configurazione"';
   const adminSave = () => FA.isAdmin() ? FA.saveDisabled() : ' disabled';
 
@@ -152,7 +154,7 @@
 
   /* ---------------- inserimento rapido di più colleghi ---------------- */
   FA.actions['th-bulk'] = () => {
-    A.ui.tb = { names: '', activity: 'ambulatorio_reparto', tpl: 'reparto8', from: A.today, done: null };
+    A.ui.tb = { names: '', activity: 'ambulatorio_reparto', tpl: '', from: A.today, done: null };
     FA.openModal({ title: 'Inserimento rapido dei fisioterapisti', wide: true, sticky: true,
       body() {
         const f = A.ui.tb;
@@ -160,7 +162,7 @@
         return '<div class="field"><label>Nomi dei colleghi, uno per riga</label><textarea rows="10" data-bind="tb.names" placeholder="Rossi Anna\nVerdi Marco\n…">' + esc(f.names) + '</textarea>' +
           '<div class="help">' + names.length + ' nomi. Chi ha un’attività o un turno diverso lo correggi dopo dalla sua scheda.</div></div>' +
           '<div class="grid3"><div class="field"><label>Attività</label>' + FA.seg('tb.activity', [['ambulatorio', 'Solo ambulatorio'], ['ambulatorio_reparto', 'Ambulatorio e reparto']], f.activity) + '</div>' +
-          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).filter(([k]) => f.activity !== 'ambulatorio' || k.startsWith('ambulatorio')).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select>' +
+          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + FA.option('', 'Nessuno: disegno io l’orario nel calendario', f.tpl) + Object.entries(TEMPLATES).filter(([k]) => f.activity !== 'ambulatorio' || k.startsWith('ambulatorio')).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + '</select>' +
           (f.activity === 'ambulatorio' ? '<div class="help">Solo ambulatorio: nessuna fascia di reparto.</div>' : '') + '</div>' +
           '<div class="field"><label>Turno in vigore dal</label><input type="date" data-bind="tb.from" value="' + esc(f.from) + '"></div></div>' +
           '<p class="muted small">Le competenze si assegnano subito dopo nella “Tabella competenze”.</p>' +
@@ -413,15 +415,20 @@
   };
 
   /* ---------------- modifica diretta dell'orario dal calendario ---------------- */
-  FA.openDayEditor = function (thId, day) {
+  FA.openDayEditor = function (thId, day, addAt) {
     const v = E.shiftFor(A.ctx, thId, day);
-    A.ui.de = { th: thId, day, blocks: E.dayBlocks(A.ctx, thId, day).map(b => Object.assign({}, b)), scope: 'giorno', note: '', conf: null, error: null,
+    const blocks = E.dayBlocks(A.ctx, thId, day).map(b => Object.assign({}, b));
+    A.ui.de = { th: thId, day, blocks, scope: 'giorno', note: '', conf: null, error: null, at: addAt || null,
       hasOverride: !!A.ctx.overrides.get(thId + '|' + day), base: v };
+    if (addAt) deAdd('amb');
     const wd = E.WD_LONG[E.weekday(day)];
     FA.openModal({ title: 'Orario di ' + FA.thName(thId) + ' · ' + FA.dayLabel(day), wide: true, sticky: true,
       body() {
         const f = A.ui.de;
-        return '<p class="small muted">Solo le fasce <strong>Ambulatorio</strong> ricevono pazienti. Per chi fa solo ambulatorio cambia “Reparto” in “Ambulatorio”. “max” limita i pazienti in una fascia (facoltativo).</p>' +
+        return '<p class="small muted">Disegna la giornata: solo le fasce <strong>Ambulatorio</strong> ricevono pazienti, tutte le altre sono bloccate. “max” limita i pazienti in una fascia (facoltativo).</p>' +
+          '<div class="row" style="margin-bottom:8px"><span class="small"><strong>Aggiungi:</strong></span>' + KINDS.filter(([k]) => k !== 'preparazione').map(([k, l]) =>
+            '<button class="btn small" data-act="de-add" data-k="' + k + '">+ ' + esc(l.replace(' (pazienti)', '')) + '</button>').join('') +
+          '<button class="btn small danger" data-act="de-clear">Svuota il giorno</button></div>' +
           blocksEditor('de.blocks', listAt('de.blocks')) +
           '<div class="field" style="margin-top:12px"><label>Vale per</label>' + FA.seg('de.scope', [['giorno', 'Solo questo giorno'], ['settimanale', 'Tutti i ' + wd + ' da questa data'], ['tutti', 'Tutti i giorni lavorativi da questa data']], f.scope) + '</div>' +
           '<div class="field"><label>Nota (facoltativa)</label><input type="text" data-bind="de.note" value="' + esc(f.note) + '"></div>' +
@@ -431,6 +438,36 @@
       foot: () => (A.ui.de.hasOverride ? '<button class="btn danger" data-act="de-reset"' + adminSave() + '>Ripristina il turno abituale per questo giorno</button>' : '') +
         '<span class="grow"></span><button class="btn" data-act="close-modal">Annulla</button><button class="btn" data-act="de-check"' + adminSave() + '>Verifica</button>' +
         '<button class="btn primary" data-act="de-save"' + (A.ui.de.conf ? adminSave() : ' disabled title="Prima verifica"') + '>Salva</button>' });
+  };
+  /** aggiunge una fascia: al punto cliccato nel calendario oppure dopo l'ultima fascia */
+  function deAdd(kind) {
+    const f = A.ui.de, l = listAt('de.blocks');
+    const sorted = l.filter(b => b.start && b.end).sort((a, b) => a.start < b.start ? -1 : 1);
+    let s0 = f.at || (sorted.length ? E.hhmm(sorted[sorted.length - 1].end) : '08:00');
+    const nextStart = sorted.map(b => E.hhmm(b.start)).find(x => x > s0);
+    let e0 = E.fromMin(Math.min(E.toMin(s0) + (kind === 'pausa' || kind === 'briefing' ? 20 : 60), nextStart ? E.toMin(nextStart) : 24 * 60 - 1));
+    if (e0 <= s0) e0 = E.fromMin(E.toMin(s0) + 15);
+    l.push({ kind, start: s0, end: e0, max: null });
+    l.sort((a, b) => (a.start || '99') < (b.start || '99') ? -1 : 1);
+    f.at = null; f.conf = null;
+  }
+  FA.actions['de-add'] = el => { deAdd(el.getAttribute('data-k')); FA.renderModal(); };
+  FA.actions['de-clear'] = () => { A.ui.de.blocks = []; A.ui.de.conf = null; FA.renderModal(); };
+  // clic su un punto vuoto della giornata nel calendario (modalità modifica orari)
+  FA.actions['de-at'] = (el, ev) => {
+    const min = Number(el.getAttribute('data-min')), px = Number(el.getAttribute('data-px'));
+    const t = Math.max(0, Math.round((min + ev.offsetY / px) / 15) * 15);
+    FA.openDayEditor(el.getAttribute('data-th'), el.getAttribute('data-day'), E.fromMin(Math.min(t, 23 * 60)));
+  };
+  // ripartire da zero: orario settimanale vuoto da oggi
+  FA.actions['wk-clear'] = async el => {
+    const th = el.getAttribute('data-th');
+    const week = {}; [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = []; });
+    let n = 0;
+    try { n = (await FA.rpc('admin_save_shift', { p_th: th, p_valid_from: A.today, p_week: week, p_note: 'Orario da ridisegnare', p_dry_run: true })).conflicts.length; }
+    catch (e) { FA.toast(e.message, 'bad'); return; }
+    if (!confirm('Svuoto l’orario settimanale di ' + FA.thName(th) + ' da oggi, per ridisegnarlo nel calendario.' + (n ? '\n' + n + ' pazienti già prenotati resteranno segnalati “da sistemare” finché non disegni le fasce Ambulatorio.' : '') + '\nI turni precedenti restano nello storico. Confermi?')) return;
+    try { await FA.save('Orario svuotato', () => FA.rpc('admin_save_shift', { p_th: th, p_valid_from: A.today, p_week: week, p_note: 'Orario da ridisegnare', p_dry_run: false })); } catch (e) { /* segnalato */ }
   };
   function deCall(dry) {
     const f = A.ui.de, blocks = cleanBlocks(f.blocks);

@@ -245,3 +245,12 @@ tr.clickable:hover td { background: #f6f9fd; }
 .wk-amb.edit span { color: var(--ok); font-weight: 600; }
 .wk-amb.edit:hover, .wk-blk.edit:hover { background: var(--primary-soft); }
 .wk-head[data-act] { cursor: pointer; }
+.wk-col.edit { cursor: copy; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 36.5px, #eef1f4 36.5px, #eef1f4 37.5px); }
+.wk-empty { left: 4px; right: 4px; top: 8px; color: var(--ink-3); font-size: .8rem; pointer-events: none; }
+.wk-blk.k-reparto { background: #ece6f6; color: #5b3fa0; }
+.wk-blk.k-pausa { background: #f3f4f6; color: #5b6472; }
+.wk-blk.k-documentazione { background: #fff4e0; color: #8a5600; }
+.wk-blk.k-segreteria { background: #e6f2f7; color: #1f5f78; }
+.wk-blk.k-corso { background: #fde8f0; color: #9b2c5a; }
+.wk-blk.k-permesso_ore, .wk-blk.k-recupero_ore { background: #fde8e7; color: #b42318; }
+.wk-blk.k-briefing { background: #e9f0e1; color: #3f6212; }

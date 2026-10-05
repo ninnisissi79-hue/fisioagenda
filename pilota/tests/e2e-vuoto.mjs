@@ -129,6 +129,7 @@ try {
   await page.click('button:has-text("Inserimento rapido")');
   await page.fill('.modal textarea[data-bind="tb.names"]', 'Neri Paola');
   await page.click('.modal button[data-act="seg"][data-val="ambulatorio"]');
+  await page.selectOption('.modal select[data-bind="tb.tpl"]', 'ambulatorio');
   await page.fill('.modal input[data-bind="tb.from"]', psql('select app.today()'));
   await page.click('.modal button:has-text("Inserisci tutti")');
   await page.waitForSelector('.modal .form-note:has-text("Inseriti 1")', { timeout: 15000 });
@@ -279,6 +280,43 @@ try {
   await page.click('button:has-text("Fine modifica orari")');
   assert.ok((await page.$$(`.wk-free.act[data-day="${other}"]`)).length > 0, 'il giorno variato è prenotabile');
   ok('Calendario modificabile direttamente: “Reparto” trasformato in “Ambulatorio” per tutti quei giorni della settimana o per un solo giorno');
+
+  // calendario libero: un collega nuovo senza turno, orario disegnato a mano con i nuovi tipi di fascia
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Fisioterapisti")');
+  await page.click('button:has-text("Inserimento rapido")');
+  await page.fill('.modal textarea[data-bind="tb.names"]', 'Gialli Sara');
+  assert.equal(await page.inputValue('.modal select[data-bind="tb.tpl"]'), '', 'per impostazione predefinita nessun turno');
+  await page.click('.modal button:has-text("Inserisci tutti")');
+  await page.waitForSelector('.modal .form-note:has-text("Inseriti 1")', { timeout: 15000 });
+  await page.click('.modal button:has-text("Chiudi")');
+  const gialli = psql("select id from therapists where name='Gialli Sara'");
+  assert.equal(psql(`select count(*) from shift_versions where therapist_id='${gialli}'`), '0');
+  await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [gialli, ed]);
+  await page.waitForSelector('button:has-text("Modifica orari")');
+  await page.click('button:has-text("Modifica orari")');
+  // clic a metà altezza della colonna del giorno: si apre l'editor con una fascia ambulatorio a quell'ora
+  const col = await page.$(`.wk-col.edit[data-day="${ed}"]`);
+  const bb = await col.boundingBox();
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + 2);
+  await page.waitForSelector('.modal');
+  for (const k of ['briefing', 'segreteria', 'documentazione', 'corso', 'permesso_ore', 'recupero_ore', 'pausa', 'reparto']) await page.click(`.modal button[data-act="de-add"][data-k="${k}"]`);
+  await page.click('.modal button[data-act="de-add"][data-k="amb"]');
+  await page.click('.modal button[data-act="seg"][data-val="tutti"]');
+  await page.click('.modal button:has-text("Verifica")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento"), .modal .form-warn, .modal .form-error', { timeout: 15000 });
+  assert.ok(!(await page.$('.modal .form-error')), await page.textContent('.modal'));
+  await page.click('.modal button:has-text("Salva")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  const wk = psql(`select week->'${wdk}' from shift_versions where therapist_id='${gialli}' order by valid_from desc limit 1`);
+  for (const k of ['"amb"', 'briefing', 'segreteria', 'documentazione', 'corso', 'permesso_ore', 'recupero_ore', 'pausa', 'reparto']) assert.ok(wk.includes(k), 'manca ' + k);
+  await page.click('button:has-text("Fine modifica orari")');
+  await page.waitForTimeout(400);
+  const txt = await page.textContent('.wk-grid');
+  for (const l of ['Briefing', 'Segreteria', 'Cartelle / adempimenti', 'Corso obbligatorio', 'Permesso a ore', 'Recupero ore', 'Pausa', 'Reparto']) assert.ok(txt.includes(l), 'non visibile: ' + l);
+  assert.ok((await page.$$(`.wk-free.act[data-day="${ed}"]`)).length >= 1, 'le fasce ambulatorio disegnate sono prenotabili');
+  await page.screenshot({ path: '/tmp/claude-0/libero.png', fullPage: true });
+  ok('Calendario libero: orario disegnato a mano con ambulatorio, reparto, pausa, cartelle/adempimenti, segreteria, corso, permesso a ore, recupero ore, briefing');
 
   // account di un fisioterapista: modifica solo il proprio calendario
   await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');

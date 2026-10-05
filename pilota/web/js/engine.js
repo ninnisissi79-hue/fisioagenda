@@ -38,7 +38,9 @@
     programmata: 'Programmata', effettuata: 'Effettuata', assente: 'Assenza paziente', annullata: 'Annullata',
     da_riprogrammare: 'Da riprogrammare', trattenuta: 'Sospesa · posto mantenuto', liberata: 'Posto liberato', spostata: 'Spostata (traccia)'
   };
-  const BLOCK = { amb: 'Ambulatorio', reparto: 'Reparto', pausa: 'Pausa', documentazione: 'Documentazione', preparazione: 'Preparazione', altro: 'Altra attività' };
+  // tipi di fascia del calendario: solo "amb" riceve pazienti
+  const BLOCK = { amb: 'Ambulatorio', reparto: 'Reparto', pausa: 'Pausa', documentazione: 'Cartelle / adempimenti', segreteria: 'Segreteria',
+    corso: 'Corso obbligatorio', permesso_ore: 'Permesso a ore', recupero_ore: 'Recupero ore', briefing: 'Briefing', preparazione: 'Preparazione', altro: 'Altra attività' };
   const PRIORITY = { U: 'U – Urgente', B: 'B – Breve', D: 'D – Differibile', P: 'P – Programmabile', NI: 'Non indicata' };
   const PRIORITY_ORDER = ['U', 'B', 'D', 'P', 'NI'];
   const REQUEST = { prima: 'Prima seduta', continuazione: 'Continuazione ciclo' };
