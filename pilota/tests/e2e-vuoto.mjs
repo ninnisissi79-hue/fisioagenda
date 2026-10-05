@@ -45,11 +45,28 @@ try {
     await page.evaluate(() => { location.hash = '#/oggi'; });
   }
   await addTherapist('Rossi Anna', 'specifica');
-  await addTherapist('Verdi Marco', 'specifica');
+  // inserimento rapido di più colleghi + tabella competenze
+  await page.evaluate(() => { location.hash = '#/config'; });
+  await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Fisioterapisti")');
+  await page.click('button:has-text("Inserimento rapido")');
+  await page.fill('.modal textarea[data-bind="tb.names"]', 'Verdi Marco\nBianchi Luca\nRossi Anna');
+  await page.selectOption('.modal select[data-bind="tb.tpl"]', 'ambulatorio');
+  await page.fill('.modal input[data-bind="tb.from"]', psql('select app.today()'));
+  await page.click('.modal button:has-text("Inserisci tutti")');
+  await page.waitForSelector('.modal .form-note:has-text("Inseriti 2 fisioterapisti")', { timeout: 20000 });
+  assert.match(await page.textContent('.modal .form-note'), /Saltati 1 nomi già presenti/);
+  await page.click('.modal button:has-text("Chiudi")');
+  await page.click('button:has-text("Tabella competenze")');
+  const verdi = psql("select id from therapists where name='Verdi Marco'");
+  await page.selectOption(`.modal select[data-bind="sk.m.${verdi}.mano"]`, 'specifica');
+  await page.click('.modal button:has-text("Salva le competenze")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(psql(`select level from therapist_skills where therapist_id='${verdi}' and category_id='mano'`), 'specifica');
+  assert.equal(psql('select count(*) from therapists'), '3');
   await page.waitForTimeout(500);
   assert.ok(!(await page.$('text=Primi passi')), 'guida nascosta quando fisioterapisti e turni ci sono');
-  assert.equal(psql('select count(*) from shift_versions'), '2');
-  ok('Due fisioterapisti inseriti con competenze e turno da schema pronto');
+  assert.equal(psql('select count(*) from shift_versions'), '3');
+  ok('Fisioterapisti inseriti (uno dalla scheda, due con l’inserimento rapido), competenze dalla tabella, turni da schema pronto');
 
   // paziente fittizio dal posto libero in agenda
   let day = E.addDays(psql('select app.today()'), 1);

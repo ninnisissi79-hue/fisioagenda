@@ -42,7 +42,9 @@
   function therapistsTab() {
     const cats = FA.categories();
     return '<div class="row between"><p class="muted">' + FA.allTherapists().length + ' fisioterapisti. Competenze: ★ specifica (proposto per primo) oppure abilitato.</p>' +
-      '<button class="btn primary small" data-act="th-edit" data-id=""' + adminOnly() + '>+ Nuovo fisioterapista</button></div>' +
+      '<div class="row"><button class="btn primary small" data-act="th-bulk"' + adminOnly() + '>Inserimento rapido (più colleghi)</button>' +
+      '<button class="btn small" data-act="sk-matrix"' + adminOnly() + '>Tabella competenze</button>' +
+      '<button class="btn small" data-act="th-edit" data-id=""' + adminOnly() + '>+ Nuovo fisioterapista</button></div></div>' +
       '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Attività</th><th>Competenza specifica</th><th>Abilitato</th><th>Limite/giorno</th><th></th></tr></thead><tbody>' +
       FA.allTherapists().map(t => {
         const sk = A.ctx.skills.get(t.id) || new Map();
@@ -85,6 +87,87 @@
       if (!f.id) { A.ui.cfgTab = 'turni'; A.ui.shTh = id; FA.render(); FA.toast('Ora definisci il turno del nuovo collega (puoi partire da quello di un altro)'); }
     }
     catch (e) { f.error = e.message; FA.renderModal(); }
+  };
+
+  /* ---------------- inserimento rapido di più colleghi ---------------- */
+  FA.actions['th-bulk'] = () => {
+    A.ui.tb = { names: '', activity: 'ambulatorio_reparto', tpl: 'reparto8', from: A.today, done: null };
+    FA.openModal({ title: 'Inserimento rapido dei fisioterapisti', wide: true, sticky: true,
+      body() {
+        const f = A.ui.tb;
+        const names = f.names.split('\n').map(x => x.trim()).filter(Boolean);
+        return '<div class="field"><label>Nomi dei colleghi, uno per riga</label><textarea rows="10" data-bind="tb.names" placeholder="Rossi Anna\nVerdi Marco\n…">' + esc(f.names) + '</textarea>' +
+          '<div class="help">' + names.length + ' nomi. Chi ha un’attività o un turno diverso lo correggi dopo dalla sua scheda.</div></div>' +
+          '<div class="grid3"><div class="field"><label>Attività</label>' + FA.seg('tb.activity', [['ambulatorio', 'Solo ambulatorio'], ['ambulatorio_reparto', 'Ambulatorio e reparto']], f.activity) + '</div>' +
+          '<div class="field"><label>Turno di partenza</label><select data-bind="tb.tpl">' + Object.entries(TEMPLATES).map(([k, t]) => FA.option(k, t.label, f.tpl)).join('') + FA.option('', 'Nessuno (lo inserisco dopo)', f.tpl) + '</select></div>' +
+          '<div class="field"><label>Turno in vigore dal</label><input type="date" data-bind="tb.from" value="' + esc(f.from) + '"></div></div>' +
+          '<p class="muted small">Le competenze si assegnano subito dopo nella “Tabella competenze”.</p>' +
+          (f.done ? '<div class="form-note">' + f.done + '</div>' : '') + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Chiudi</button><button class="btn primary" data-act="th-bulk-save"' + adminSave() + '>' + (A.saving ? 'Inserimento…' : 'Inserisci tutti') + '</button>' });
+  };
+  FA.actions['th-bulk-save'] = async () => {
+    const f = A.ui.tb;
+    const existing = new Set(FA.allTherapists().map(t => t.name.trim().toLowerCase()));
+    const names = [...new Set(f.names.split('\n').map(x => x.trim()).filter(Boolean))];
+    const todo = names.filter(n => !existing.has(n.toLowerCase()));
+    if (!todo.length) { f.error = names.length ? 'Questi nomi sono già presenti.' : 'Scrivi almeno un nome.'; FA.renderModal(); return; }
+    f.error = null;
+    const week = {};
+    [1, 2, 3, 4, 5, 6, 7].forEach(d => { week[d] = f.tpl && d <= 5 ? TEMPLATES[f.tpl].day.map(x => Object.assign({}, x)) : []; });
+    const okNames = [], fail = [];
+    try {
+      await FA.save(todo.length + ' fisioterapisti', async () => {
+        for (let i = 0; i < todo.length; i++) {
+          try {
+            const id = await FA.rpc('admin_save_therapist', { p: { name: todo[i], activity: f.activity, active: true, note: '', sort: FA.allTherapists().length + i + 1, skills: [] } });
+            if (f.tpl) await FA.rpc('admin_save_shift', { p_th: id, p_valid_from: f.from, p_week: week, p_note: 'Turno iniziale: ' + TEMPLATES[f.tpl].label, p_dry_run: false });
+            okNames.push(todo[i]);
+          } catch (e) { fail.push(todo[i] + ': ' + e.message); }
+        }
+      });
+    } catch (e) { /* già segnalato */ }
+    f.done = '✓ Inseriti ' + okNames.length + ' fisioterapisti.' + (names.length > todo.length ? ' Saltati ' + (names.length - todo.length) + ' nomi già presenti.' : '') +
+      (fail.length ? '<br>✗ Non inseriti: ' + esc(fail.join('; ')) : '') + '<br>Ora assegna le competenze con “Tabella competenze”.';
+    f.names = '';
+    FA.renderModal();
+  };
+
+  /* ---------------- tabella delle competenze ---------------- */
+  FA.actions['sk-matrix'] = () => {
+    const m = {};
+    FA.allTherapists().forEach(t => { m[t.id] = {}; FA.categories().forEach(c => { m[t.id][c.id] = E.skillLevel(A.ctx, t.id, c.id) || ''; }); });
+    A.ui.sk = { m, error: null };
+    FA.openModal({ title: 'Tabella competenze', wide: true, sticky: true,
+      body() {
+        const cats = FA.categories();
+        return '<p class="small muted">★ = competenza specifica (proposto per primo) · A = abilitato · – = non abilitato (mai proposto per quel percorso).</p>' +
+          '<div class="table-wrap"><table class="small"><thead><tr><th>Fisioterapista</th>' + cats.map(c => '<th title="' + esc(c.name) + '">' + esc(c.name) + '</th>').join('') + '</tr></thead><tbody>' +
+          FA.allTherapists().map(t => '<tr><td class="nowrap"><strong>' + esc(t.name) + '</strong></td>' + cats.map(c => '<td><select style="min-height:34px;padding:4px;min-width:62px" aria-label="' + esc(t.name + ' – ' + c.name) + '" data-bind="sk.m.' + t.id + '.' + c.id + '">' +
+            FA.option('', '–', A.ui.sk.m[t.id][c.id]) + FA.option('abilitato', 'A', A.ui.sk.m[t.id][c.id]) + FA.option('specifica', '★', A.ui.sk.m[t.id][c.id]) + '</select></td>').join('') + '</tr>').join('') +
+          '</tbody></table></div>' + FA.errBox(A.ui.sk.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Chiudi senza salvare</button><button class="btn primary" data-act="sk-save"' + adminSave() + '>' + (A.saving ? 'Salvataggio…' : 'Salva le competenze') + '</button>' });
+  };
+  FA.actions['sk-save'] = async () => {
+    const f = A.ui.sk;
+    const changed = FA.allTherapists().filter(t => FA.categories().some(c => (E.skillLevel(A.ctx, t.id, c.id) || '') !== f.m[t.id][c.id]));
+    if (!changed.length) { FA.closeModal(); return; }
+    const fail = [];
+    try {
+      await FA.save('Competenze di ' + changed.length + ' colleghi', async () => {
+        for (const t of changed) {
+          // le competenze di percorsi non attivi restano invariate
+          const keep = (A.data.therapist_skills || []).filter(s => s.therapist_id === t.id && !f.m[t.id].hasOwnProperty(s.category_id)).map(s => ({ category_id: s.category_id, level: s.level }));
+          const skills = keep.concat(Object.entries(f.m[t.id]).filter(([, l]) => l).map(([category_id, level]) => ({ category_id, level })));
+          try {
+            await FA.rpc('admin_save_therapist', { p: { id: t.id, version: t.version, name: t.name, activity: t.activity, max_daily: t.max_daily == null ? '' : String(t.max_daily),
+              active: t.active, note: t.note, sort: t.sort, skills } });
+          } catch (e) { fail.push(t.name + ': ' + e.message); }
+        }
+      });
+    } catch (e) { /* già segnalato */ }
+    if (fail.length) { f.error = 'Non salvate: ' + fail.join('; '); FA.renderModal(); } else FA.closeModal();
   };
 
   /* ---------------- turni ---------------- */
