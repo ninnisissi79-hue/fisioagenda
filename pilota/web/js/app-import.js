@@ -32,6 +32,7 @@
   function newSheet(base) {
     const s = Object.assign({ label: 'Foglio', thName: '', month: '', photoName: '', rotation: 0, duration: null, durationHint: null, durationNote: '',
       planned: 10, grid: null, rows: [], extra: [], notes: [], absences: [] }, base || {});
+    s.subsMap = {};
     s.id = ++seq;
     s.th = matchTherapist(s.thName) || (FA.isFisio() ? A.me.therapist_id || '' : '');
     s.from = defaultFrom(s.month);
@@ -140,7 +141,7 @@
   FA.actions['imp-add-row'] = () => {
     const s = cur();
     s.rows.push({ ref: 'M' + (s.rows.length + 1), include: true, name: '', time: '', freq: '', weekdays: [], tipo: '', closed: false, y: null,
-      cells: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false, dur: '' });
+      cells: {}, subs: {}, times: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false, dur: '' });
     FA.render();
   };
   FA.actions['imp-del-row'] = el => { const s = cur(); s.rows.splice(Number(el.getAttribute('data-r')), 1); FA.render(); };
@@ -263,18 +264,22 @@
       out.issues.unshift('Continua il ciclo in corso (' + cnt.effettuate + ' effettuate, ' + cnt.programmate + ' programmate su ' + res.cycle.planned_sessions + ').');
     }
     cells.forEach(c => {
-      const end = time && dur ? E.fromMin(E.toMin(time) + dur) : null;
-      const item = { c, day: c.day, start: time, end, next: nextSet.has(c) };
+      // orario diverso per una sola casella (seduta scritta in un'altra fascia del foglio)
+      const t0 = c.d != null && (r.times || {})[c.d] ? FA.normTime(r.times[c.d]) || time : time;
+      const end = t0 && dur ? E.fromMin(E.toMin(t0) + dur) : null;
+      const sub = c.d != null && (r.subs || {})[c.d] ? H.normName(r.subs[c.d]) : null;
+      const subTh = sub && s.subsMap[sub] ? s.subsMap[sub] : null;
+      const item = { c, day: c.day, start: t0, end, next: nextSet.has(c), th: subTh || s.th, thMain: s.th, sub: sub ? r.subs[c.d] : null };
       if (res.patientId && existingOnDay(res.patientId, c.day)) { out.dups.push(item); return; }
       if (!end) { out.cells.push(item); return; } // orario o durata ancora da indicare: i controlli si fanno dopo
-      const chk = E.checkSlot(A.ctx, s.th, c.day, time, end, { patientId: res.patientId || null, cycleId: res.cycleId || null, reserve: false, extra: extraAcc });
+      const chk = E.checkSlot(A.ctx, item.th, c.day, t0, end, { patientId: res.patientId || null, cycleId: res.cycleId || null, reserve: false, extra: extraAcc });
       if (chk) {
         item.chk = chk; item.forceable = FORCEABLE.has(chk.code);
         out.conflicts.push(item);
         if (!(item.forceable && r.force[c.day])) out.unresolved = (out.unresolved || 0) + 1;
       }
       out.cells.push(item);
-      if (extraAcc) extraAcc.push({ therapist_id: s.th, day: c.day, start: time, end, patient_id: res.patientId || 'riga-' + r.ref, ref: r.ref });
+      if (extraAcc) extraAcc.push({ therapist_id: item.th, day: c.day, start: t0, end, patient_id: res.patientId || 'riga-' + r.ref, ref: r.ref });
     });
     if (out.unresolved) block.push(out.unresolved + (out.unresolved === 1 ? ' seduta in conflitto' : ' sedute in conflitto') + ' (vedi l’elenco): correggi la casella o l’orario, oppure importa comunque quelle fuori turno.');
     if (res.patientId) out.visits = out.visits.filter(v => !(A.ctx.events.get(res.patientId + '|' + v)));
@@ -354,7 +359,7 @@
     h += '<div class="imp-split">' + photoPane(s, i) + '<div class="imp-data"><div class="panel"><div class="row between"><h3 style="margin:0">3. Anteprima e correzioni</h3><button class="btn small" data-act="imp-add-row">+ Riga</button></div>' +
       '<p class="small muted" style="margin:6px 0 0">Scrivi nelle caselle come sul tabulato: numero (a ritroso), <strong>R</strong> recupero, <strong>V</strong> visita fisiatrica (es. <code>1V</code>). In giallo le letture incerte: correggile o confermale. Le sedute già passate restano <em>programmate</em>: il tabulato non dimostra la presenza.</p></div>' +
       s.rows.map((r, k) => rowCard(s, i, r, k, ans[k])).join('') +
-      extraPanel(s, i) + notesPanel(s) + absencePanel(s, i) + confirmPanel(s, i, ans) + '</div></div>';
+      subsPanel(s, i) + extraPanel(s, i) + notesPanel(s) + absencePanel(s, i) + confirmPanel(s, i, ans) + '</div></div>';
     return h;
   }
   function photoPane(s, i) {
@@ -410,6 +415,8 @@
         else if (c.num != null || c.R) { cls += ' ok'; tip = c.R ? 'Recupero' : 'Seduta n. ' + c.p + ' di ' + s.planned; }
         else if (c.V) { cls += ' vis'; tip = 'Visita fisiatrica (non è una seduta)'; }
       }
+      if (c && (r.times || {})[d]) tip = (tip ? tip + ' · ' : '') + 'Alle ' + r.times[d];
+      if (c && (r.subs || {})[d]) { const m = s.subsMap[H.normName(r.subs[d])]; cls += ' sub'; tip = (tip ? tip + ' · ' : '') + 'Sigla «' + r.subs[d] + '»: ' + (m ? 'seduta fatta da ' + FA.thName(m) : 'collega non indicato, resta al titolare'); }
       if (day && s.month && A.ctx.closures.has(day)) tip = (tip ? tip + ' · ' : '') + 'Chiuso: ' + A.ctx.closures.get(day);
       const val = r.cells[d] == null ? '' : r.cells[d];
       cells += '<td class="' + cls.trim() + '"' + (tip ? ' title="' + esc(tip) + '"' : '') + '><input data-imp-cell data-r="' + k + '" data-d="' + d + '" data-bind="' + P(i, 'rows.' + k + '.cells.' + d) + '" data-on="imp-cell" value="' + esc(val) + '" maxlength="4" aria-label="Giorno ' + d + '">' +
@@ -445,6 +452,17 @@
         (conflicts ? '<ul class="small imp-conf">' + conflicts + '</ul>' : '') +
         (a.block.length ? '<div class="form-error small">Da sistemare prima di importare: ' + esc(a.block.join(' ')) + '</div>' : '') : '') +
       '</div>';
+  }
+  /** sigle dei colleghi scritte sotto i numeri: chi ha fatto la seduta al posto del titolare */
+  function subsPanel(s, i) {
+    const sig = new Map();
+    s.rows.forEach(r => Object.keys(r.subs || {}).forEach(d => { const k = H.normName(r.subs[d]); if (!k) return; if (!sig.has(k)) sig.set(k, { label: r.subs[d], n: 0 }); sig.get(k).n++; }));
+    if (!sig.size) return '';
+    const ths = FA.activeTherapists().filter(t => t.id !== s.th);
+    return '<div class="panel"><h3>Sigle dei colleghi sotto i numeri</h3><p class="small muted">Chi ha fatto la seduta al posto di ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') +
+      '. Scegli il collega: la seduta va nel suo calendario come sostituzione (il ciclo resta del titolare). Se non lo indichi, la seduta resta al titolare.</p><ul class="list">' +
+      [...sig.entries()].map(([k, v]) => '<li class="todo-item"><div><strong>' + esc(v.label) + '</strong> <span class="small muted">(' + v.n + ' sedute)</span></div><div>' +
+        '<select data-bind="' + P(i, 'subsMap.' + k) + '" data-rerender><option value="">Resta al titolare</option>' + ths.map(t => FA.option(t.id, t.name, s.subsMap[k] || '')).join('') + '</select></div></li>').join('') + '</ul></div>';
   }
   function extraPanel(s, i) {
     if (!s.extra.length) return '';
@@ -504,7 +522,7 @@
   function extraPayload(s) {
     return s.extra.filter(x => x.cycleId && x.d && s.month && FA.normTime(x.time)).map(x => ({ cycle_id: x.cycleId, day: H.dayOf(s.month, x.d), start: FA.normTime(x.time), number: (String(x.value).match(/\d+/) || [null])[0] }));
   }
-  const cellOut = r => x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!(x.chk && r.force[x.day]) });
+  const cellOut = r => x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!(x.chk && r.force[x.day]), start: x.start, therapist_id: x.th && x.th !== x.thMain ? x.th : null });
   function payload(s, ans) {
     const rows = [];
     s.rows.forEach((r, k) => {

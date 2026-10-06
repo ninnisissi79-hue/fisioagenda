@@ -175,7 +175,7 @@
       rows: (f.righe || []).map((r, j) => ({
         ref: r.rif || ('R' + (j + 1)), include: r.importa !== false, dur: r.durata ? String(r.durata) : '', name: r.paziente || '', time: r.ora || '', freq: r.frequenza || '',
         weekdays: Array.isArray(r.giorni) ? r.giorni.map(Number) : [], tipo: r.tipo || '', closed: !!r.chiuso, y: r.y == null ? null : Number(r.y),
-        cells: Object.assign({}, r.caselle || {}), doubts: Object.assign({}, r.dubbi || {}), rowDoubts: (r.dubbi_riga || []).map(t => ({ text: t, ok: false })),
+        cells: Object.assign({}, r.caselle || {}), subs: Object.assign({}, r.sostituti || {}), times: Object.assign({}, r.orari || {}), doubts: Object.assign({}, r.dubbi || {}), rowDoubts: (r.dubbi_riga || []).map(t => ({ text: t, ok: false })),
         note: r.nota || ''
       })),
       extra: (f.estemporanei || []).map((x, j) => ({ ref: 'E' + (j + 1), name: x.paziente || '', d: Number(x.giorno) || null, time: x.ora || '', value: x.valore || '', note: x.nota || '', y: x.y == null ? null : Number(x.y), cycleId: '' })),

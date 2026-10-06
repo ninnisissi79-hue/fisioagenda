@@ -1,0 +1,162 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Zunini (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo; F = ferie, M = malattia, P = permesso; sigle sotto i numeri = collega che ha fatto la seduta.",
+ "fogli": [
+  {
+   "fisioterapista": "Zunini",
+   "mese": "2026-10",
+   "foto": "zunini-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 23.4,
+    "x_giorno31": 97.25,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "Z1",
+     "ora": "08:15",
+     "paziente": "Allori",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "TF",
+     "y": 39.1,
+     "caselle": {
+      "5": "2",
+      "7": "1V",
+      "9": "R"
+     },
+     "dubbi": {
+      "7": "«1V» di mercoledì 7 o giovedì 8?"
+     }
+    },
+    {
+     "rif": "Z2",
+     "ora": "08:15",
+     "paziente": "Bozano",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "",
+     "y": 43.6,
+     "caselle": {
+      "7": "7",
+      "13": "5",
+      "15": "4",
+      "20": "3",
+      "23": "2",
+      "26": "1V"
+     },
+     "dubbi": {
+      "26": "«1V» di Lun 26?"
+     },
+     "nota": "il 15 e il 23 scritto in verticale «BO ZA NO» alle 7:15 con il numero sotto; il 6 forse fatto altrove",
+     "orari": {
+      "15": "07:15",
+      "23": "07:15"
+     }
+    },
+    {
+     "rif": "Z3",
+     "ora": "12:20",
+     "paziente": "Salvo",
+     "frequenza": "Mer Ven",
+     "giorni": [
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 69.8,
+     "caselle": {
+      "2": "2",
+      "7": "1V",
+      "9": "R"
+     },
+     "dubbi": {
+      "7": "«1V» di mercoledì 7 o giovedì 8?"
+     }
+    },
+    {
+     "rif": "Z4",
+     "ora": "12:20",
+     "paziente": "Bonesso",
+     "frequenza": "Lu Gi",
+     "giorni": [
+      1,
+      4
+     ],
+     "tipo": "GC",
+     "y": 74.0,
+     "caselle": {
+      "1": "3",
+      "6": "2V",
+      "8": "1",
+      "12": "10"
+     },
+     "dubbi": {
+      "6": "«2V» il martedì 6 (freccia «12:20» dal 5?)",
+      "8": "«1» di giovedì 8 o venerdì 9?"
+     },
+     "nota": "dopo l’1 nuovo ciclo dal 12, poi niente: controlla"
+    },
+    {
+     "rif": "Z5",
+     "ora": "12:50",
+     "paziente": "Rignanese",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 79.6,
+     "caselle": {
+      "2": "2",
+      "7": "1"
+     },
+     "nota": "ciclo finito il 7; l’8 una scritta in verticale"
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "«IAGU…» in verticale (forse Iagberau, di Cantarella)",
+     "giorno": 5,
+     "ora": "07:15",
+     "valore": "",
+     "nota": "anche il 7 e l’8"
+    },
+    {
+     "paziente": "«CATANEO» in verticale (forse Cattaneo, di Cantarella)",
+     "giorno": 2,
+     "ora": "07:45",
+     "valore": "",
+     "nota": ""
+    },
+    {
+     "paziente": "«BO CANO…» in verticale",
+     "giorno": 9,
+     "ora": "07:15",
+     "valore": "",
+     "nota": ""
+    }
+   ],
+   "note": [
+    {
+     "giorni": [
+      1,
+      8,
+      15,
+      22,
+      29
+     ],
+     "testo": "«BU» in verticale ogni giovedì alle 8:15: significato da verificare"
+    }
+   ],
+   "assenze": []
+  }
+ ]
+}

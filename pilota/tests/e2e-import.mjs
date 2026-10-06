@@ -19,6 +19,8 @@ const TH = 'Fittizio ' + RUN;
 const DAY = [{ kind: 'amb', start: '07:00', end: '12:00' }, { kind: 'pausa', start: '12:00', end: '12:20' }, { kind: 'amb', start: '12:20', end: '14:30' }];
 const thId = await S.rpc(admin, 'admin_save_therapist', { p: { name: TH, activity: 'ambulatorio', skills: [{ category_id: 'mano', level: 'specifica' }] } });
 await S.rpc(admin, 'admin_save_shift', { p_th: thId, p_valid_from: T0, p_week: { 1: DAY, 2: DAY, 3: DAY, 4: DAY, 5: DAY, 6: [], 7: [] }, p_note: '', p_dry_run: false });
+const colId = await S.rpc(admin, 'admin_save_therapist', { p: { name: 'Collega ' + RUN, activity: 'ambulatorio', skills: [{ category_id: 'mano', level: 'specifica' }] } });
+await S.rpc(admin, 'admin_save_shift', { p_th: colId, p_valid_from: T0, p_week: { 1: DAY, 2: DAY, 3: DAY, 4: DAY, 5: DAY, 6: [], 7: [] }, p_note: '', p_dry_run: false });
 
 // tabulato del mese prossimo, costruito sulle date reali di quel mese
 let first = E.addDays(T0, 1); while (first.slice(8) !== '01') first = E.addDays(first, 1);
@@ -33,8 +35,8 @@ ferieDay = Number(ferieDay.slice(8));
 const transcript = { formato: 'fisioagenda-tabulato-1', fogli: [{ fisioterapista: TH, mese: M, foto: 'tabulato-fittizio.png', durata: null, durata_suggerita: 30, sedute_ciclo: 10,
   griglia: { x_giorno1: 27.16, x_giorno31: 96.84, h_riga: 4.6 },
   righe: [
-    { rif: 'F1', ora: '07:15', paziente: name('Bianchi'), frequenza: '3v', giorni: [1, 3, 5], tipo: 'GC', y: 17.69, caselle: cells(bi, ['3', '2', '1V', 'R']) },
-    { rif: 'F2', ora: '07:15', paziente: name('Neri'), frequenza: '2v', giorni: [2, 4], tipo: 'RM', y: 22.31, caselle: cells(ne, ['6', '5', '4', '3', '2', '1']) },
+    { rif: 'F1', ora: '07:15', paziente: name('Bianchi'), frequenza: '3v', giorni: [1, 3, 5], tipo: 'GC', y: 17.69, caselle: cells(bi, ['3', '2', '1V', 'R']), orari: { [String(Number(bi[1].slice(8)))]: '09:30' } },
+    { rif: 'F2', ora: '07:15', paziente: name('Neri'), frequenza: '2v', giorni: [2, 4], tipo: 'RM', y: 22.31, caselle: cells(ne, ['6', '5', '4', '3', '2', '1']), sostituti: { [String(Number(ne[2].slice(8)))]: 'XY' } },
     { rif: 'F3', ora: '08:15', paziente: name('Gialli'), frequenza: '2v', giorni: [2, 4], tipo: 'GC', y: 26.92, caselle: cells(gi, ['4', '3', '2', '1']), dubbi: { [String(Number(gi[1].slice(8)))]: '3 poco leggibile' } },
     { rif: 'F4', ora: '06:30', paziente: name('Viola'), frequenza: 'Ven', giorni: [5], tipo: 'GC', y: 31.54, caselle: cells(vi, ['10', '9', '8']), dubbi_riga: ['orario 6:30?'] }
   ], estemporanei: [], note: [{ giorni: [20], testo: 'Corso' }], assenze: [{ giorni: [ferieDay], tipo: 'ferie', nota: 'F sul foglio' }] }] };
@@ -77,6 +79,8 @@ try {
   assert.match(await page.textContent('.imp-row[data-ref="F4"]'), /fuori dalle fasce/);
   // correzioni: lettura confermata, orario controllato, "importa comunque" per il fuori turno
   await page.click('.imp-row[data-ref="F3"] .imp-okc');
+  // sigla sotto il numero: il collega che ha fatto la seduta
+  await page.selectOption('.panel:has(h3:has-text("Sigle dei colleghi")) select', colId);
   await page.click('.imp-row[data-ref="F4"] input[data-act-change="imp-rd"]');
   const nForce = (await page.$$('.imp-row[data-ref="F4"] input[data-act-change="imp-force"]')).length;
   assert.equal(nForce, 3);
@@ -92,12 +96,14 @@ try {
   assert.equal(psql(`select c.prior_sessions from cycles c join patients p on p.id=c.patient_id where p.name='${name('Bianchi')}'`), '7');
   assert.equal(count(`select count(*) from patient_events where patient_id in ${pats}`), 1);
   assert.equal(psql(`select sheet_mark from appointments a join patients p on p.id=a.patient_id where p.name='${name('Bianchi')}' and a.day='${bi[3]}'`), 'R');
+  assert.equal(psql(`select to_char(start_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Bianchi')}' and a.day='${bi[1]}'`), '09:30', 'orario della singola casella');
+  assert.equal(psql(`select (a.therapist_id='${colId}')::text||' '||a.substitute_kind||' '||(a.original_therapist_id='${thId}')::text from appointments a join patients p on p.id=a.patient_id where p.name='${name('Neri')}' and a.day='${ne[2]}'`), 'true singola true', 'sigla del collega: sostituzione');
   // ferie segnate sul foglio (F): registrate solo con il pulsante
   assert.equal(count(`select count(*) from absences where therapist_id='${thId}'`), 0, 'le ferie non si registrano da sole');
   await page.click('button[data-act="imp-abs"]');
   await page.waitForSelector('.panel:has(h3:has-text("segnate sul foglio")) .chip.ok', { timeout: 15000 });
   assert.equal(psql(`select kind||' '||start_date||' '||end_date from absences where therapist_id='${thId}'`), `ferie ${M}-${String(ferieDay).padStart(2, '0')} ${M}-${String(ferieDay).padStart(2, '0')}`);
-  ok('Importazione confermata: 4 pazienti, 17 sedute programmate (numeri a ritroso → 8ª, 9ª, 10ª), R come recupero, V come visita; ferie del foglio registrate con un clic');
+  ok('Importazione confermata: 4 pazienti, 17 sedute programmate (numeri a ritroso → 8ª, 9ª, 10ª), R come recupero, V come visita, sigla del collega come sostituzione, orario della singola casella; ferie del foglio registrate con un clic');
 
   // stessa foto e stessa trascrizione di nuovo: nessun doppione
   await load();

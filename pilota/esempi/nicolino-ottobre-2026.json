@@ -62,7 +62,12 @@
      "dubbi_riga": [
       "nome poco leggibile («Iacoveanu»?)"
      ],
-     "nota": "5, 7 e 9: sotto i numeri le sigle BR/BE (colleghi che hanno sostituito?)"
+     "nota": "5, 7 e 9: sotto i numeri le sigle BR/BE (colleghi che hanno sostituito?)",
+     "sostituti": {
+      "5": "BR",
+      "7": "BR",
+      "9": "BE"
+     }
     },
     {
      "rif": "N3",
@@ -86,7 +91,11 @@
      "dubbi": {
       "20": "«V1» di Lun 19 o Mar 20?"
      },
-     "nota": "6 e 8: sigla MG sotto i numeri"
+     "nota": "6 e 8: sigla MG sotto i numeri",
+     "sostituti": {
+      "6": "MG",
+      "8": "MG"
+     }
     },
     {
      "rif": "N4",
@@ -112,7 +121,11 @@
      "dubbi_riga": [
       "dopo il 14 altri segni (2 il 26, V il 28): forse un nuovo ciclo, controlla"
      ],
-     "nota": "6 e 8: sigla SC sotto i numeri"
+     "nota": "6 e 8: sigla SC sotto i numeri",
+     "sostituti": {
+      "6": "SC",
+      "8": "SC"
+     }
     },
     {
      "rif": "N5",
@@ -131,7 +144,11 @@
       "19": "4",
       "23": "3"
      },
-     "nota": "5 e 9: sigla DB; «3v» ma le sedute cadono Lun/Ven"
+     "nota": "5 e 9: sigla DB; «3v» ma le sedute cadono Lun/Ven",
+     "sostituti": {
+      "5": "DB",
+      "9": "DB"
+     }
     },
     {
      "rif": "N6",
@@ -161,7 +178,12 @@
       "2": "9 sbiadito?",
       "21": "«V1»: V il 20 e 1 il 21?"
      },
-     "nota": "6, 7 e 9: sigla MB"
+     "nota": "6, 7 e 9: sigla MB",
+     "sostituti": {
+      "6": "MB",
+      "7": "MB",
+      "9": "MB"
+     }
     },
     {
      "rif": "N7",
@@ -185,24 +207,23 @@
       "9": "«4» di giovedì 8 o venerdì 9?",
       "19": "«1/» di Lun 19 o Mar 20?"
      },
-     "nota": "dopo l’1 del 1° nuovo ciclo; sigla AA sotto i numeri 6–9; il 7 e il 9 annotato «13:20»"
+     "nota": "dopo l’1 del 1° nuovo ciclo; sigla AA sotto i numeri 6–9; il 7 e il 9 annotato «13:20»",
+     "sostituti": {
+      "6": "AA",
+      "7": "AA",
+      "9": "AA"
+     }
     }
    ],
    "estemporanei": [],
    "note": [
     {
-     "giorni": [
-      5,
-      6,
-      7,
-      8,
-      9
-     ],
-     "testo": "«M» sopra i giorni 5–9 e sigle di colleghi sotto i numeri: Nicolino assente, pazienti coperti dai colleghi?"
+     "giorni": [],
+     "testo": "Alle 12:20, 12:50 e 13:20 righe «SPLINT 2v»: tutori, non importate"
     },
     {
      "giorni": [],
-     "testo": "Alle 12:20, 12:50 e 13:20 righe «SPLINT 2v»: tutori, non importate"
+     "testo": "Sigle sotto i numeri = colleghi che hanno fatto la seduta (MG = Manuela Guidetti; BR, BE, SC, DB, MB, AA da associare nell’anteprima)"
     }
    ],
    "assenze": [
@@ -215,7 +236,7 @@
       9
      ],
      "tipo": "malattia",
-     "nota": "«M» sul foglio (malattia?): verifica il tipo"
+     "nota": "«M» sul foglio"
     },
     {
      "giorni": [

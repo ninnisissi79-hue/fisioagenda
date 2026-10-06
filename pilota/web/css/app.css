@@ -349,3 +349,4 @@ select.need, input.need { border-color: var(--warn) !important; box-shadow: 0 0 
 .wk-appt.dragging { opacity: .45; }
 .pd-found { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .pd-found .btn { justify-content: flex-start; text-align: left; }
+.imp-grid td.sub::after { content: ''; position: absolute; left: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--info); }

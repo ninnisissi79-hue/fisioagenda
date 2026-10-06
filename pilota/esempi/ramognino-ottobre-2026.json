@@ -1,0 +1,205 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Ramognino (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo; F = ferie, M = malattia, P = permesso; sigle sotto i numeri = collega che ha fatto la seduta.",
+ "fogli": [
+  {
+   "fisioterapista": "Ramognino",
+   "mese": "2026-10",
+   "foto": "ramognino-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 25.75,
+    "x_giorno31": 97.9,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "A1",
+     "ora": "08:15",
+     "paziente": "Torre",
+     "frequenza": "Lu Me Gio",
+     "giorni": [
+      1,
+      3,
+      4
+     ],
+     "tipo": "GC",
+     "y": 17.3,
+     "caselle": {
+      "1": "5",
+      "5": "4",
+      "7": "3",
+      "8": "2",
+      "12": "1"
+     }
+    },
+    {
+     "rif": "A2",
+     "ora": "08:15",
+     "paziente": "Velzer",
+     "frequenza": "Ma Ven",
+     "giorni": [
+      2,
+      5
+     ],
+     "tipo": "RM",
+     "y": 24.9,
+     "caselle": {
+      "6": "10"
+     },
+     "dubbi_riga": [
+      "solo il «10» del 6: le sedute successive non sono scritte, controlla"
+     ]
+    },
+    {
+     "rif": "A3",
+     "ora": "12:50",
+     "paziente": "Cantero",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 58.7,
+     "caselle": {
+      "5": "3",
+      "7": "2",
+      "9": "1",
+      "12": "R",
+      "13": "V"
+     },
+     "nota": "numeri sbiaditi il 1°–2 e il 6, 8 (forse della riga sotto)"
+    },
+    {
+     "rif": "A4",
+     "ora": "12:50",
+     "paziente": "Giordanetto",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 61.2,
+     "caselle": {
+      "1": "7",
+      "6": "6",
+      "8": "5",
+      "13": "4",
+      "15": "3",
+      "20": "2",
+      "21": "V",
+      "22": "1"
+     },
+     "dubbi": {
+      "21": "V di Mar 20 o Mer 21?"
+     }
+    },
+    {
+     "rif": "A5",
+     "ora": "13:20",
+     "paziente": "Nieddu",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 73.6,
+     "caselle": {
+      "5": "5",
+      "7": "4",
+      "9": "3",
+      "12": "2",
+      "13": "V",
+      "14": "1"
+     }
+    },
+    {
+     "rif": "A6",
+     "ora": "13:50",
+     "paziente": "Szili",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 78.8,
+     "caselle": {
+      "1": "5",
+      "8": "4",
+      "12": "V",
+      "13": "3",
+      "15": "2"
+     },
+     "dubbi_riga": [
+      "il 6 un segno (barrato?): forse assente"
+     ]
+    },
+    {
+     "rif": "A7",
+     "ora": "13:50",
+     "paziente": "Shawky",
+     "frequenza": "",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "GC",
+     "y": 83.3,
+     "caselle": {
+      "5": "3",
+      "7": "2",
+      "9": "1",
+      "12": "10",
+      "14": "9",
+      "16": "8",
+      "19": "7",
+      "21": "6",
+      "23": "5",
+      "26": "4",
+      "28": "3V",
+      "30": "2"
+     },
+     "dubbi": {
+      "21": "colonna incerta",
+      "23": "colonna incerta",
+      "28": "colonna incerta",
+      "30": "colonna incerta"
+     },
+     "nota": "dopo l’1 del 9 nuovo ciclo dal 12; oltre il 31 «+1». Un «Shawky» c’è anche sul tabulato di Mazzucco"
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [
+      6,
+      7,
+      26,
+      27
+     ],
+     "testo": "«Gruppo» alle 13:50"
+    }
+   ],
+   "assenze": [
+    {
+     "giorni": [
+      2
+     ],
+     "tipo": "ferie",
+     "nota": "«F» sopra il 2: verifica"
+    }
+   ]
+  }
+ ]
+}

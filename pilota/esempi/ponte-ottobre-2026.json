@@ -1,0 +1,127 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Ponte (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo; F = ferie, M = malattia, P = permesso; sigle sotto i numeri = collega che ha fatto la seduta.",
+ "fogli": [
+  {
+   "fisioterapista": "Ponte",
+   "mese": "2026-10",
+   "foto": "ponte-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 25.35,
+    "x_giorno31": 92.6,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "P1",
+     "ora": "07:45",
+     "paziente": "Cunino",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 31.2,
+     "caselle": {
+      "5": "8",
+      "7": "7",
+      "12": "6",
+      "14": "5",
+      "19": "4",
+      "21": "3",
+      "22": "V",
+      "23": "2",
+      "26": "1"
+     },
+     "dubbi": {
+      "21": "colonna incerta (Mar 20 o Mer 21)",
+      "22": "V di Mer 21 o Gio 22?",
+      "23": "colonna incerta (Gio 22 o Ven 23)"
+     },
+     "nota": "nessuna seduta il venerdì 9 e 16 (permesso del collega)"
+    },
+    {
+     "rif": "P2",
+     "ora": "08:15",
+     "paziente": "Giaccone",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "",
+     "y": 40.6,
+     "caselle": {
+      "1": "V"
+     },
+     "nota": "solo una V il 1° e un segno il 2: esclusa",
+     "importa": false
+    },
+    {
+     "rif": "P3",
+     "ora": "08:15",
+     "paziente": "Giardini",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 42.6,
+     "caselle": {
+      "1": "1"
+     },
+     "nota": "«//»: ciclo finito il 1°",
+     "chiuso": true
+    },
+    {
+     "rif": "P4",
+     "ora": "12:20",
+     "paziente": "Viti",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 68.7,
+     "caselle": {
+      "1": "7",
+      "6": "6",
+      "8": "5",
+      "13": "4",
+      "15": "3",
+      "20": "2",
+      "21": "V",
+      "22": "1",
+      "26": "R"
+     },
+     "dubbi": {
+      "6": "numero scarabocchiato (6?)",
+      "21": "«V» il 21?"
+     },
+     "nota": "frequenza non scritta: Mar/Gio dalle caselle"
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "Alle 12:20, 12:50 e 13:20 righe «SPLINT Lu Mer»: tutori, non importate"
+    }
+   ],
+   "assenze": [
+    {
+     "giorni": [
+      2,
+      9,
+      16
+     ],
+     "tipo": "permesso",
+     "nota": "«P» sopra i venerdì 2, 9 e 16"
+    }
+   ]
+  }
+ ]
+}

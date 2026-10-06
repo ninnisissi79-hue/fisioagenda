@@ -230,3 +230,16 @@ test('nuovo ciclo sulla stessa riga del tabulato: due cicli dello stesso pazient
   const u = await S.rpc(op1, 'undo_import', { p_batch: r.batch_id });
   assert.equal(u.cycles, 3); assert.equal(u.patients, 2);
 });
+
+test('sigla di un collega sotto il numero: la seduta va al collega come sostituzione', async () => {
+  const A = await therapist('S1'), B = await therapist('S2');
+  const [d1, d2] = days(E.addDays(T0, 1), [2, 4], 2);
+  const r = await S.rpc(op1, 'import_sheet', { p: { therapist_id: A, month: month(d1), from_date: d1, rows: [
+    { ref: 's', target: 'nuovo', patient_name: 'Sostituito ' + RUN, category_id: 'mano', planned: 10, prior: 4, duration: 30, weekdays: [2, 4], start: '09:00',
+      cells: [{ day: d1, number: 6, therapist_id: B }, { day: d2, number: 5 }] }] } });
+  assert.equal(r.appointments, 2);
+  const rows = q(`select string_agg(case when a.therapist_id='${B}' then 'B' else 'A' end||':'||coalesce(a.substitute_kind,'-')||':'||case when a.original_therapist_id='${A}' then 'A' else '-' end, ',' order by a.day)
+    from appointments a join patients p on p.id=a.patient_id where p.name='Sostituito ${RUN}'`);
+  assert.equal(rows, 'B:singola:A,A:-:-');
+  assert.equal(q(`select c.therapist_id from cycles c join patients p on p.id=c.patient_id where p.name='Sostituito ${RUN}'`), A, 'il ciclo resta del titolare');
+});

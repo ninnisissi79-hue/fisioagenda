@@ -75,6 +75,8 @@ Se il database era stato installato con una versione precedente, esegui una volt
    - Conflitti (fuori turno, assenza, chiusura): correggi, oppure spunta “importa comunque” e la seduta finirà in “Da sistemare”. Due pazienti alla stessa ora non sono mai importabili.
    - Le sedute non scritte sul foglio si aggiungono solo se lo chiedi (“Programma anche le sedute successive…”).
    - **Assenze segnate sul foglio** (F = ferie, M, P…): compaiono in un riquadro a parte e si registrano solo con il pulsante **Registra**, meglio dopo aver importato le sedute. Le sedute già in calendario in quei giorni finiscono in “Da sistemare”, dove organizzi i sostituti.
+   - **Sigle sotto i numeri** (es. MG): sono i colleghi che hanno fatto la seduta. Nel riquadro “Sigle dei colleghi” scegli chi è: la seduta va nel suo calendario come sostituzione, il ciclo resta del titolare. Se non scegli, resta al titolare.
+   - Una seduta scritta in un’altra fascia del foglio mantiene il suo orario (la casella lo mostra passandoci sopra).
    - **Durata:** scegli quella predefinita del foglio (30′, 45′, 1 ora o altro) e cambiala per i pazienti che hanno una durata diversa.
 5. **Importa nel calendario.** Ricaricare la stessa foto o lo stesso foglio non crea doppioni. Ogni importazione compare in **Importazioni recenti** con il pulsante **Annulla**, che elimina ciò che ha creato (le sedute con un esito già registrato restano).
 
