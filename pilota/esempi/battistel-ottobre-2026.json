@@ -1,0 +1,184 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Battistel (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Battistel",
+   "mese": "2026-10",
+   "foto": "battistel-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 23.0,
+    "x_giorno31": 96.5,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "T1",
+     "ora": "07:15",
+     "paziente": "Chalon",
+     "frequenza": "Lu Me",
+     "giorni": [
+      1,
+      3
+     ],
+     "tipo": "TF",
+     "y": 19.8,
+     "caselle": {
+      "7": "4",
+      "12": "3",
+      "14": "2",
+      "19": "1"
+     },
+     "nota": "dopo il nome una sigla cerchiata (TF?)"
+    },
+    {
+     "rif": "T2",
+     "ora": "07:15",
+     "paziente": "Bazzardi",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "",
+     "y": 21.8,
+     "caselle": {
+      "1": "8",
+      "2": "7",
+      "8": "6",
+      "9": "5",
+      "13": "4",
+      "15": "3",
+      "16": "2",
+      "19": "1"
+     },
+     "dubbi": {
+      "13": "colonna incerta: martedì 13 o altro giorno?"
+     },
+     "dubbi_riga": [
+      "frequenza non scritta: le sedute cadono di Gio/Ven e poi di Mar, Lun: indica i giorni"
+     ],
+     "nota": "dopo il nome «Magine AMITF?»"
+    },
+    {
+     "rif": "T3",
+     "ora": "12:50",
+     "paziente": "Berruti",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "",
+     "y": 60.4,
+     "caselle": {},
+     "nota": "nome scritto in piccolo, forse cancellato; piccoli segni il 13 e il 19 (8? V6?): esclusa",
+     "importa": false
+    },
+    {
+     "rif": "T4",
+     "ora": "12:50",
+     "paziente": "Bianchi",
+     "frequenza": "",
+     "giorni": [
+      1,
+      3
+     ],
+     "tipo": "",
+     "y": 64.1,
+     "caselle": {
+      "7": "10",
+      "12": "9",
+      "14": "8",
+      "19": "7",
+      "20": "6",
+      "26": "5",
+      "28": "4"
+     },
+     "dubbi": {
+      "20": "colonna incerta: Mar 20 o Mer 21?"
+     },
+     "nota": "dopo il nome «neurolin…»; oltre il 31 è scritto «+3» (3 sedute nel mese successivo)"
+    },
+    {
+     "rif": "T5",
+     "ora": "13:20",
+     "paziente": "Roccovi",
+     "frequenza": "Lu Me",
+     "giorni": [
+      1,
+      3
+     ],
+     "tipo": "RM",
+     "y": 69.9,
+     "caselle": {
+      "5": "2",
+      "7": "1"
+     },
+     "nota": "il 12 e il 14 numeri sbiaditi (12? 10?): forse un nuovo ciclo, controlla sulla foto"
+    },
+    {
+     "rif": "T6",
+     "ora": "14:20",
+     "paziente": "Novara",
+     "frequenza": "3V",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "TF",
+     "y": 89.4,
+     "caselle": {
+      "2": "3",
+      "7": "?",
+      "12": "1"
+     },
+     "dubbi": {
+      "7": "2 o 8? numeri della riga di sotto molto vicini"
+     },
+     "dubbi_riga": [
+      "righe di Novara e Adami molto vicine: controlla a chi appartengono i numeri"
+     ],
+     "nota": "dopo il nome «TF 3V laser»"
+    },
+    {
+     "rif": "T7",
+     "ora": "14:20",
+     "paziente": "Adami",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 91.4,
+     "caselle": {
+      "1": "?",
+      "6": "8",
+      "8": "7",
+      "13": "6",
+      "15": "5",
+      "20": "4",
+      "22": "3",
+      "27": "2",
+      "29": "1"
+     },
+     "dubbi": {
+      "1": "3 o 9?",
+      "20": "colonna incerta (Lun 19 o Mar 20)",
+      "22": "colonna incerta (Mer 21 o Gio 22)",
+      "29": "colonna incerta (Mer 28 o Gio 29)"
+     },
+     "nota": "frequenza non scritta: dedotta Mar/Gio dalle caselle"
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "In alto al foglio «F F»"
+    }
+   ]
+  }
+ ]
+}

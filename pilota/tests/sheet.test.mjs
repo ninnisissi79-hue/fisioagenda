@@ -77,3 +77,17 @@ test('trascrizione: formato, fogli, posizione delle caselle sulla foto', () => {
   assert.deepEqual(H.cellPos(sheets[0].grid, 31, 20), { x: 90, y: 20, w: 2, h: 3 });
   assert.ok(H.fromTranscript({ formato: 'altro' }).errors.length);
 });
+
+test('nuovo ciclo sulla stessa riga: dopo l’1 si ricomincia da 10', () => {
+  // Borreani (Bozano, ottobre 2026): Gio 1 → 2, Mar 6 → 1, poi Mar 13 → 10, Mar 20 → 9, Mar 27 → 8
+  const r = H.analyzeRow({ cells: { 1: '2', 6: '1', 13: '10', 20: '9', 27: '8' } }, O);
+  assert.deepEqual(r.blocking, []);
+  assert.match(r.issues.join(' '), /Nuovo ciclo dal Mar 13\/10/);
+  assert.deepEqual(r.imported.map(c => c.num), [2, 1]); assert.equal(r.prior, 8);
+  assert.deepEqual(r.next.cells.map(c => c.num), [10, 9, 8]); assert.equal(r.next.prior, 0);
+  // se il primo ciclo è già finito prima della data di inizio, resta solo il nuovo
+  const n = H.analyzeRow({ cells: { 1: '2', 6: '1', 13: '10', 20: '9' } }, Object.assign({}, O, { from: '2026-10-07' }));
+  assert.equal(n.next, undefined); assert.deepEqual(n.imported.map(c => c.num), [10, 9]); assert.equal(n.prior, 0);
+  // salita senza fine ciclo: errore di lettura
+  assert.match(H.analyzeRow({ cells: { 1: '5', 6: '7' } }, O).blocking.join(' '), /non in successione/);
+});

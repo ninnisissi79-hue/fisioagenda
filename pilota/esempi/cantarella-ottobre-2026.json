@@ -1,0 +1,261 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Cantarella (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Cantarella",
+   "mese": "2026-10",
+   "foto": "cantarella-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce del pomeriggio distano 30 minuti; quelle del mattino un’ora: verifica la durata",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 25.75,
+    "x_giorno31": 95.35,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "C1",
+     "ora": "07:15",
+     "paziente": "Mantrobi",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "GC",
+     "y": 21.4,
+     "caselle": {
+      "9": "5",
+      "12": "4V",
+      "14": "3",
+      "16": "2",
+      "19": "1"
+     },
+     "dubbi_riga": [
+      "nome poco leggibile: «Mantrobi»?"
+     ],
+     "nota": "il 5 e il 7 scritte in verticale (CRI STI GLI…): forse un altro paziente"
+    },
+    {
+     "rif": "C2",
+     "ora": "07:15",
+     "paziente": "Cattaneo",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "",
+     "y": 26.0,
+     "caselle": {
+      "2": "?",
+      "6": "3",
+      "8": "V",
+      "13": "1",
+      "15": "R"
+     },
+     "dubbi": {
+      "2": "4 con un segno sotto (3?)",
+      "8": "V con un altro segno (V2?)"
+     }
+    },
+    {
+     "rif": "C3",
+     "ora": "08:15",
+     "paziente": "Scarrone",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "",
+     "y": 31.0,
+     "caselle": {
+      "5": "?",
+      "7": "5",
+      "9": "4",
+      "12": "3",
+      "14": "2",
+      "16": "1"
+     },
+     "dubbi": {
+      "5": "1 o 6?"
+     },
+     "nota": "«//» dopo il nome e dopo l’1 del 16: fine ciclo",
+     "chiuso": true
+    },
+    {
+     "rif": "C4",
+     "ora": "09:15",
+     "paziente": "Iagberau",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 40.6,
+     "caselle": {
+      "1": "4",
+      "6": "3",
+      "8": "2",
+      "14": "10",
+      "20": "1"
+     },
+     "dubbi": {
+      "14": "«10» con un trattino il 13: nuovo ciclo?",
+      "20": "1 di questa riga?"
+     },
+     "dubbi_riga": [
+      "sequenza poco chiara: 4, 3, 2, poi «10» il 14 e «1» il 20"
+     ],
+     "nota": "il 5 scritto in verticale «LA NE RO» (forse Lanero)"
+    },
+    {
+     "rif": "C5",
+     "ora": "09:15",
+     "paziente": "Bellotto",
+     "frequenza": "Ma Ven",
+     "giorni": [
+      2,
+      5
+     ],
+     "tipo": "GC",
+     "y": 45.0,
+     "caselle": {
+      "2": "?",
+      "6": "6",
+      "9": "5",
+      "13": "4",
+      "16": "3",
+      "20": "2",
+      "28": "1",
+      "30": "R"
+     },
+     "dubbi": {
+      "2": "numero poco leggibile (7?)",
+      "20": "colonna incerta: Mar 20 o Mer 21?",
+      "28": "«1» barrato il 28 (Mer): spostata o fine ciclo?"
+     }
+    },
+    {
+     "rif": "C6",
+     "ora": "10:15",
+     "paziente": "Poggi",
+     "frequenza": "3v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 50.3,
+     "caselle": {
+      "5": "?",
+      "6": "4",
+      "7": "3",
+      "8": "V",
+      "9": "2",
+      "12": "1"
+     },
+     "dubbi": {
+      "5": "segno illeggibile"
+     },
+     "dubbi_riga": [
+      "orario della fascia: 10:15?"
+     ],
+     "nota": "il 7 una scritta in verticale"
+    },
+    {
+     "rif": "C7",
+     "ora": "11:15",
+     "paziente": "Cieris",
+     "frequenza": "3v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 59.4,
+     "caselle": {
+      "5": "4",
+      "7": "3V",
+      "9": "2",
+      "12": "1"
+     },
+     "nota": "il 14 un «2» sbiadito: nuovo ciclo o cancellato? controlla"
+    },
+    {
+     "rif": "C8",
+     "ora": "11:15",
+     "paziente": "Chicchirico",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 63.9,
+     "caselle": {
+      "1": "9",
+      "6": "8",
+      "8": "7",
+      "13": "6",
+      "15": "5",
+      "20": "4",
+      "22": "3",
+      "27": "2",
+      "29": "1"
+     },
+     "dubbi": {
+      "20": "sbiadito",
+      "22": "sbiadito",
+      "27": "sbiadito",
+      "29": "sbiadito"
+     },
+     "nota": "oltre il 31 «+R»"
+    },
+    {
+     "rif": "C9",
+     "ora": "12:20",
+     "paziente": "Lanero",
+     "frequenza": "Lu-Me",
+     "giorni": [
+      1,
+      3
+     ],
+     "tipo": "TF",
+     "y": 69.0,
+     "caselle": {},
+     "nota": "le colonne del 5, 7, 12 e 14 sono occupate da scritte in verticale (SPRINT…): non leggibili, esclusa",
+     "importa": false
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "«RO MA NO LO LN»? in verticale",
+     "giorno": 6,
+     "ora": "08:15",
+     "valore": "",
+     "nota": "anche il 8"
+    },
+    {
+     "paziente": "nome in verticale",
+     "giorno": 8,
+     "ora": "10:15",
+     "valore": "",
+     "nota": ""
+    }
+   ],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "Alle 12:20, 12:50 e 13:20 righe «SPRINT 2a Gio Ven»: attività di gruppo? non importate"
+    },
+    {
+     "giorni": [],
+     "testo": "Al mattino le fasce sono di un’ora (7:15, 8:15, 9:15, 10:15, 11:15) con due pazienti in giorni diversi"
+    }
+   ]
+  }
+ ]
+}

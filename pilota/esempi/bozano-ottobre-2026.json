@@ -1,0 +1,164 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Bozano (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Bozano",
+   "mese": "2026-10",
+   "foto": "bozano-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 29.7,
+    "x_giorno31": 91.8,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "O1",
+     "ora": "08:15",
+     "paziente": "Borreani",
+     "frequenza": "2v",
+     "giorni": [
+      2
+     ],
+     "tipo": "GC",
+     "y": 21.5,
+     "caselle": {
+      "1": "2",
+      "6": "1",
+      "13": "10",
+      "20": "9",
+      "27": "8"
+     },
+     "dubbi_riga": [
+      "«2v» ma sul foglio una seduta a settimana (martedì): controlla i giorni"
+     ],
+     "nota": "dopo l’1 del 6 ricomincia da 10: nuovo ciclo; oltre il 31 «+7» (7 sedute nel mese successivo)"
+    },
+    {
+     "rif": "O2",
+     "ora": "08:15",
+     "paziente": "Mora",
+     "frequenza": "2v L-Me",
+     "giorni": [
+      1,
+      3
+     ],
+     "tipo": "RM",
+     "y": 23.9,
+     "caselle": {
+      "5": "7",
+      "7": "6",
+      "12": "5",
+      "14": "4",
+      "19": "3",
+      "20": "V",
+      "21": "2",
+      "26": "1"
+     }
+    },
+    {
+     "rif": "O3",
+     "ora": "08:45",
+     "paziente": "Roosco",
+     "frequenza": "",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 32.6,
+     "caselle": {
+      "2": "8",
+      "5": "7",
+      "7": "6",
+      "9": "5",
+      "12": "4",
+      "14": "3",
+      "16": "2",
+      "19": "1V"
+     },
+     "dubbi_riga": [
+      "nome poco leggibile: «Roosco»?"
+     ]
+    },
+    {
+     "rif": "O4",
+     "ora": "12:50",
+     "paziente": "Nicotera",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 57.0,
+     "caselle": {
+      "1": "5",
+      "6": "4"
+     },
+     "dubbi_riga": [
+      "dopo il 6 numeri molto sbiaditi (forse 3, 2, 1 nei giorni 8, 13, 15): aggiungili se li leggi sul foglio"
+     ]
+    },
+    {
+     "rif": "O5",
+     "ora": "12:50",
+     "paziente": "Zunino",
+     "frequenza": "2v L-V",
+     "giorni": [
+      1,
+      5
+     ],
+     "tipo": "RM",
+     "y": 59.0,
+     "caselle": {
+      "2": "3",
+      "5": "2"
+     },
+     "dubbi_riga": [
+      "dopo il 5 la riga è quasi illeggibile: il 19–20 sembra «2 V»"
+     ]
+    },
+    {
+     "rif": "O6",
+     "ora": "13:50",
+     "paziente": "Unocc",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 76.8,
+     "caselle": {
+      "1": "3",
+      "2": "2",
+      "5": "1"
+     },
+     "nota": "dopo il nome «RM + US x2»; «//» il 5: fine ciclo",
+     "chiuso": true
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "nome in verticale («11:30 …»)",
+     "giorno": 19,
+     "ora": "",
+     "valore": "",
+     "nota": "nella fascia vuota tra le 8:45 e le 12:50"
+    },
+    {
+     "paziente": "«Gr…»",
+     "giorno": 5,
+     "ora": "13:50",
+     "valore": "",
+     "nota": "seconda riga della fascia delle 13:50"
+    }
+   ],
+   "note": []
+  }
+ ]
+}

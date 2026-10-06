@@ -83,17 +83,24 @@
       if (c.bad) res.blocking.push(c.d + '/' + o.month.slice(5) + ': ' + c.bad + '.');
       if (c.doubtMsg) res.blocking.push(c.d + '/' + o.month.slice(5) + ': lettura incerta (' + c.doubtMsg + '): correggi o conferma la casella.');
     });
-    // numeri in successione a ritroso: 10, 9, 8 … (un salto = seduta su un altro foglio)
+    // numeri in successione a ritroso: 10, 9, 8 … (un salto = seduta su un altro foglio).
+    // Dopo l'ultima seduta (1) la stessa riga può ricominciare da capo: è un nuovo ciclo dello stesso paziente.
     const num = res.cells.filter(c => c.num != null && !c.bad);
     res.numbered = num;
-    for (let i = 1; i < num.length; i++) {
-      const a = num[i - 1], b = num[i];
-      if (b.num >= a.num) res.blocking.push('Numeri non in successione: ' + a.num + ' il ' + a.d + ', poi ' + b.num + ' il ' + b.d + '. Controlla le caselle.');
-      else if (a.num - b.num > 1) {
+    let seg = 0;
+    num.forEach((b, i) => {
+      const a = num[i - 1];
+      if (a && b.num >= a.num) {
+        if (a.num === 1 || b.num === planned) { seg++; res.issues.push('Nuovo ciclo dal ' + E.fmtItDay(b.day) + ': dopo il n. ' + a.num + ' la riga ricomincia da ' + b.num + '.'); }
+        else res.blocking.push('Numeri non in successione: ' + a.num + ' il ' + a.d + ', poi ' + b.num + ' il ' + b.d + '. Controlla le caselle.');
+      } else if (a && a.num - b.num > 1) {
         const miss = []; for (let k = a.num - 1; k > b.num; k--) miss.push(k);
         res.issues.push('Manca il n. ' + miss.join(', ') + ' tra il ' + a.d + ' e il ' + b.d + ': forse seduta fatta con un collega (compare sul suo tabulato).');
       }
-    }
+      b.seg = seg;
+    });
+    // recuperi: appartengono al ciclo in corso in quel giorno
+    res.cells.filter(c => c.num == null).forEach(c => { const p = num.filter(x => x.day <= c.day).pop(); c.seg = p ? p.seg : 0; });
     const rs = res.cells.filter(c => c.R && !c.bad);
     if (rs.length > 1) res.issues.push(rs.length + ' recuperi (R) nella stessa riga: di norma se ne recupera al massimo uno.');
     // giorni della settimana
@@ -107,13 +114,21 @@
     // dalla data di inizio
     const from = o.from || dayOf(o.month, 1);
     res.before = res.cells.filter(c => c.day < from && (c.num != null || c.R));
-    res.imported = res.cells.filter(c => c.day >= from && !c.bad && (c.num != null || c.R));
+    const all = res.cells.filter(c => c.day >= from && !c.bad && (c.num != null || c.R));
+    const segs = [...new Set(all.map(c => c.seg))];
+    if (segs.length > 2) res.blocking.push('Più di due cicli nella stessa riga dopo il ' + E.fmtIt(from) + ': dividi la riga.');
+    res.imported = all.filter(c => c.seg === segs[0]);
     res.visits = res.cells.filter(c => c.V && !c.bad && c.day >= from).map(c => c.day);
     const firstNum = res.imported.find(c => c.num != null);
     if (firstNum) res.prior = firstNum.p - 1;
     else {
-      const lastBefore = res.before.filter(c => c.num != null).pop();
+      const lastBefore = res.before.filter(c => c.num != null && (!segs.length || c.seg === segs[0])).pop();
       if (lastBefore) res.prior = lastBefore.p;
+    }
+    if (segs.length > 1) {
+      const cells = all.filter(c => c.seg === segs[1]);
+      const fn = cells.find(c => c.num != null);
+      res.next = { cells, prior: fn ? fn.p - 1 : 0, from: cells[0].day };
     }
     // visite in giorni senza trattamento
     const treat = new Set(res.cells.filter(c => c.num != null || c.R).map(c => c.day));

@@ -250,8 +250,10 @@
     if (res.target !== 'ciclo' && !r.name.trim()) block.push('Manca il nome del paziente.');
     if (!time) block.push(r.time ? 'Orario non valido: ' + r.time + '.' : 'Manca l’orario della fascia.');
     r.rowDoubts.forEach(d => { if (!d.ok) block.push('Da controllare: ' + d.text); });
-    const cells = an.imported.concat(an.generated);
-    if (res.target !== 'ciclo' && cells.some(c => c.num != null) === false && cells.length) block.push('Serve almeno un numero di seduta per sapere a che punto è il ciclo.');
+    // un nuovo ciclo iniziato sulla stessa riga riceve anche le eventuali sedute aggiunte
+    const nextSet = new Set(an.next ? an.next.cells.concat(an.generated) : []);
+    const cells = an.imported.concat(an.next ? an.next.cells : []).concat(an.generated);
+    if (res.target !== 'ciclo' && an.imported.length && an.prior == null) block.push('Serve almeno un numero di seduta per sapere a che punto è il ciclo.');
     if (res.target !== 'ciclo' && !an.weekdays.length && cells.length) block.push('Indica i giorni della settimana.');
     if (res.target === 'ciclo' && res.cycle) {
       const cnt = E.cycleCounts(A.ctx, res.cycle.id);
@@ -259,7 +261,7 @@
     }
     cells.forEach(c => {
       const end = time && dur ? E.fromMin(E.toMin(time) + dur) : null;
-      const item = { c, day: c.day, start: time, end };
+      const item = { c, day: c.day, start: time, end, next: nextSet.has(c) };
       if (res.patientId && existingOnDay(res.patientId, c.day)) { out.dups.push(item); return; }
       if (!end) { out.cells.push(item); return; } // orario o durata ancora da indicare: i controlli si fanno dopo
       const chk = E.checkSlot(A.ctx, s.th, c.day, time, end, { patientId: res.patientId || null, cycleId: res.cycleId || null, reserve: false, extra: extraAcc });
@@ -407,12 +409,13 @@
     const doubts = r.rowDoubts.map((d, j) => '<label class="inline-check small' + (d.ok ? '' : ' need-txt') + '"><input type="checkbox" data-act-change="imp-rd" data-r="' + k + '" data-k="' + j + '"' + (d.ok ? ' checked' : '') + '> Controllato: ' + esc(d.text) + '</label>').join('');
     const conflicts = a.conflicts.map(x => '<li>' + (x.forceable ? '<label class="inline-check"><input type="checkbox" data-act-change="imp-force" data-r="' + k + '" data-day="' + x.day + '"' + (r.force[x.day] ? ' checked' : '') + '> ' : '') +
       '✗ ' + esc(E.fmtItDay(x.day) + ' ' + x.start + ': ' + x.chk.msg) + (x.forceable ? ' — <strong>importa comunque</strong> (finirà in “Da sistemare”)</label>' : ' — <strong>non importabile</strong>: correggi orario o casella') + '</li>').join('');
-    const nImp = a.cells.length, nNum = a.cells.filter(x => x.c.num != null).length;
+    const nImp = a.cells.length, nNum = a.cells.filter(x => x.c.num != null && !x.next).length;
+    const nNext = a.cells.filter(x => x.next).length;
     const pr = a.res.target === 'ciclo' ? null : a.an.prior;
     const summary = !r.include ? 'Riga esclusa.' : a.nothing && a.dups.length ? 'Tutte le ' + a.dups.length + ' sedute sono già presenti nel calendario: niente da importare.' :
       a.nothing ? 'Niente da importare dal ' + E.fmtIt(s.from) + '.' :
       nImp + ' sedut' + (nImp === 1 ? 'a' : 'e') + ' da importare' + (nNum && pr != null ? ' (dalla ' + (pr + 1) + 'ª' + (gen.length ? ', comprese ' + gen.length + ' aggiunte' : '') + ')' : '') +
-      (a.dups.length ? ', ' + a.dups.length + ' già presenti' : '') + (a.an.before.length ? ', ' + a.an.before.length + ' prima del ' + E.fmtIt(s.from) + (pr != null && a.res.target !== 'ciclo' ? ' (contate come precedenti: ' + pr + ')' : '') : '') +
+      (nNext ? ', di cui ' + nNext + ' del nuovo ciclo dal ' + E.fmtItDay(a.an.next.from) : '') + (a.dups.length ? ', ' + a.dups.length + ' già presenti' : '') + (a.an.before.length ? ', ' + a.an.before.length + ' prima del ' + E.fmtIt(s.from) + (pr != null && a.res.target !== 'ciclo' ? ' (contate come precedenti: ' + pr + ')' : '') : '') +
       (a.visits.length ? ', visite fisiatriche: ' + a.visits.map(E.fmtItDay).join(', ') : '') + '.';
     return '<div class="panel imp-row' + (!r.include ? ' off' : blocked ? ' blocked' : ' ready') + '" data-ref="' + esc(r.ref) + '">' +
       '<div class="row imp-row-head"><label class="inline-check"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.include') + '" data-rerender' + (r.include ? ' checked' : '') + '> Importa</label>' +
@@ -421,7 +424,7 @@
       FA.timeField(P(i, 'rows.' + k + '.time'), r.time, ' data-rerender aria-label="Orario"') +
       '<input type="text" class="imp-tipo" data-bind="' + P(i, 'rows.' + k + '.tipo') + '" data-rerender value="' + esc(r.tipo) + '" placeholder="Tipo (GC, RM…)" aria-label="Tipo di trattamento">' +
       '<span class="imp-wds">' + [1, 2, 3, 4, 5, 6].map(w => '<button class="btn small ' + (wds.includes(w) ? 'primary' : '') + '" data-act="imp-wd" data-r="' + k + '" data-wd="' + w + '">' + E.WD_SHORT[w] + '</button>').join('') + '</span>' +
-      (r.freq ? '<span class="small muted">sul foglio: «' + esc(r.freq) + '»</span>' : '') + (r.closed ? '<span class="chip grey" title="Segno // dopo il nome">//</span>' : '') +
+      (r.freq ? '<span class="small muted">sul foglio: «' + esc(r.freq) + '»</span>' : '') + '<label class="inline-check small" title="Segno // dopo il nome: fine ciclo"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.closed') + '" data-rerender' + (r.closed ? ' checked' : '') + '> // fine ciclo</label>' +
       '<button class="btn link small" data-act="imp-del-row" data-r="' + k + '" title="Togli la riga">togli</button></div>' +
       (r.include ? '<div class="row" style="margin-top:6px">' + choiceSelect(s, i, r, k, a.res) + (r.note ? '<span class="small muted">Nota: ' + esc(r.note) + '</span>' : '') + '</div>' : '') +
       '<div class="imp-grid-wrap"><table class="imp-grid"><thead><tr>' + head + '</tr></thead><tbody><tr>' + cells + '</tr></tbody></table></div>' +
@@ -451,6 +454,7 @@
   function extraPayload(s) {
     return s.extra.filter(x => x.cycleId && x.d && s.month && FA.normTime(x.time)).map(x => ({ cycle_id: x.cycleId, day: H.dayOf(s.month, x.d), start: FA.normTime(x.time), number: (String(x.value).match(/\d+/) || [null])[0] }));
   }
+  const cellOut = r => x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!(x.chk && r.force[x.day]) });
   function payload(s, ans) {
     const rows = [];
     s.rows.forEach((r, k) => {
@@ -461,8 +465,9 @@
         ref: r.ref, target: res.target, patient_name: r.name.trim(), patient_id: res.patientId || null, cycle_id: res.cycleId || null, homonym: !!res.homonym,
         category_id: s.category, treatment: r.tipo.trim().toUpperCase(), planned: Number(s.planned), prior: a.an.prior == null ? 0 : a.an.prior, duration: sheetDur(s),
         weekdays: r.weekdays.length ? r.weekdays : a.an.weekdays, start: a.time,
-        cells: a.cells.map(x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!(x.chk && r.force[x.day]) })),
-        visits: a.visits
+        cells: a.cells.filter(x => !x.next).map(cellOut(r)),
+        next: a.an.next ? { planned: Number(s.planned), prior: a.an.next.prior, cells: a.cells.filter(x => x.next).map(cellOut(r)) } : null,
+        visits: a.visits, concluded: !!r.closed
       });
     });
     return rows;
@@ -473,10 +478,10 @@
     const blocked = inc.filter(x => x.a.block.length);
     const rows = sb.length ? [] : payload(s, ans);
     const extra = sb.length ? [] : extraPayload(s);
-    const nApp = rows.reduce((n, r) => n + r.cells.length, 0) + extra.length;
+    const nApp = rows.reduce((n, r) => n + r.cells.length + (r.next ? r.next.cells.length : 0), 0) + extra.length;
     const nNew = rows.filter(r => r.target === 'nuovo').length;
     const nVis = rows.reduce((n, r) => n + r.visits.length, 0);
-    const forced = rows.reduce((n, r) => n + r.cells.filter(c => c.force).length, 0);
+    const forced = rows.reduce((n, r) => n + r.cells.concat(r.next ? r.next.cells : []).filter(c => c.force).length, 0);
     const ok = !sb.length && !blocked.length && (nApp > 0 || nVis > 0);
     return '<div class="panel imp-confirm"><h3>4. Conferma</h3>' +
       (sb.length ? '<div class="form-error">' + sb.map(esc).join(' ') + '</div>' : '') +

@@ -1,0 +1,188 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Bizzo (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Bizzo",
+   "mese": "2026-10",
+   "foto": "bizzo-ottobre-2026.jpg",
+   "rotazione": 270,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 28.4,
+    "x_giorno31": 99.3,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "Z1",
+     "ora": "08:15",
+     "paziente": "Casarino",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 28.1,
+     "caselle": {
+      "2": "1"
+     },
+     "nota": "«//»: ciclo finito il 2",
+     "chiuso": true
+    },
+    {
+     "rif": "Z2",
+     "ora": "08:15",
+     "paziente": "Venturino",
+     "frequenza": "",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "",
+     "y": 29.8,
+     "caselle": {
+      "5": "5",
+      "7": "4",
+      "9": "3",
+      "14": "2",
+      "16": "1"
+     },
+     "nota": "frequenza non scritta: Lun/Mer/Ven dalle caselle; lunedì 12 vuoto"
+    },
+    {
+     "rif": "Z3",
+     "ora": "08:15",
+     "paziente": "Caccagno",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 31.7,
+     "caselle": {
+      "6": "3",
+      "8": "2",
+      "12": "1",
+      "13": "V"
+     },
+     "dubbi": {
+      "12": "1 di Caccagno o di Venturino? Con Mar/Gio ci si aspetterebbe martedì 13"
+     },
+     "nota": "il 1° un segno illeggibile (RKI?)"
+    },
+    {
+     "rif": "Z4",
+     "ora": "12:50",
+     "paziente": "Diacinti",
+     "frequenza": "Lu Ven",
+     "giorni": [
+      1,
+      5
+     ],
+     "tipo": "GC",
+     "y": 66.4,
+     "caselle": {
+      "2": "3",
+      "5": "2",
+      "9": "1"
+     },
+     "dubbi": {
+      "9": "1 seguito da un segno (// fine ciclo?)"
+     }
+    },
+    {
+     "rif": "Z5",
+     "ora": "12:50",
+     "paziente": "Mlac",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 68.3,
+     "caselle": {
+      "1": "3",
+      "6": "2",
+      "7": "V",
+      "8": "1"
+     },
+     "dubbi_riga": [
+      "nome poco leggibile: «Mlac…»?"
+     ]
+    },
+    {
+     "rif": "Z6",
+     "ora": "13:50",
+     "paziente": "Brunino",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "GC",
+     "y": 81.1,
+     "caselle": {
+      "7": "10",
+      "9": "9",
+      "12": "8",
+      "14": "7",
+      "16": "6",
+      "19": "5",
+      "21": "4",
+      "23": "3",
+      "26": "2",
+      "28": "1"
+     },
+     "dubbi": {
+      "21": "colonna incerta",
+      "23": "colonna incerta",
+      "26": "colonna incerta",
+      "28": "colonna incerta"
+     },
+     "nota": "il 29 un segno («C»?)"
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "nomi in verticale (TSP…, RO…, RH…, BA…)",
+     "giorno": 5,
+     "ora": "",
+     "valore": "",
+     "nota": "anche il 7 e il 9, nella fascia vuota sopra le 12:50"
+    },
+    {
+     "paziente": "nome in verticale",
+     "giorno": 8,
+     "ora": "13:50",
+     "valore": "4?",
+     "nota": "sotto la riga di Brunino"
+    },
+    {
+     "paziente": "nome in verticale",
+     "giorno": 22,
+     "ora": "12:50",
+     "valore": "",
+     "nota": ""
+    },
+    {
+     "paziente": "nome in verticale",
+     "giorno": 29,
+     "ora": "12:50",
+     "valore": "",
+     "nota": ""
+    }
+   ],
+   "note": [
+    {
+     "giorni": [
+      20
+     ],
+     "testo": "Corso"
+    }
+   ]
+  }
+ ]
+}

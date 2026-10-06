@@ -214,3 +214,19 @@ test('correzioni rapide dal calendario: elimina, numerazione, durata, sedute agg
   const f = JSON.parse(q(`select row_to_json(a) from appointments a where cycle_id='${cyc.id}' and day='${fut[2]}'`));
   await expectError(S.rpc(op1, 'move_appointment', { p_id: f.id, p_version: f.version, p_therapist: th, p_day: wrong[1], p_start: '12:30', p_note: '' }), 'FA_INPUT', /passata/);
 });
+
+test('nuovo ciclo sulla stessa riga del tabulato: due cicli dello stesso paziente', async () => {
+  const th = await therapist('G');
+  const tue = days(E.addDays(T0, 1), [2], 4);
+  const r = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(tue[0]), from_date: tue[0], rows: [
+    { ref: 'n', target: 'nuovo', patient_name: 'Ricomincia ' + RUN, category_id: 'mano', treatment: 'GC', planned: 10, prior: 9, duration: 30, weekdays: [2], start: '08:15',
+      cells: [{ day: tue[0], number: 1 }], next: { planned: 10, prior: 0, cells: [{ day: tue[1], number: 10 }, { day: tue[2], number: 9 }] } },
+    { ref: 'f', target: 'nuovo', patient_name: 'Finito ' + RUN, category_id: 'mano', planned: 10, prior: 9, duration: 30, weekdays: [2], start: '09:15', concluded: true,
+      cells: [{ day: tue[0], number: 1 }] }] } });
+  assert.equal(q(`select forecast from cycles c join patients p on p.id=c.patient_id where p.name='Finito ${RUN}'`), 'conclusione_confermata', '"//" = fine ciclo');
+  assert.equal(r.cycles, 3); assert.equal(r.appointments, 4); assert.equal(r.patients, 2);
+  assert.equal(q(`select string_agg(c.prior_sessions||':'||(select count(*) from appointments a where a.cycle_id=c.id)||':'||c.treatment, ',' order by c.prior_sessions desc)
+    from cycles c join patients p on p.id=c.patient_id where p.name='Ricomincia ${RUN}'`), '9:1:GC,0:2:GC');
+  const u = await S.rpc(op1, 'undo_import', { p_batch: r.batch_id });
+  assert.equal(u.cycles, 3); assert.equal(u.patients, 2);
+});

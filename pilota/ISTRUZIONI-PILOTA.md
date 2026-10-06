@@ -67,6 +67,7 @@ Se il database era stato installato con una versione precedente, esegui una volt
 3. Controlla **fisioterapista, mese, “Importa dal”, durata delle sedute** e percorso. La durata, se non è scritta sul foglio, va sempre confermata.
 4. **Anteprima:** a sinistra la foto, a destra una riga per paziente con le caselle del mese. Clicca una casella: il punto corrispondente si evidenzia sulla foto. In giallo le letture incerte: correggi il valore o conferma con ✓. Le righe con problemi hanno il bordo rosso e il motivo scritto sotto.
    - Numero sul tabulato a ritroso: **seduta n. = 11 − numero** (cicli da 10). Il numero originale resta salvato su ogni seduta.
+   - **«//»** dopo il nome = fine ciclo (il posto risulta libero dopo l’ultima seduta). Se dopo l’1 la riga ricomincia da 10, l’app crea un nuovo ciclo dello stesso paziente.
    - **R** = recupero (non consuma un numero); **V** = visita fisiatrica (promemoria del paziente, non è una seduta). Se la visita cade in un giorno senza trattamento, l'app suggerisce i giorni di trattamento più vicini.
    - Le caselle prima di “Importa dal” non diventano appuntamenti: servono a sapere a che seduta è il paziente.
    - Le sedute già passate entrano **programmate**: il tabulato non dimostra la presenza. L'esito si registra dal calendario o da “Da sistemare”.

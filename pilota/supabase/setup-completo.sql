@@ -2151,12 +2151,41 @@ create or replace function app.norm_name(p text) returns text language sql immut
                               '[^a-z0-9]+', ' ', 'g'))
 $$;
 
+-- Inserisce le sedute di una riga in un ciclo; salta quelle già presenti. Restituisce [inserite, doppioni, fuori turno].
+create or replace function app.import_cells(p_batch uuid, p_th uuid, p_cyc uuid, p_pat uuid, p_name text, p_dur int, p_start time, p_cells jsonb)
+returns int[] language plpgsql security definer set search_path = '' as $$
+declare cell jsonb; v_day date; v_start time; v_msg text; v_mark text; v_n int := 0; v_d int := 0; v_f int := 0;
+begin
+  for cell in select e from jsonb_array_elements(coalesce(p_cells, '[]'::jsonb)) e order by (e->>'day')::date loop
+    v_day := (cell->>'day')::date;
+    v_start := coalesce(nullif(cell->>'start', '')::time, p_start);
+    if v_start is null then perform app.fail(p_name || ': manca l''orario della seduta del ' || app.fmt_d(v_day) || '.'); end if;
+    v_mark := nullif(cell->>'mark', '');
+    if exists (select 1 from public.appointments a where a.patient_id = p_pat and a.day = v_day and a.status not in ('spostata', 'liberata')) then
+      v_d := v_d + 1; continue;
+    end if;
+    v_msg := app.check_slot(p_th, v_day, v_start, v_start + make_interval(mins => p_dur), p_pat, null, p_cyc, false);
+    if v_msg is not null then
+      if not coalesce((cell->>'force')::boolean, false) then
+        perform app.fail(p_name || ', ' || app.fmt_d(v_day) || ' ' || app.fmt_t(v_start) || ': ' || v_msg, 'FA_SLOT');
+      end if;
+      v_f := v_f + 1;
+    end if;
+    insert into public.appointments (cycle_id, patient_id, therapist_id, day, start_time, end_time, sheet_number, sheet_mark, import_batch_id, note, created_by)
+    values (p_cyc, p_pat, p_th, v_day, v_start, v_start + make_interval(mins => p_dur), nullif(cell->>'number', '')::int, v_mark, p_batch,
+      case when v_mark = 'R' then 'Recupero (dal tabulato)' else '' end, auth.uid());
+    v_n := v_n + 1;
+  end loop;
+  return array[v_n, v_d, v_f];
+end $$;
+
 -- ---------------------------------------------------------------------
 -- Importazione di un tabulato (tutto o niente).
 -- p = { therapist_id, month: 'YYYY-MM-01', from_date, photo_hash, source_hash, label,
 --       rows: [{ ref, target: 'nuovo'|'paziente'|'ciclo', patient_name, patient_id, cycle_id, homonym,
 --                category_id, treatment, planned, prior, duration, weekdays: [1,3,5], start,
---                cells: [{ day, start, number, mark, force }], visits: ['YYYY-MM-DD', …] }],
+--                cells: [{ day, start, number, mark, force }], visits: ['YYYY-MM-DD', …],
+--                next: { planned, prior, cells }, concluded }],   -- concluded = "//" dopo il nome: fine ciclo     -- nuovo ciclo dello stesso paziente sulla stessa riga
 --       extra: [{ cycle_id, day, start, number, force }] }      -- pazienti di colleghi trattati in sostituzione
 -- Le caselle già presenti (stesso paziente, stesso giorno) vengono saltate: ricaricare lo
 -- stesso tabulato non crea doppioni. Le date passate restano "programmate": il tabulato
@@ -2170,7 +2199,7 @@ declare
   r jsonb; cell jsonb; v_pat uuid; v_cyc uuid; c public.cycles;
   v_name text; v_dur int; v_start time; v_day date; v_msg text; v_wd int[]; v_times jsonb;
   v_new_pat int := 0; v_new_cyc int := 0; v_appts int := 0; v_dups int := 0; v_visits int := 0; v_forced int := 0;
-  v_rows int := 0; v_first time; v_planned int; v_prior int; v_mark text; v_num int; v_ref text;
+  v_rows int := 0; v_planned int; v_prior int; v_ref text; v_res int[];
 begin
   perform app.require_role('operatore');
   if v_th is null or not exists (select 1 from public.therapists where id = v_th) then perform app.fail('Scegli il fisioterapista del tabulato.'); end if;
@@ -2228,29 +2257,28 @@ begin
     end if;
     v_rows := v_rows + 1;
     -- sedute
-    for cell in select e from jsonb_array_elements(coalesce(r->'cells', '[]'::jsonb)) e order by (e->>'day')::date loop
-      v_day := (cell->>'day')::date;
-      v_start := coalesce(nullif(cell->>'start', '')::time, nullif(r->>'start', '')::time);
-      if v_start is null then perform app.fail('Riga ' || v_ref || ': manca l''orario della seduta del ' || app.fmt_d(v_day) || '.'); end if;
-      v_mark := nullif(cell->>'mark', '');
-      v_num := nullif(cell->>'number', '')::int;
-      if exists (select 1 from public.appointments a where a.patient_id = v_pat and a.day = v_day
-                  and a.status not in ('spostata', 'liberata')) then
-        v_dups := v_dups + 1; continue;
-      end if;
-      v_msg := app.check_slot(v_th, v_day, v_start, v_start + make_interval(mins => v_dur), v_pat, null, v_cyc, false);
-      if v_msg is not null then
-        if not coalesce((cell->>'force')::boolean, false) then
-          perform app.fail(v_name || ', ' || app.fmt_d(v_day) || ' ' || app.fmt_t(v_start) || ': ' || v_msg, 'FA_SLOT');
-        end if;
-        v_forced := v_forced + 1;
-      end if;
-      insert into public.appointments (cycle_id, patient_id, therapist_id, day, start_time, end_time, sheet_number, sheet_mark,
-        import_batch_id, note, created_by)
-      values (v_cyc, v_pat, v_th, v_day, v_start, v_start + make_interval(mins => v_dur), v_num, v_mark, v_batch,
-        case when v_mark = 'R' then 'Recupero (dal tabulato)' else '' end, auth.uid());
-      v_appts := v_appts + 1;
-    end loop;
+    v_res := app.import_cells(v_batch, v_th, v_cyc, v_pat, v_name, v_dur, nullif(r->>'start', '')::time, r->'cells');
+    v_appts := v_appts + v_res[1]; v_dups := v_dups + v_res[2]; v_forced := v_forced + v_res[3];
+    -- "//" dopo il nome: fine ciclo (vale per l'ultimo ciclo della riga)
+    if coalesce((r->>'concluded')::boolean, false) and jsonb_array_length(coalesce(r->'next'->'cells', '[]'::jsonb)) = 0 then
+      update public.cycles set forecast = 'conclusione_confermata' where id = v_cyc;
+    end if;
+    -- nuovo ciclo dello stesso paziente iniziato sulla stessa riga (dopo il n. 1 si ricomincia da capo)
+    if jsonb_array_length(coalesce(r->'next'->'cells', '[]'::jsonb)) > 0 then
+      select * into c from public.cycles where id = v_cyc;
+      v_planned := coalesce(nullif(r->'next'->>'planned', '')::int, c.planned_sessions);
+      v_prior := coalesce(nullif(r->'next'->>'prior', '')::int, 0);
+      if v_prior < 0 or v_prior >= v_planned then perform app.fail('Riga ' || v_ref || ': numerazione del nuovo ciclo non coerente.'); end if;
+      insert into public.cycles (patient_id, category_id, priority, request_type, duration, planned_sessions, prior_sessions, weekdays,
+        weekday_times, start_time, therapist_id, status, treatment, note, import_batch_id, created_by)
+      values (v_pat, c.category_id, 'NI', 'continuazione', c.duration, v_planned, v_prior, c.weekdays, c.weekday_times, c.start_time, v_th, 'attivo',
+        c.treatment, 'Nuovo ciclo importato dal tabulato (importazione n. ' || v_bno || ').', v_batch, auth.uid())
+      returning id into v_cyc;
+      v_new_cyc := v_new_cyc + 1;
+      v_res := app.import_cells(v_batch, v_th, v_cyc, v_pat, v_name, c.duration, nullif(r->>'start', '')::time, r->'next'->'cells');
+      v_appts := v_appts + v_res[1]; v_dups := v_dups + v_res[2]; v_forced := v_forced + v_res[3];
+      if coalesce((r->>'concluded')::boolean, false) then update public.cycles set forecast = 'conclusione_confermata' where id = v_cyc; end if;
+    end if;
     -- visite fisiatriche: eventi del paziente, non sedute
     for cell in select e from jsonb_array_elements(coalesce(r->'visits', '[]'::jsonb)) e loop
       insert into public.patient_events (patient_id, day, kind, import_batch_id, created_by)
@@ -2537,3 +2565,4 @@ begin
   end loop;
 end $$;
 revoke all on function app.norm_name(text) from public, anon;
+revoke all on function app.import_cells(uuid, uuid, uuid, uuid, text, int, time, jsonb) from public, anon;
