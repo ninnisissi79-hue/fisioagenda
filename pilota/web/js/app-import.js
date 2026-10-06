@@ -31,7 +31,7 @@
   }
   function newSheet(base) {
     const s = Object.assign({ label: 'Foglio', thName: '', month: '', photoName: '', rotation: 0, duration: null, durationHint: null, durationNote: '',
-      planned: 10, grid: null, rows: [], extra: [], notes: [] }, base || {});
+      planned: 10, grid: null, rows: [], extra: [], notes: [], absences: [] }, base || {});
     s.id = ++seq;
     s.th = matchTherapist(s.thName) || (FA.isFisio() ? A.me.therapist_id || '' : '');
     s.from = defaultFrom(s.month);
@@ -354,7 +354,7 @@
     h += '<div class="imp-split">' + photoPane(s, i) + '<div class="imp-data"><div class="panel"><div class="row between"><h3 style="margin:0">3. Anteprima e correzioni</h3><button class="btn small" data-act="imp-add-row">+ Riga</button></div>' +
       '<p class="small muted" style="margin:6px 0 0">Scrivi nelle caselle come sul tabulato: numero (a ritroso), <strong>R</strong> recupero, <strong>V</strong> visita fisiatrica (es. <code>1V</code>). In giallo le letture incerte: correggile o confermale. Le sedute già passate restano <em>programmate</em>: il tabulato non dimostra la presenza.</p></div>' +
       s.rows.map((r, k) => rowCard(s, i, r, k, ans[k])).join('') +
-      extraPanel(s, i) + notesPanel(s) + confirmPanel(s, i, ans) + '</div></div>';
+      extraPanel(s, i) + notesPanel(s) + absencePanel(s, i) + confirmPanel(s, i, ans) + '</div></div>';
     return h;
   }
   function photoPane(s, i) {
@@ -457,6 +457,45 @@
           '<select data-bind="' + P(i, 'extra.' + j + '.cycleId') + '" data-rerender><option value="">Non importare</option>' + m.map(c => FA.option(c.id, FA.patName(c.patient_id) + ' (' + FA.thName(c.therapist_id) + ')', x.cycleId)).join('') + '</select></div></li>';
       }).join('') + '</ul></div>';
   }
+  /** giorni consecutivi (ignorando sabati, domeniche e chiusure) → intervalli da registrare */
+  function absRanges(s, a) {
+    const dates = a.days.filter(d => d >= 1 && d <= H.daysInMonth(s.month)).map(d => H.dayOf(s.month, d)).sort();
+    const todo = dates.filter(d => !E.absenceOnDay(A.ctx, s.th, d).some(x => !x.start_time));
+    const out = [];
+    todo.forEach(d => {
+      const l = out[out.length - 1];
+      let k = l ? E.addDays(l.end, 1) : null;
+      while (k && k < d && (E.weekday(k) >= 6 || A.ctx.closures.has(k))) k = E.addDays(k, 1);
+      if (l && k === d) l.end = d; else out.push({ start: d, end: d });
+    });
+    return { dates, ranges: out };
+  }
+  function absencePanel(s, i) {
+    if (!s.absences.length) return '';
+    const KIND = E.ABSENCE_KIND;
+    return '<div class="panel"><h3>Assenze di ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') + ' segnate sul foglio</h3>' +
+      '<p class="small muted">Lettere sopra i giorni (F = ferie…). Non vengono registrate da sole: registrale con il pulsante, meglio <strong>dopo</strong> aver importato le sedute. Le sedute già prenotate in quei giorni finiscono in “Da sistemare”, dove organizzi i sostituti.</p><ul class="list">' +
+      s.absences.map((a, k) => {
+        const r = s.th && s.month ? absRanges(s, a) : { dates: [], ranges: [] };
+        const busy = r.dates.filter(d => (A.ctx.byThDay.get(s.th + '|' + d) || []).length).length;
+        return '<li class="todo-item"><div><strong>' + esc(KIND[a.kind] || a.kind) + '</strong>: ' + (r.dates.length ? r.dates.map(E.fmtItDay).join(', ') : 'giorni ' + a.days.join(', ')) +
+          (a.note ? ' <span class="small muted">· ' + esc(a.note) + '</span>' : '') + (busy ? ' <span class="chip warn">' + busy + ' giorni con sedute già in calendario</span>' : '') + '</div><div>' +
+          (a.saved || (r.dates.length && !r.ranges.length) ? '<span class="chip ok">registrata</span>' :
+            '<button class="btn small" data-act="imp-abs" data-i="' + i + '" data-k="' + k + '"' + (s.th && s.month && FA.canEditTh(s.th) ? FA.saveDisabled() : ' disabled') + '>Registra</button>') + '</div></li>';
+      }).join('') + '</ul></div>';
+  }
+  FA.actions['imp-abs'] = async el => {
+    const s = st().sheets[Number(el.getAttribute('data-i'))], a = s.absences[Number(el.getAttribute('data-k'))];
+    const { ranges } = absRanges(s, a);
+    if (!ranges.length) { a.saved = true; FA.render(); return; }
+    if (!confirm('Registrare ' + (E.ABSENCE_KIND[a.kind] || a.kind).toLowerCase() + ' di ' + FA.thName(s.th) + ': ' + ranges.map(r => r.start === r.end ? E.fmtIt(r.start) : 'dal ' + E.fmtIt(r.start) + ' al ' + E.fmtIt(r.end)).join(', ') + '?')) return;
+    try {
+      await FA.save('Assenza registrata', async () => {
+        for (const r of ranges) await FA.rpc('save_absence', { p: { therapist_id: s.th, kind: a.kind, start_date: r.start, end_date: r.end, note: 'Dal tabulato' + (a.note ? ': ' + a.note : '') } });
+      });
+      a.saved = true; FA.render();
+    } catch (e) { s.error = e.message; FA.render(); }
+  };
   function notesPanel(s) {
     if (!s.notes.length) return '';
     return '<div class="panel"><h3>Altre annotazioni sul foglio</h3><ul class="small">' + s.notes.map(n => '<li>' + esc((n.days.length ? 'giorno ' + n.days.join(', ') + ': ' : '') + n.text) + '</li>').join('') + '</ul>' +
@@ -522,7 +561,8 @@
       (r.duplicates ? ', ' + r.duplicates + ' già presenti saltate' : '') + (r.visits ? ', ' + r.visits + ' visite fisiatriche' : '') + (r.forced ? ', ' + r.forced + ' fuori turno: le trovi in “Da sistemare”' : '') + '.</p>' +
       '<p class="small">Le sedute già passate restano <strong>programmate</strong>: registra l’esito (effettuata, assenza) dal calendario o da “Da sistemare”.</p>' +
       '<div class="row"><button class="btn primary" data-act="go" data-view="calendario" data-param="' + s.th + '/' + (s.from >= A.today ? s.from : A.today) + '/settimana">Apri il calendario di ' + esc(FA.thName(s.th)) + '</button>' +
-      (b && !b.undone_at ? '<button class="btn" data-act="imp-undo" data-id="' + r.batch_id + '">Annulla questa importazione</button>' : (b && b.undone_at ? '<span class="chip grey">annullata</span>' : '')) + '</div></div>';
+      (b && !b.undone_at ? '<button class="btn" data-act="imp-undo" data-id="' + r.batch_id + '">Annulla questa importazione</button>' : (b && b.undone_at ? '<span class="chip grey">annullata</span>' : '')) + '</div></div>' +
+      absencePanel(s, st().sheets.indexOf(s));
   }
   function historyPanel() {
     const list = (A.data.import_batches || []).slice().sort((a, b) => b.number - a.number).slice(0, 20);

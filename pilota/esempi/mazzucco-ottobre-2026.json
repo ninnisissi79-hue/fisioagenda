@@ -1,0 +1,99 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Mazzucco (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo; F = ferie.",
+ "fogli": [
+  {
+   "fisioterapista": "Mazzucco",
+   "mese": "2026-10",
+   "foto": "mazzucco-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 23.15,
+    "x_giorno31": 95.85,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "Q1",
+     "ora": "07:15",
+     "paziente": "BG",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "",
+     "y": 19.9,
+     "caselle": {
+      "7": "4",
+      "9": "3",
+      "13": "2",
+      "15": "1"
+     },
+     "dubbi": {
+      "9": "«3» il 9 oppure l’8 (ce n’è uno barrato)"
+     },
+     "dubbi_riga": [
+      "nessun nome: sotto i numeri la sigla «BG» (paziente o collega?)"
+     ]
+    },
+    {
+     "rif": "Q2",
+     "ora": "09:00",
+     "paziente": "Fazio",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "",
+     "y": 41.5,
+     "caselle": {},
+     "nota": "nessun numero sul foglio: esclusa",
+     "importa": false
+    },
+    {
+     "rif": "Q3",
+     "ora": "10:15",
+     "paziente": "Colcagno",
+     "frequenza": "",
+     "giorni": [
+      4
+     ],
+     "tipo": "",
+     "y": 52.2,
+     "caselle": {
+      "8": "4",
+      "15": "3",
+      "22": "2"
+     },
+     "nota": "il giovedì 8 scritto «(Bizzo)»: seduta fatta da Bizzo?"
+    },
+    {
+     "rif": "Q4",
+     "ora": "11:15",
+     "paziente": "Shawky",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "",
+     "y": 60.5,
+     "caselle": {
+      "2": "3",
+      "6": "2",
+      "8": "1"
+     }
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "Alle 12:20, 12:50 e 13:40 righe «SPLINT 3v»: tutori, non importate"
+    },
+    {
+     "giorni": [],
+     "testo": "Righe diagonali su molti giorni: significato da verificare"
+    }
+   ],
+   "assenze": []
+  }
+ ]
+}

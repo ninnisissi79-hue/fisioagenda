@@ -1,0 +1,195 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Novara (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo; F = ferie.",
+ "fogli": [
+  {
+   "fisioterapista": "Novara",
+   "mese": "2026-10",
+   "foto": "novara-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 26.55,
+    "x_giorno31": 92.15,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "V1",
+     "ora": "09:15",
+     "paziente": "Grauso",
+     "frequenza": "3v",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 24.1,
+     "caselle": {
+      "2": "2",
+      "5": "1",
+      "6": "V"
+     }
+    },
+    {
+     "rif": "V2",
+     "ora": "09:15",
+     "paziente": "Falle",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 28.7,
+     "caselle": {
+      "1": "7",
+      "6": "6",
+      "8": "5",
+      "13": "4",
+      "15": "3",
+      "19": "V",
+      "20": "2",
+      "22": "1"
+     },
+     "dubbi": {
+      "19": "«V2»: V il 19 e 2 il 20?"
+     }
+    },
+    {
+     "rif": "V3",
+     "ora": "12:50",
+     "paziente": "Pariso",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 61.8,
+     "caselle": {
+      "1": "3",
+      "6": "2",
+      "8": "1",
+      "13": "R"
+     }
+    },
+    {
+     "rif": "V4",
+     "ora": "12:50",
+     "paziente": "Canepa",
+     "frequenza": "Lu Ven",
+     "giorni": [
+      1,
+      5
+     ],
+     "tipo": "GC",
+     "y": 66.1,
+     "caselle": {
+      "2": "7",
+      "5": "6",
+      "9": "5",
+      "12": "4",
+      "16": "3",
+      "19": "2",
+      "22": "1V"
+     },
+     "dubbi": {
+      "22": "«V1» di giovedì 22 o venerdì 23?"
+     }
+    },
+    {
+     "rif": "V5",
+     "ora": "13:50",
+     "paziente": "Astigiano",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 79.4,
+     "caselle": {
+      "1": "2",
+      "6": "1",
+      "8": "10",
+      "13": "9",
+      "15": "8",
+      "22": "7"
+     },
+     "dubbi": {
+      "6": "«1» di martedì 6 o mercoledì 7?"
+     },
+     "nota": "dopo l’1 nuovo ciclo dall’8; il 26 alle 13:20 «Astigiano 6» (aggiungila dal calendario); oltre il 31 «+5»"
+    },
+    {
+     "rif": "V6",
+     "ora": "13:50",
+     "paziente": "Macias",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 81.9,
+     "caselle": {
+      "2": "?",
+      "5": "5",
+      "7": "4",
+      "9": "3",
+      "12": "2",
+      "14": "1V"
+     },
+     "dubbi": {
+      "2": "numero barrato con «RV»?"
+     }
+    },
+    {
+     "rif": "V7",
+     "ora": "14:20",
+     "paziente": "Ymeri",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 89.1,
+     "caselle": {
+      "7": "5",
+      "9": "4",
+      "12": "3",
+      "14": "2",
+      "16": "1"
+     }
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [
+      28,
+      29
+     ],
+     "testo": "In alto «P P» sopra il 28–29 (permesso?)"
+    },
+    {
+     "giorni": [
+      26
+     ],
+     "testo": "Il 26 alle 13:50 «Gruppo»"
+    }
+   ],
+   "assenze": [
+    {
+     "giorni": [
+      28,
+      29
+     ],
+     "tipo": "permesso",
+     "nota": "«P» sul foglio: permesso? verifica"
+    }
+   ]
+  }
+ ]
+}

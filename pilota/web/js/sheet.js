@@ -179,7 +179,9 @@
         note: r.nota || ''
       })),
       extra: (f.estemporanei || []).map((x, j) => ({ ref: 'E' + (j + 1), name: x.paziente || '', d: Number(x.giorno) || null, time: x.ora || '', value: x.valore || '', note: x.nota || '', y: x.y == null ? null : Number(x.y), cycleId: '' })),
-      notes: (f.note || []).map(n => ({ days: n.giorni || [], text: n.testo || '' }))
+      notes: (f.note || []).map(n => ({ days: n.giorni || [], text: n.testo || '' })),
+      // assenze del collega segnate sul foglio (F = ferie, M = malattia…): si registrano solo su richiesta
+      absences: (f.assenze || []).map(a => ({ days: (a.giorni || []).map(Number), kind: a.tipo || 'ferie', note: a.nota || '', saved: false }))
     }));
     return { sheets, errors };
   }

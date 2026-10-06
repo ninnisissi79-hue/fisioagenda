@@ -95,18 +95,26 @@
     }
    ],
    "estemporanei": [],
-   "note": [
+   "note": [],
+   "assenze": [
     {
      "giorni": [
       1,
       2,
-      3,
-      4,
       5,
       6,
       7
      ],
-     "testo": "Righe diagonali sui giorni 1–7 e lettere «F F» in alto: assenza (ferie?) di Ghiso"
+     "tipo": "ferie",
+     "nota": "righe diagonali sui giorni 1–7 e «F F» in alto"
+    },
+    {
+     "giorni": [
+      29,
+      30
+     ],
+     "tipo": "ferie",
+     "nota": "«F F» in alto"
     }
    ]
   }

@@ -28,6 +28,8 @@ const daysOf = (wds, n) => { const out = []; let d = first; while (out.length < 
 const cells = (dates, vals) => Object.fromEntries(dates.map((d, i) => [String(Number(d.slice(8))), vals[i]]));
 const bi = daysOf([1, 3, 5], 4), ne = daysOf([2, 4], 6), gi = daysOf([2, 4], 4), vi = daysOf([5], 3);
 const name = n => n + ' ' + RUN;
+let ferieDay = E.addDays(first, 40); while (ferieDay.slice(0, 7) !== M || E.weekday(ferieDay) >= 6 || closures.has(ferieDay)) ferieDay = E.addDays(ferieDay, -1);
+ferieDay = Number(ferieDay.slice(8));
 const transcript = { formato: 'fisioagenda-tabulato-1', fogli: [{ fisioterapista: TH, mese: M, foto: 'tabulato-fittizio.png', durata: null, durata_suggerita: 30, sedute_ciclo: 10,
   griglia: { x_giorno1: 27.16, x_giorno31: 96.84, h_riga: 4.6 },
   righe: [
@@ -35,7 +37,7 @@ const transcript = { formato: 'fisioagenda-tabulato-1', fogli: [{ fisioterapista
     { rif: 'F2', ora: '07:15', paziente: name('Neri'), frequenza: '2v', giorni: [2, 4], tipo: 'RM', y: 22.31, caselle: cells(ne, ['6', '5', '4', '3', '2', '1']) },
     { rif: 'F3', ora: '08:15', paziente: name('Gialli'), frequenza: '2v', giorni: [2, 4], tipo: 'GC', y: 26.92, caselle: cells(gi, ['4', '3', '2', '1']), dubbi: { [String(Number(gi[1].slice(8)))]: '3 poco leggibile' } },
     { rif: 'F4', ora: '06:30', paziente: name('Viola'), frequenza: 'Ven', giorni: [5], tipo: 'GC', y: 31.54, caselle: cells(vi, ['10', '9', '8']), dubbi_riga: ['orario 6:30?'] }
-  ], estemporanei: [], note: [{ giorni: [20], testo: 'Corso' }] }] };
+  ], estemporanei: [], note: [{ giorni: [20], testo: 'Corso' }], assenze: [{ giorni: [ferieDay], tipo: 'ferie', nota: 'F sul foglio' }] }] };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fa-imp-'));
 const jsonFile = path.join(tmp, 'trascrizione.json');
 fs.writeFileSync(jsonFile, JSON.stringify(transcript));
@@ -90,7 +92,12 @@ try {
   assert.equal(psql(`select c.prior_sessions from cycles c join patients p on p.id=c.patient_id where p.name='${name('Bianchi')}'`), '7');
   assert.equal(count(`select count(*) from patient_events where patient_id in ${pats}`), 1);
   assert.equal(psql(`select sheet_mark from appointments a join patients p on p.id=a.patient_id where p.name='${name('Bianchi')}' and a.day='${bi[3]}'`), 'R');
-  ok('Importazione confermata: 4 pazienti, 17 sedute programmate (numeri a ritroso → 8ª, 9ª, 10ª), R come recupero, V come visita');
+  // ferie segnate sul foglio (F): registrate solo con il pulsante
+  assert.equal(count(`select count(*) from absences where therapist_id='${thId}'`), 0, 'le ferie non si registrano da sole');
+  await page.click('button[data-act="imp-abs"]');
+  await page.waitForSelector('.panel:has(h3:has-text("segnate sul foglio")) .chip.ok', { timeout: 15000 });
+  assert.equal(psql(`select kind||' '||start_date||' '||end_date from absences where therapist_id='${thId}'`), `ferie ${M}-${String(ferieDay).padStart(2, '0')} ${M}-${String(ferieDay).padStart(2, '0')}`);
+  ok('Importazione confermata: 4 pazienti, 17 sedute programmate (numeri a ritroso → 8ª, 9ª, 10ª), R come recupero, V come visita; ferie del foglio registrate con un clic');
 
   // stessa foto e stessa trascrizione di nuovo: nessun doppione
   await load();

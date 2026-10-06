@@ -158,10 +158,16 @@
      "nota": "anche il 9"
     }
    ],
-   "note": [
+   "note": [],
+   "assenze": [
     {
-     "giorni": [],
-     "testo": "In alto «F F F» sopra gli ultimi giorni (ferie?)"
+     "giorni": [
+      28,
+      29,
+      30
+     ],
+     "tipo": "ferie",
+     "nota": "«F F F» in alto"
     }
    ]
   }

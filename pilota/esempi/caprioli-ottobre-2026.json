@@ -178,7 +178,8 @@
     }
    ],
    "estemporanei": [],
-   "note": [
+   "note": [],
+   "assenze": [
     {
      "giorni": [
       13,
@@ -187,7 +188,8 @@
       16,
       20
      ],
-     "testo": "In alto, sopra i giorni, lettere «F» (ferie?)"
+     "tipo": "ferie",
+     "nota": "«F» sul foglio: ci sono sedute in quei giorni, verifica"
     }
    ]
   }
