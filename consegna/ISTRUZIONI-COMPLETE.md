@@ -120,7 +120,9 @@ Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei ta
     - Nome già presente: scegli se è lo stesso paziente o un omonimo.
     - **Sigle dei colleghi** sotto i numeri (es. MG): scegli il collega; la seduta va nel suo calendario come sostituzione.
     - Fuori turno / assenza: correggi oppure spunta “importa comunque” (finirà in “Da sistemare”).
-5. **Importa nel calendario.**
+    - **Correzioni veloci** (in alto, per tutto il foglio): “Accetta le letture incerte”, “Importa comunque i fuori turno”, “Nomi già in archivio: crea come pazienti nuovi”.
+    - Se il fisioterapista non esiste ancora: pulsante **Crea il fisioterapista «…»** (con l’orario ambulatoriale standard e tutti i percorsi).
+5. **Importa le righe pronte nel calendario.** Le righe ancora da sistemare restano nel foglio: le sistemi e le importi dopo, senza doppioni.
 6. Riquadro **Assenze segnate sul foglio** (F ferie, M malattia, P permesso): premi **Registra** se sono corrette.
 7. Le sedute già passate entrano **programmate**: registra l'esito (effettuata / assenza) dal calendario o da **Da sistemare**.
 
