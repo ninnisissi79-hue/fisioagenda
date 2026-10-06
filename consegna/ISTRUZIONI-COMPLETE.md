@@ -111,7 +111,7 @@ Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei ta
 
 ## 5. Importare i tabulati
 
-1. Estrai `5-TRASCRIZIONI-tabulati.zip`. Ogni file `.json` è un tabulato (es. `barile-ottobre-2026.json`).
+1. Puoi caricare **direttamente** `5-TRASCRIZIONI-tabulati.zip` (senza estrarlo): si apre una scheda per ogni tabulato. Oppure estrailo e scegli i singoli `.json` (es. `barile-ottobre-2026.json`).
 2. Nell'app: **Importa tabulato → Scegli foto e trascrizione…** → seleziona insieme la **foto** del foglio e il suo **.json**. La foto resta sul computer: non viene inviata a nessuno.
 3. Controlla **fisioterapista, mese, “Importa dal”** e scegli la **durata** (30′, 45′, 1 ora o altro; poi cambiala per i pazienti che hanno una durata diversa).
 4. **Anteprima**: a sinistra la foto, a destra una riga per paziente. Clicca una casella: si evidenzia sulla foto.
