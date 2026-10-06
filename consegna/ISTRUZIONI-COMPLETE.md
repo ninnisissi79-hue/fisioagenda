@@ -131,7 +131,12 @@ Ricaricare lo stesso foglio **non crea doppioni**. Un'importazione sbagliata si 
 
 ---
 
-## 6. Correggere dal calendario del collega
+## 6. Gestire gli appuntamenti dal calendario del collega
+- **+ Aggiungi paziente** (in alto): fisioterapista e giorno già impostati, modificabili; paziente nuovo, in trattamento o dalla lista d’attesa; ora di inizio e durata.
+- **Pazienti in trattamento**: elenco con sedute fatte / programmate / prossima. **+ Seduta** aggiunge una seduta al suo ciclo (stessa anagrafica, stessa numerazione).
+- Clic su un punto libero: conta l’orario esatto del clic. Le incompatibilità (turni, assenze, sovrapposizioni) sono segnalate in rosso **prima** della conferma.
+- Una seduta inserita resta **programmata** finché non registri l’esito: non conta come effettuata.
+- “Trova posto” automatico resta disponibile nel menu.
 
 - **Trascina** una seduta per cambiare giorno o ora (l'app controlla subito se il posto va bene).
 - **Clic sulla seduta → ✎ Correggi**: nome, “questa è la seduta n. … di …”, tipo (GC, RM…), durata, visita fisiatrica, **elimina** una seduta inserita per errore.
