@@ -208,7 +208,7 @@ try {
   const others = () => psql(`select string_agg(id::text||day||start_time||therapist_id::text, ',' order by day) from appointments where patient_id='${patId}' and id<>'${target}'`);
   const othersBefore = others();
   await wp.click(`tr[data-id="${target}"]`);
-  await wp.click('.modal button:has-text("Sposta solo questa seduta")');
+  await wp.click('.modal button:has-text("Sposta / cambia fisioterapista")');
   await wp.waitForTimeout(300);
   const tOpts = await wp.$$eval('.modal select[data-bind="am.pick.start"] option', os => os.map(o => o.value).filter(Boolean));
   const cur = psql(`select to_char(start_time,'HH24:MI') from appointments where id='${target}'`);

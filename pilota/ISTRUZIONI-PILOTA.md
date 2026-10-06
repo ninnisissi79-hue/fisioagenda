@@ -84,6 +84,10 @@ Per provare senza dati reali: crea un fisioterapista di nome **Fittizio** e impo
 
 ## Correggere dal calendario del collega
 
+- **+ Aggiungi paziente** (in alto nel calendario): fisioterapista e giorno sono già quelli del calendario aperto, ma si possono cambiare.
+- **Pazienti in trattamento**: elenco dei pazienti del collega (o di tutti), con sedute fatte, programmate e prossima seduta. “+ Seduta” aggiunge una seduta al **suo** ciclo, senza nuova anagrafica né nuovo ciclo; si scelgono giorno e ora (anche cliccando nel calendario).
+- Cliccando un punto libero del calendario conta **l’orario esatto** del clic (a passi di 15 minuti).
+
 - **Trascina** una seduta per cambiare giorno o ora: mentre trascini vedi subito se il posto va bene (turni, assenze, sovrapposizioni).
 - **Clicca una seduta → ✎ Correggi:** nome del paziente, “questa è la seduta n. … di …” (rinumera il ciclo), tipo di trattamento (GC, RM…), durata (questa e le future), visita fisiatrica del giorno, **elimina** una seduta inserita per errore.
 - **Clicca uno spazio libero:** nuovo paziente, **paziente in archivio** (se è già in trattamento si aggiungono le sedute che mancano) o dalla lista d'attesa; per chi è già in trattamento indichi le **sedute già fatte** e l'app mostra qual è la prossima.

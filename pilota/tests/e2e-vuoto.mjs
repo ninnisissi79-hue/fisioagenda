@@ -298,7 +298,7 @@ try {
   // paziente alla quarta seduta di dieci, Lun-Mer-Ven, dal pannello laterale
   await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, ed]);
   await page.waitForSelector(`.wk-free.act[data-day="${ed}"]`);
-  await page.click(`.wk-free.act[data-day="${ed}"] >> nth=0`);
+  await page.click(`.wk-free.act[data-day="${ed}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: inizio dello spazio libero
   await page.waitForSelector('.drawer');
   await page.fill('.drawer input[data-bind="pd.name"]', 'Quarta Seduta');
   await page.dispatchEvent('.drawer input[data-bind="pd.name"]', 'change');
@@ -319,7 +319,7 @@ try {
   await page.waitForSelector('.wk-appt:has-text("Quarta Seduta")');
   const wedAppt = psql(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and a.day='${wed}'`);
   await page.click(`.wk-appt[data-id="${wedAppt}"]`);
-  await page.click('.modal button:has-text("Sposta solo questa seduta")');
+  await page.click('.modal button:has-text("Sposta / cambia fisioterapista")');
   await page.click('.modal button[data-act="seg"][data-val="successive"]');
   await page.fill('.modal input[data-bind="am.rg.time"]', '12.20');
   await page.dispatchEvent('.modal input[data-bind="am.rg.time"]', 'change');

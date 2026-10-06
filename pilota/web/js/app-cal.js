@@ -459,7 +459,7 @@
     h += '<div class="row" style="margin:10px 0">' +
       '<button class="btn ' + (am.mode === 'correggi' ? 'primary' : '') + '" data-act="am-mode" data-m="correggi">✎ Correggi</button>' +
       (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito / assenza' : 'Correggi esito') + '</button>' : '') +
-      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Sposta solo questa seduta</button>' : '') +
+      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Sposta / cambia fisioterapista</button>' : '') +
       (canRecover ? '<button class="btn ' + (am.mode === 'recupero' ? 'primary' : '') + '" data-act="am-mode" data-m="recupero">Programma il recupero</button>' : '') + '</div>';
     if (am.mode === 'esito') {
       const o = am.out;

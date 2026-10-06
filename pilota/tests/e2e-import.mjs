@@ -136,7 +136,9 @@ try {
   // trascinamento: Bianchi dalle 7:15 alle 9:00 dello stesso giorno
   await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, bi[0]]);
   const b0 = psql(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='${name('Bianchi')}' and a.day='${bi[0]}'`);
-  const el = await page.waitForSelector(`.wk-appt[data-id="${b0}"]`);
+  await page.waitForSelector(`.wk-appt[data-id="${b0}"]`);
+  await page.waitForTimeout(800); // attende eventuali aggiornamenti in tempo reale
+  const el = page.locator(`.wk-appt[data-id="${b0}"]`);
   assert.match(await el.textContent(), /8\/10/);
   const box = await el.boundingBox();
   await page.mouse.move(box.x + 20, box.y + 5); await page.mouse.down();
@@ -171,17 +173,49 @@ try {
 
   // spazio libero → paziente in archivio già in trattamento → si aggiunge la seduta mancante
   await page.waitForSelector(`.wk-free.act[data-day="${ne[1]}"]`);
-  await page.click(`.wk-free.act[data-day="${ne[1]}"] >> nth=0`);
+  await page.click(`.wk-free.act[data-day="${ne[1]}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: le 7:00
   await page.waitForSelector('.drawer');
   await page.click('.drawer button[data-act="seg"][data-val="esistente"]');
   await page.fill('.drawer input[data-bind="pd.q"]', 'Neri ' + RUN); await page.dispatchEvent('.drawer input[data-bind="pd.q"]', 'change');
   await page.click('.drawer button[data-act="pd-pick"]:has-text("Neri")');
-  await page.waitForSelector('.drawer .form-note:has-text("Si aggiungono le 1 che mancano")');
-  await page.waitForSelector('.drawer .form-note:has-text("Tutte disponibili")', { timeout: 10000 });
+  await page.waitForSelector('.drawer .form-note:has-text("Manca 1 seduta da programmare")');
+  await page.waitForSelector('.drawer .form-note:has-text("Disponibile")', { timeout: 10000 });
   await page.click('.drawer button:has-text("Conferma")');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   assert.equal(count(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Neri')}'`), 6);
   ok('Dallo spazio libero: paziente già in trattamento scelto dall’archivio, aggiunta la seduta mancante');
+
+  // "+ Aggiungi paziente": fisioterapista e giorno del calendario aperto, modificabili
+  await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, gi[0]]);
+  await page.click('button[data-act="pd-add"]');
+  await page.waitForSelector('.drawer');
+  assert.equal(await page.$eval('.drawer select[data-bind="pd.th"]', e => e.value), thId);
+  assert.equal(await page.$eval('.drawer input[data-bind="pd.day"]', e => e.value), gi[0]);
+  await page.click('.drawer button[data-act="pd-close"]');
+  // una seduta di Gialli eliminata per errore, poi rimessa dall'elenco dei pazienti in trattamento
+  const g1 = psql(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}' and a.day='${gi[1]}'`);
+  await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, gi[1]]);
+  await page.click(`.wk-appt[data-id="${g1}"]`);
+  await page.click('.modal button:has-text("✎ Correggi")');
+  await page.click('.modal button:has-text("Elimina questa seduta")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  const before = count(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}'`);
+  await page.click('button[data-act="pl-open"]');
+  await page.waitForSelector('.drawer .pl-list');
+  await page.fill('.drawer input[data-bind="pl.q"]', 'Gialli'); await page.dispatchEvent('.drawer input[data-bind="pl.q"]', 'change');
+  await page.waitForSelector('.drawer .pl-list li:has-text("1 da programmare")');
+  await page.click('.drawer .pl-list li:has-text("Gialli") button[data-act="pl-add"]');
+  await page.waitForSelector('.drawer select[data-bind="pd.th"]');
+  assert.match(await page.textContent('.drawer'), /Manca 1 seduta da programmare/);
+  await page.fill('.drawer input[data-bind="pd.start"]', '10:00'); await page.dispatchEvent('.drawer input[data-bind="pd.start"]', 'change');
+  await page.waitForSelector('.drawer .form-note:has-text("Disponibile")', { timeout: 10000 });
+  await page.click('.drawer button:has-text("Conferma")');
+  await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
+  assert.equal(count(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}'`), before + 1);
+  assert.equal(count(`select count(*) from cycles c join patients p on p.id=c.patient_id where p.name='${name('Gialli')}'`), 1, 'nessun ciclo nuovo');
+  assert.equal(count(`select count(*) from patients where name='${name('Gialli')}'`), 1, 'nessuna anagrafica duplicata');
+  assert.equal(psql(`select a.status||' '||to_char(a.start_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}' order by a.created_at desc limit 1`), 'programmata 10:00');
+  ok('Dal calendario: “+ Aggiungi paziente” con collega e giorno precompilati; elenco dei pazienti in trattamento → una seduta aggiunta al suo ciclo, senza nuova anagrafica né nuovo ciclo');
   assert.deepEqual(errors, [], 'nessun errore nella pagina');
 } finally {
   await browser.close(); server.kill();
