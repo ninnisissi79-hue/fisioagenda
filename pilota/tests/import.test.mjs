@@ -69,7 +69,10 @@ test('importazione di un tabulato: numeri a ritroso, R, V, date passate solo pro
   assert.equal(q(`select count(*) from import_batches where id='${r.batch_id}' and summary->>'appointments'='7'`), '1');
 
   // stesso tabulato ricaricato: i pazienti ora esistono, la conferma come "nuovo" è rifiutata…
-  await expectError(S.rpc(op1, 'import_sheet', { p: sheet }), 'FA_CONFLICT', /esiste già un paziente/);
+  const rx = await S.rpc(op1, 'import_sheet', { p: sheet });
+  assert.equal(rx.number, null, 'nulla salvato: nessuna importazione vuota nello storico');
+  assert.equal(rx.results.length, 2);
+  assert.ok(rx.results.every(x => !x.ok && /esiste già un paziente/.test(x.error)), 'ogni riga dice esattamente cosa non va');
   // …e collegandolo al ciclo esistente nessuna seduta viene duplicata
   const cycFav = q(`select id from cycles where patient_id='${fav}'`);
   const again = JSON.parse(JSON.stringify(sheet));
@@ -84,28 +87,39 @@ test('importazione di un tabulato: numeri a ritroso, R, V, date passate solo pro
   assert.equal(q(`select count(*) from patients where name='Rossi ${RUN}'`), '2');
 });
 
-test('importazione: conflitti segnalati e tutto o niente; "importa comunque" solo per fuori turno', async () => {
+test('importazione: ogni riga e ogni seduta si salvano per conto loro; gli avvisi si confermano, le sovrapposizioni no', async () => {
   const th = await therapist('B');
   const [d1, d2] = days(E.addDays(T0, 1), [1, 2, 3, 4, 5], 2);
   const base = n => ({ ref: 'x' + n, target: 'nuovo', patient_name: `Conflitto${n} ${RUN}`, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [E.weekday(d1)], start: '06:30' });
-  // fuori dalla fascia ambulatoriale: rifiutato, nulla salvato
-  await expectError(S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d1), from_date: d1, rows: [Object.assign(base(1), { cells: [{ day: d1, number: 10 }] })] } }), 'FA_SLOT', /fuori dalle fasce/);
-  assert.equal(q(`select count(*) from patients where name='Conflitto1 ${RUN}'`), '0');
-  assert.equal(q(`select count(*) from import_batches where therapist_id='${th}'`), '0', 'nulla resta del tentativo');
-  // "importa comunque": la seduta entra e compare tra quelle da sistemare
-  const r = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d1), from_date: d1, rows: [Object.assign(base(1), { cells: [{ day: d1, number: 10, force: true }] })] } });
-  assert.equal(r.forced, 1);
+  // fuori dalla fascia ambulatoriale senza conferma: il paziente entra, la seduta resta fuori con il motivo
+  const r0 = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d1), from_date: d1, rows: [Object.assign(base(1), { cells: [{ day: d1, number: 10 }] })] } });
+  assert.equal(r0.appointments, 0); assert.equal(r0.results[0].ok, true);
+  assert.match(r0.results[0].skipped[0].message, /fuori dalle fasce/); assert.equal(r0.results[0].skipped[0].day, d1);
+  // avviso confermato ("importa comunque") sul ciclo appena creato: la seduta entra e compare tra quelle da sistemare
+  const r = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d1), from_date: d1, rows: [{ ref: 'x1', target: 'ciclo', cycle_id: r0.results[0].cycle_id, start: '06:30', cells: [{ day: d1, number: 10, force: true }] }] } });
+  assert.equal(r.forced, 1); assert.equal(r.appointments, 1);
   const id = q(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='Conflitto1 ${RUN}'`);
   const iss = await S.rpc(op1, 'appointment_issues', { p_from: T0, p_to: E.addDays(T0, 30) });
   assert.ok(iss.some(i => i.appointment_id === id && i.kind === 'conflitto'));
-  // due pazienti nello stesso posto: impossibile anche con "importa comunque"
+  // due pazienti nello stesso posto: la seconda seduta non entra nemmeno con "importa comunque", la prima sì
   const r2 = Object.assign(base(2), { start: '08:00', cells: [{ day: d2, number: 10, force: true }] });
   const r3 = Object.assign(base(3), { start: '08:00', cells: [{ day: d2, number: 10, force: true }] });
-  await expectError(S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [r2, r3] } }), 'FA_SLOT', /sovrappongono/);
-  assert.equal(q(`select count(*) from patients where name in ('Conflitto2 ${RUN}', 'Conflitto3 ${RUN}')`), '0');
-  // assenza del fisioterapista: segnalata
+  const rr = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [r2, r3] } });
+  assert.equal(rr.appointments, 1);
+  assert.match(rr.results[1].skipped[0].message, /sovrappone a Conflitto2/);
+  // durate diverse sullo stesso foglio e per singola seduta: nessun vincolo
+  const r4 = Object.assign(base(6), { start: '10:00', duration: 45, cells: [{ day: d2, number: 10, minutes: 60 }] });
+  await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [r4] } });
+  assert.equal(q(`select to_char(a.end_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='Conflitto6 ${RUN}'`), '11:00');
+  // una riga sbagliata non blocca le altre
+  const bad = Object.assign(base(7), { patient_name: '', cells: [{ day: d2, number: 10 }] });
+  const good = Object.assign(base(8), { start: '12:30', cells: [{ day: d2, number: 10 }] });
+  const rb = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [bad, good] } });
+  assert.equal(rb.rows, 1); assert.equal(rb.results[0].ok, false); assert.match(rb.results[0].error, /manca il nome/); assert.equal(rb.results[1].ok, true);
+  // assenza del fisioterapista: avviso da confermare
   await S.rpc(op1, 'save_absence', { p: { therapist_id: th, kind: 'ferie', start_date: d2, end_date: d2 } });
-  await expectError(S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [Object.assign(base(4), { start: '09:00', cells: [{ day: d2, number: 10 }] })] } }), 'FA_SLOT', /assente/);
+  const ra = await S.rpc(op1, 'import_sheet', { p: { therapist_id: th, month: month(d2), from_date: d2, rows: [Object.assign(base(4), { start: '09:00', cells: [{ day: d2, number: 10 }] })] } });
+  assert.match(ra.results[0].skipped[0].message, /assente/);
 });
 
 test('annullare un’importazione: elimina ciò che ha creato, conserva le sedute con esito', async () => {
@@ -194,9 +208,13 @@ test('correzioni rapide dal calendario: elimina, numerazione, durata, sedute agg
   // sedute aggiunte entro il numero previsto (5 precedenti + 2 + 3 = 10)
   c2 = JSON.parse(q(`select row_to_json(c) from cycles c where id='${cyc.id}'`));
   const add = [{ day: fut[2], start: '09:00' }, { day: fut[3], start: '09:00' }, { day: days(E.addDays(fut[3], 1), [1, 2, 3, 4, 5], 1)[0], start: '09:00' }];
-  await expectError(S.rpc(op1, 'add_cycle_slots', { p_cycle: cyc.id, p_version: c2.version, p_therapist: th, p_slots: add.concat([{ day: E.addDays(fut[3], 14), start: '09:00' }]) }), 'FA_INPUT', /già 7 sedute su 10/);
-  await S.rpc(op1, 'add_cycle_slots', { p_cycle: cyc.id, p_version: c2.version, p_therapist: th, p_slots: add });
-  assert.equal(q(`select count(*) from appointments where cycle_id='${cyc.id}' and status in ('programmata','effettuata')`), '5');
+  // una seduta in più del previsto: il ciclo si allunga (nessun blocco)
+  let more = E.addDays(fut[3], 14); while (E.weekday(more) >= 6) more = E.addDays(more, 1);
+  const ra = await S.rpc(op1, 'add_cycle_slots', { p_cycle: cyc.id, p_version: c2.version, p_therapist: th, p_slots: add.concat([{ day: more, start: '09:00', minutes: 45 }]) });
+  assert.equal(ra.extended, 1);
+  assert.equal(q(`select planned_sessions from cycles where id='${cyc.id}'`), '11');
+  assert.equal(q(`select count(*) from appointments where cycle_id='${cyc.id}' and status in ('programmata','effettuata')`), '6');
+  assert.equal(q(`select to_char(end_time,'HH24:MI') from appointments where cycle_id='${cyc.id}' and day='${more}'`), '09:45', 'durata della singola seduta');
   // visita fisiatrica in un giorno di trattamento
   await S.rpc(op1, 'save_patient_event', { p_patient: cyc.patient_id, p_day: fut[2], p_note: '', p_delete: false });
   await S.rpc(op1, 'save_patient_event', { p_patient: cyc.patient_id, p_day: fut[2], p_note: 'ore 11', p_delete: false });
@@ -242,4 +260,47 @@ test('sigla di un collega sotto il numero: la seduta va al collega come sostituz
     from appointments a join patients p on p.id=a.patient_id where p.name='Sostituito ${RUN}'`);
   assert.equal(rows, 'B:singola:A,A:-:-');
   assert.equal(q(`select c.therapist_id from cycles c join patients p on p.id=c.patient_id where p.name='Sostituito ${RUN}'`), A, 'il ciclo resta del titolare');
+});
+
+test('sostituzioni dal tabulato (anche di pazienti nuovi), modifica di una singola seduta, annullamento della sostituzione', async () => {
+  const A = await therapist('T1'), B = await therapist('T2'), C = await therapist('T3');
+  const [d1, d2, d3] = days(E.addDays(T0, 1), [1, 2, 3, 4, 5], 3);
+  // sul foglio di B: paziente di A non ancora in archivio, trattato da B il giorno d1 (casella "4")
+  const r = await S.rpc(op1, 'import_sheet', { p: { therapist_id: B, month: month(d1), from_date: d1, rows: [], extra: [
+    { ref: 'e1', target: 'nuovo', patient_name: 'Sost nuovo ' + RUN, original_therapist_id: A, therapist_id: B, category_id: 'mano', day: d1, start: '10:00', minutes: 45, number: '4' },
+    { ref: 'e2', target: 'nuovo', patient_name: '', original_therapist_id: A, day: d1, start: '11:00' }] } });
+  assert.equal(r.substitutions, 1); assert.equal(r.extra[0].ok, true); assert.equal(r.extra[1].ok, false); assert.match(r.extra[1].error, /manca il nome/);
+  const a = JSON.parse(q(`select row_to_json(a) from appointments a join patients p on p.id=a.patient_id where p.name='Sost nuovo ${RUN}'`));
+  assert.equal(a.therapist_id, B); assert.equal(a.original_therapist_id, A); assert.equal(a.substitute_kind, 'singola');
+  assert.equal(a.end_time, '10:45:00');
+  const cyc = JSON.parse(q(`select row_to_json(c) from cycles c where id='${a.cycle_id}'`));
+  assert.equal(cyc.therapist_id, A, 'il ciclo resta del titolare'); assert.equal(cyc.prior_sessions, 6, 'casella 4 = 7ª seduta');
+  // stessa sostituzione importata di nuovo: nessun doppione
+  const r2 = await S.rpc(op1, 'import_sheet', { p: { therapist_id: B, month: month(d1), from_date: d1, rows: [], extra: [
+    { ref: 'e1', target: 'paziente', patient_id: a.patient_id, original_therapist_id: A, day: d1, start: '10:00' }] } });
+  assert.equal(r2.duplicates, 1); assert.equal(q(`select count(*) from appointments where patient_id='${a.patient_id}'`), '1');
+  // modifica della singola seduta: durata 60′, altro sostituto (C)
+  await S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: a.version, p: { therapist_id: C, minutes: 60 } });
+  let x = JSON.parse(q(`select row_to_json(a) from appointments a where id='${a.id}'`));
+  assert.equal(x.therapist_id, C); assert.equal(x.original_therapist_id, A); assert.equal(x.end_time, '11:00:00');
+  // avviso organizzativo (fuori orario): da confermare; sovrapposizione: mai
+  await expectError(S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { start: '06:00' } }), 'FA_WARN', /fuori dalle fasce/);
+  await S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { start: '06:00', force: true } });
+  x = JSON.parse(q(`select row_to_json(a) from appointments a where id='${a.id}'`));
+  const other = await S.rpc(op1, 'import_sheet', { p: { therapist_id: C, month: month(d2), from_date: d2, rows: [
+    { ref: 'o', target: 'nuovo', patient_name: 'Occupa ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [E.weekday(d2)], start: '09:00', cells: [{ day: d2, number: 10 }] }] } });
+  assert.equal(other.appointments, 1);
+  await expectError(S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { day: d2, start: '09:15', force: true } }), 'FA_SLOT', /sovrappone a Occupa/);
+  // annullare la sostituzione: la seduta torna al titolare
+  await S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { start: '10:00', force: true } });
+  x = JSON.parse(q(`select row_to_json(a) from appointments a where id='${a.id}'`));
+  await S.rpc(op1, 'cancel_substitution', { p_id: a.id, p_version: x.version });
+  x = JSON.parse(q(`select row_to_json(a) from appointments a where id='${a.id}'`));
+  assert.equal(x.therapist_id, A); assert.equal(x.original_therapist_id, null); assert.equal(x.substitute_kind, null); assert.equal(x.status, 'programmata');
+  // riassegnata a B dal titolare con edit_appointment = sostituzione; di nuovo ad A = sostituzione annullata
+  await S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { therapist_id: B, day: d3 } });
+  x = JSON.parse(q(`select row_to_json(a) from appointments a where id='${a.id}'`));
+  assert.equal(x.original_therapist_id, A); assert.equal(x.day, d3);
+  await S.rpc(op1, 'edit_appointment', { p_id: a.id, p_version: x.version, p: { therapist_id: A } });
+  assert.equal(q(`select coalesce(original_therapist_id::text,'-') from appointments where id='${a.id}'`), '-');
 });

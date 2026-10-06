@@ -67,9 +67,10 @@ try {
   assert.equal(await page.$eval(`select[data-bind$=".th"]`, el => el.value), thId, 'fisioterapista riconosciuto dal nome sul foglio');
   assert.ok(await page.$('.imp-ph-wrap img'), 'foto accanto ai dati');
   assert.ok(await page.$('.imp-grid td.doubt'), 'lettura incerta evidenziata');
-  assert.match(await page.textContent('.imp-confirm'), /Scegli la durata/);
-  assert.ok(await page.$eval('button[data-act="imp-go"]', b => b.disabled), 'senza durata non si importa');
-  ok('Foto e trascrizione caricate: fisioterapista riconosciuto, foto accanto, letture incerte evidenziate, durata da confermare');
+  assert.match(await page.textContent('main'), /Durata predefinita delle sedute/);
+  assert.equal(await page.$eval('.panel button[data-act="seg"][data-path$=".durSel"].on', b => b.getAttribute('data-val')), '30', 'durata proposta dal foglio, modificabile');
+  assert.match(await page.textContent('main'), /Proposta in base al foglio/);
+  ok('Foto e trascrizione caricate: fisioterapista riconosciuto, foto accanto, letture incerte evidenziate, durata predefinita proposta (30 minuti)');
 
   // clic su una casella: evidenziata sulla foto
   await page.click('.imp-row[data-ref="F1"] input[data-imp-cell] >> nth=' + (Number(bi[0].slice(8)) - 1));
@@ -80,17 +81,17 @@ try {
   // correzioni: lettura confermata, orario controllato, "importa comunque" per il fuori turno
   await page.click('.imp-row[data-ref="F3"] .imp-okc');
   // sigla sotto il numero: il collega che ha fatto la seduta
-  await page.selectOption('.panel:has(h3:has-text("Sigle dei colleghi")) select', colId);
+  await page.selectOption('.panel:has(h3:has-text("sigle dei colleghi")) select', colId);
   await page.click('.imp-row[data-ref="F4"] input[data-act-change="imp-rd"]');
   const nForce = (await page.$$('.imp-row[data-ref="F4"] input[data-act-change="imp-force"]')).length;
   assert.equal(nForce, 3);
   for (let k = 0; k < nForce; k++) { await page.click(`.imp-row[data-ref="F4"] input[data-act-change="imp-force"] >> nth=${k}`); await page.waitForTimeout(100); }
   await page.waitForFunction(() => !document.querySelector('button[data-act="imp-go"]').disabled, null, { timeout: 5000 });
-  assert.match(await page.textContent('.imp-confirm'), /4 pazienti \(4 nuovi\), 17 sedute, 1 visite fisiatriche, di cui 3 fuori turno/);
+  assert.match(await page.textContent('.imp-confirm'), /4 pazienti \(4 nuovi\) e 17 sedute, 1 visite fisiatriche/);
   ok('Correzioni nell’anteprima: casella confermata, orario controllato, fuori turno importati consapevolmente');
 
   await page.click('button[data-act="imp-go"]');
-  await page.waitForSelector('h3:has-text("completata")', { timeout: 15000 });
+  await page.waitForSelector('h3:has-text("salvata")', { timeout: 15000 });
   assert.equal(count(`select count(*) from appointments where patient_id in ${pats}`), 17);
   assert.equal(count(`select count(*) from appointments where patient_id in ${pats} and status <> 'programmata'`), 0, 'nessuna seduta segnata come svolta');
   assert.equal(psql(`select c.prior_sessions from cycles c join patients p on p.id=c.patient_id where p.name='${name('Bianchi')}'`), '7');
@@ -108,7 +109,7 @@ try {
   // stessa foto e stessa trascrizione di nuovo: nessun doppione
   await load();
   await page.waitForSelector('text=Questa foto è già stata importata');
-  assert.match(await page.textContent('.imp-row[data-ref="F1"]'), /già presenti/);
+  assert.match(await page.textContent('.imp-row[data-ref="F1"]'), /già nel calendario/);
   assert.ok(await page.$eval('button[data-act="imp-go"]', b => b.disabled), 'niente di nuovo da importare');
   ok('Stessa foto ricaricata: riconosciuta, pazienti collegati ai cicli esistenti, nessuna seduta doppia');
 
@@ -128,7 +129,7 @@ try {
   await page.selectOption('.imp-row[data-ref="F2"] select.imp-dur', '60');
   await page.waitForFunction(() => !document.querySelector('button[data-act="imp-go"]').disabled, null, { timeout: 5000 });
   await page.click('button[data-act="imp-go"]');
-  await page.waitForSelector('h3:has-text("completata")', { timeout: 15000 });
+  await page.waitForSelector('h3:has-text("salvata")', { timeout: 15000 });
   assert.equal(count(`select count(*) from appointments where patient_id in ${pats}`), 14);
   assert.equal(psql(`select string_agg(distinct (extract(epoch from end_time - start_time)/60)::int::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Neri')}'`), '60', 'durata di 1 ora scelta per il paziente');
   assert.equal(psql(`select string_agg(distinct (extract(epoch from end_time - start_time)/60)::int::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}'`), '30', 'gli altri con la durata del foglio');
@@ -216,6 +217,84 @@ try {
   assert.equal(count(`select count(*) from patients where name='${name('Gialli')}'`), 1, 'nessuna anagrafica duplicata');
   assert.equal(psql(`select a.status||' '||to_char(a.start_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}' order by a.created_at desc limit 1`), 'programmata 10:00');
   ok('Dal calendario: “+ Aggiungi paziente” con collega e giorno precompilati; elenco dei pazienti in trattamento → una seduta aggiunta al suo ciclo, senza nuova anagrafica né nuovo ciclo');
+  // percorso completo delle sostituzioni: tabulato del collega con un paziente del titolare (Neri) trattato in sostituzione
+  const kd = daysOf([1, 3], 2), sd = daysOf([1], 3)[2];
+  const t2 = { formato: 'fisioagenda-tabulato-1', fogli: [{ fisioterapista: 'Collega ' + RUN, mese: M, durata: null, durata_suggerita: 30, sedute_ciclo: 10,
+    righe: [{ rif: 'K1', ora: '09:00', paziente: name('Arancio'), frequenza: '2v', giorni: [1, 3], tipo: 'GC', caselle: cells(kd, ['10', '9']) }],
+    estemporanei: [{ paziente: name('Neri'), giorno: Number(sd.slice(8)), ora: '11:00', valore: '', nota: 'paziente di ' + TH }], note: [], assenze: [] }] };
+  const f2 = path.join(tmp, 'collega.json'); fs.writeFileSync(f2, JSON.stringify(t2));
+  await page.click('nav a[href="#/importa"]');
+  await page.waitForSelector('input[data-imp-files]', { state: 'attached' });
+  for (const x of await page.$$('button[data-act="imp-close"]')) { await page.click('button[data-act="imp-close"] >> nth=0'); }
+  await page.setInputFiles('input[data-imp-files]', [f2]);
+  await page.waitForSelector('.imp-row[data-ref="K1"]');
+  assert.equal(await page.$eval(`select[data-bind$=".th"]`, el => el.value), colId);
+  // durata di una sola seduta: 45 minuti per la prima, la seconda resta di 30
+  await page.click('.imp-row[data-ref="K1"] button[data-act="imp-cells"]');
+  await page.selectOption(`.imp-row[data-ref="K1"] select[data-bind$="rows.0.cellDur.${Number(kd[0].slice(8))}"]`, '45');
+  // sostituzione: Importa, paziente scelto dall'elenco (ciclo con il titolare), sostituto = chi ha il tabulato
+  assert.match(await page.textContent('.imp-row[data-ref="E1"]'), /Da decidere/);
+  await page.click('.imp-row[data-ref="E1"] button[data-act="seg"][data-val="importa"]');
+  const neriCyc = psql(`select c.id from cycles c join patients p on p.id=c.patient_id where p.name='${name('Neri')}' and c.status='attivo'`);
+  await page.selectOption('.imp-row[data-ref="E1"] select[data-bind$=".pick"]', 'c:' + neriCyc);
+  await page.waitForSelector('.imp-row[data-ref="E1"] .ok-txt:has-text("Pronta")');
+  assert.match(await page.textContent('.imp-row[data-ref="E1"]'), new RegExp('sostituisce ' + TH));
+  assert.match(await page.textContent('.imp-confirm'), /di cui 1 sostituzioni/);
+  // correzione scritta e clic subito su «Importa» (senza uscire dal campo): la correzione vale e il clic non si perde
+  await page.fill('.imp-row[data-ref="K1"] input.imp-tipo', 'RM');
+  await page.click('button[data-act="imp-go"]');
+  await page.waitForSelector('h3:has-text("salvata")', { timeout: 15000 });
+  assert.equal(psql(`select string_agg((extract(epoch from end_time - start_time)/60)::int::text, ',' order by day) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Arancio')}'`), '45,30', 'durata per singola seduta');
+  assert.equal(psql(`select treatment from cycles c join patients p on p.id=c.patient_id where p.name='${name('Arancio')}'`), 'RM', 'correzione dell’ultimo momento salvata');
+  const sub = JSON.parse(psql(`select row_to_json(a) from appointments a where a.cycle_id='${neriCyc}' and a.day='${sd}'`));
+  assert.equal(sub.therapist_id, colId); assert.equal(sub.original_therapist_id, thId); assert.equal(sub.end_time, '12:00:00', 'durata del ciclo di Neri (1 ora)');
+  ok('Tabulato del collega: correzione e clic immediato su «Importa», durata 45′ per una sola seduta, sostituzione «Importa» con il paziente scelto, salvata nel calendario del sostituto');
+  // sezione Sostituzioni: data, orario, titolare, sostituto, paziente, durata, stato; distribuzione
+  await page.click('nav a[href="#/sostituzioni"]');
+  await page.fill('input[data-bind="sb.to"]', E.addDays(sd, 1)); await page.dispatchEvent('input[data-bind="sb.to"]', 'change');
+  await page.selectOption('select[data-bind="sb.th"]', thId);
+  const srow = page.locator('.sb-table tr', { hasText: name('Neri') });
+  await srow.waitFor();
+  const stxt = await srow.textContent();
+  assert.match(stxt, /11:00–12:00/); assert.match(stxt, /60′/); assert.match(stxt, new RegExp(TH)); assert.match(stxt, /confermata/);
+  assert.equal(await srow.locator('select').inputValue(), colId);
+  assert.match(await page.textContent('main'), new RegExp('Chi prende i pazienti[\\s\\S]*' + TH + ' → Collega ' + RUN + ': 1'));
+  // nei calendari: dal sostituto come sostituzione, dal titolare come promemoria
+  await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [colId, sd]);
+  await page.waitForSelector(`.wk-appt.sub[data-id="${sub.id}"]`);
+  assert.match(await page.textContent(`.wk-appt[data-id="${sub.id}"]`), new RegExp('sostituisce ' + TH));
+  await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, sd]);
+  await page.waitForSelector(`.wk-given[data-id="${sub.id}"]`);
+  ok('Sezione Sostituzioni: data, orario, titolare, sostituto, paziente, durata e stato; distribuzione dei pazienti; visibile nei due calendari');
+  // annullare la sostituzione: la seduta torna al titolare; poi solo questa seduta portata a 45 minuti dal calendario
+  await page.click('nav a[href="#/sostituzioni"]');
+  await page.click(`.sb-table button[data-act="sb-cancel"][data-id="${sub.id}"]`);
+  await page.waitForFunction(id => !document.querySelector('button[data-act="sb-cancel"][data-id="' + id + '"]'), sub.id, { timeout: 15000 });
+  assert.equal(psql(`select (therapist_id='${thId}')::text||' '||coalesce(original_therapist_id::text,'-') from appointments where id='${sub.id}'`), 'true -');
+  await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, sd]);
+  await page.click(`.wk-appt[data-id="${sub.id}"]`);
+  await page.click('.modal button:has-text("Modifica: giorno, ora, durata")');
+  await page.click('.modal button[data-act="seg"][data-path="am.pick.dur"][data-val="45"]');
+  await page.waitForSelector('.modal .form-note:has-text("Posto libero")');
+  await page.click('.modal button:has-text("Salva la modifica")');
+  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(psql(`select to_char(end_time,'HH24:MI') from appointments where id='${sub.id}'`), '11:45');
+  assert.equal(psql(`select duration from cycles where id='${neriCyc}'`), '60', 'le altre sedute del ciclo non cambiano');
+  ok('Sostituzione annullata (la seduta torna al titolare); dal calendario solo questa seduta portata a 45 minuti');
+  // assenza del titolare: le sue sedute diventano «da assegnare»; si assegnano dal riepilogo
+  await S.rpc(admin, 'save_absence', { p: { therapist_id: thId, kind: 'malattia', start_date: sd, end_date: sd } });
+  await page.click('nav a[href="#/sostituzioni"]');
+  await page.click('button[data-act="refresh"]').catch(() => {});
+  await page.click('button[data-act="seg"][data-path="sb.show"][data-val="da_assegnare"]');
+  const trow = page.locator('.sb-table tr', { hasText: name('Neri') });
+  await trow.waitFor({ timeout: 15000 });
+  assert.match(await trow.textContent(), /da assegnare/);
+  await trow.locator('select').selectOption(colId);
+  await trow.locator('button[data-act="sb-assign"]').click();
+  await page.waitForFunction(() => document.querySelector('button[data-path="sb.show"][data-val="da_assegnare"]').textContent.includes('(0)'), null, { timeout: 15000 });
+  assert.equal(psql(`select (therapist_id='${colId}')::text||' '||(original_therapist_id='${thId}')::text from appointments where id='${sub.id}'`), 'true true');
+  ok('Assenza del titolare: la seduta compare «da assegnare» in Sostituzioni e si assegna a un collega con due clic');
+
   // tutto lo zip delle trascrizioni in un colpo: una scheda per tabulato (l'esempio fittizio è escluso)
   const zipFile = path.join(tmp, 'trascrizioni.zip');
   (await import('node:child_process')).execFileSync('zip', ['-qr', zipFile, '.'], { cwd: path.join(ROOT, 'esempi') });
@@ -232,14 +311,14 @@ try {
   assert.match(await page.textContent('.imp-tab .btn.primary'), /Barile/);
   if (await page.$('button[data-act="imp-newth"]')) { await page.click('button[data-act="imp-newth"]'); await page.waitForSelector('button[data-act="imp-newth"]', { state: 'detached', timeout: 15000 }); }
   await page.click('.panel button[data-act="seg"][data-val="30"]');
-  for (const k of ['dubbi', 'nomi', 'forza']) { const bt = await page.$(`button[data-act="imp-bulk"][data-k="${k}"]`); if (bt) { await bt.click(); await page.waitForTimeout(300); } }
+  for (const k of ['dubbi', 'nomi']) { const bt = await page.$(`button[data-act="imp-bulk"][data-k="${k}"]`); if (bt) { await bt.click(); await page.waitForTimeout(300); } }
   if (await page.$eval('button[data-act="imp-go"]', bt => bt.disabled)) {
     // database di prova già usato: il foglio di Barile è già tutto in calendario
-    assert.match(await page.textContent('.imp-row[data-ref="B1"]'), /già presenti/);
+    assert.match(await page.textContent('.imp-row[data-ref="B1"]'), /già nel calendario/);
   } else {
-    assert.match(await page.textContent('button[data-act="imp-go"]'), /Importa le \d+ righe pronte/);
+    assert.match(await page.textContent('button[data-act="imp-go"]'), /Importa nel calendario/);
     await page.click('button[data-act="imp-go"]');
-    await page.waitForSelector('h3:has-text("completata")', { timeout: 20000 });
+    await page.waitForSelector('h3:has-text("salvata")', { timeout: 20000 });
   }
   const barile = psql("select id from therapists where name='Barile' limit 1");
   assert.ok(count(`select count(*) from appointments where therapist_id='${barile}'`) > 0);

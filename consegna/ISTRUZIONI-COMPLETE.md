@@ -103,31 +103,31 @@ Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei ta
 
 > **Il vostro caso.** Il pacchetto `3-PILOTA-sito-netlify.zip` è già collegato al vostro database: **non** va estratto né modificato. Basta il punto 1 (database) e poi trascinare lo zip, così com'è, in Netlify → **fisioagenda-pilota** → **Deploys**.
 
-1. Supabase → SQL Editor → incolla `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Si può rieseguire senza problemi e non tocca i dati.
-2. Prepara il sito come al punto 3.2 (estrai, compila `config.js` con gli **stessi** dati di prima).
-3. Netlify → progetto del **pilota** → **Deploys** → trascina la cartella. Il link resta lo stesso.
+1. Supabase → SQL Editor → **New query** → incolla **tutto** `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Si può rieseguire senza problemi e non tocca i dati. Deve finire con “Success”.
+2. Netlify → progetto **fisioagenda-pilota** → **Deploys** → trascina `3-PILOTA-sito-netlify.zip` così com’è. Il link resta lo stesso.
+3. Apri l’app e premi **Ctrl+F5** (sul telefono: chiudi e riapri la pagina) per caricare la versione nuova.
 
 ---
 
 ## 5. Importare i tabulati
 
-1. Puoi caricare **direttamente** `5-TRASCRIZIONI-tabulati.zip` (senza estrarlo): si apre una scheda per ogni tabulato. Oppure estrailo e scegli i singoli `.json` (es. `barile-ottobre-2026.json`).
-2. Nell'app: **Importa tabulato → Scegli foto e trascrizione…** → seleziona insieme la **foto** del foglio e il suo **.json**. La foto resta sul computer: non viene inviata a nessuno.
-3. Controlla **fisioterapista, mese, “Importa dal”** e scegli la **durata** (30′, 45′, 1 ora o altro; poi cambiala per i pazienti che hanno una durata diversa).
-4. **Anteprima**: a sinistra la foto, a destra una riga per paziente. Clicca una casella: si evidenzia sulla foto.
-    - **In giallo** le letture incerte: correggi il valore o conferma con ✓.
-    - Bordo **rosso** = riga da sistemare: il motivo è scritto sotto.
-    - Nome già presente: scegli se è lo stesso paziente o un omonimo.
-    - **Sigle dei colleghi** sotto i numeri (es. MG): scegli il collega; la seduta va nel suo calendario come sostituzione.
-    - Fuori turno / assenza: correggi oppure spunta “importa comunque” (finirà in “Da sistemare”).
-    - **Correzioni veloci** (in alto, per tutto il foglio): “Accetta le letture incerte”, “Importa comunque i fuori turno”, “Nomi già in archivio: crea come pazienti nuovi”.
-    - Se il fisioterapista non esiste ancora: pulsante **Crea il fisioterapista «…»** (con l’orario ambulatoriale standard e tutti i percorsi).
-5. **Importa le righe pronte nel calendario.** Le righe ancora da sistemare restano nel foglio: le sistemi e le importi dopo, senza doppioni.
-6. Riquadro **Assenze segnate sul foglio** (F ferie, M malattia, P permesso): premi **Registra** se sono corrette.
-7. Le sedute già passate entrano **programmate**: registra l'esito (effettuata / assenza) dal calendario o da **Da sistemare**.
+1. Puoi caricare **direttamente** `5-TRASCRIZIONI-tabulati.zip` (senza estrarlo): si apre una scheda per ogni tabulato. Oppure scegli i singoli `.json`, anche insieme alla foto del foglio (la foto resta sul computer).
+2. Controlla **fisioterapista, mese, “Importa dal”** e percorso. Se il fisioterapista non esiste: **Crea il fisioterapista «…»**.
+3. **Durata predefinita delle sedute** (già proposta: 30 minuti, 45 minuti, 1 ora o altro): vale per i pazienti a cui non scegli un’altra durata. Nella riga del paziente: **Durata della seduta**. Per una sola seduta: **Modifica singole sedute** (orario, durata, chi la fa). Durate diverse sullo stesso foglio vanno benissimo.
+4. **Anteprima**: una riga per paziente, foto accanto.
+    - **Giallo** = lettura incerta: correggi o conferma con ✓ (oppure “Accetta le letture incerte” per tutto il foglio).
+    - **Avvisi** (fuori orario, assenza, chiusura): non bloccano. In **4. Conferma** spunta “Importa comunque le sedute con avvisi”.
+    - **Conflitti** (due pazienti alla stessa ora): resta fuori solo quella seduta; la sistemi con “Modifica singole sedute”.
+    - Una riga resta fuori solo se manca davvero qualcosa (nome, orario, lettura da confermare, omonimo da scegliere): il motivo è scritto nella riga e nell’elenco della Conferma, con il link.
+5. **Sostituzioni sul foglio**
+    - **Sigle** sotto i numeri (es. MG = Manuela Guidetti): per ogni sigla scegli il collega, “nel calendario del titolare” o “Non importare”.
+    - **Pazienti di colleghi** scritti in un giorno solo: per ognuno **Importa** o **Non importare**. Se importi, completa paziente, titolare, sostituto, data, ora e durata (“+ Stessa sostituzione in un altro giorno” se serve). Nessun doppione.
+6. **Importa nel calendario.** Ogni riga si salva per conto suo: in alto compare il riepilogo di **cosa è entrato** e di **cosa no, con il motivo** (riga, giorno). Le correzioni restano sul foglio: sistemi e premi di nuovo “Importa”, senza doppioni. Per le sedute rimaste fuori: “Correggi e riprova queste sedute”.
+7. Riquadro **Assenze segnate sul foglio** (F ferie, M malattia, P permesso): premi **Registra** se sono corrette.
+8. Le sedute già passate entrano **programmate**: registra l’esito (effettuata / assenza) dal calendario o da **Da sistemare**.
 
-Regole di lettura: numero a ritroso (seduta n. = 11 − numero), **R** recupero, **V** visita fisiatrica (promemoria, non è una seduta), **//** fine ciclo, se dopo l'1 la riga riparte da 10 è un nuovo ciclo.
-Ricaricare lo stesso foglio **non crea doppioni**. Un'importazione sbagliata si annulla da **Importazioni recenti → Annulla**.
+Regole di lettura: numero a ritroso (seduta n. = 11 − numero), **R** recupero, **V** visita fisiatrica (promemoria, non è una seduta), **//** fine ciclo; se la numerazione riparte da capo è un nuovo ciclo.
+Un’importazione sbagliata si annulla da **Importazioni recenti → Annulla**.
 
 **Per provare senza dati veri:** crea un fisioterapista di nome **Fittizio** e importa `tabulato-fittizio.png` con `tabulato-fittizio.json`.
 
@@ -135,14 +135,17 @@ Ricaricare lo stesso foglio **non crea doppioni**. Un'importazione sbagliata si 
 
 ## 6. Gestire gli appuntamenti dal calendario del collega
 - **+ Aggiungi paziente** (in alto): fisioterapista e giorno già impostati, modificabili; paziente nuovo, in trattamento o dalla lista d’attesa; ora di inizio e durata.
-- **Pazienti in trattamento**: elenco con sedute fatte / programmate / prossima. **+ Seduta** aggiunge una seduta al suo ciclo (stessa anagrafica, stessa numerazione).
-- Clic su un punto libero: conta l’orario esatto del clic. Le incompatibilità (turni, assenze, sovrapposizioni) sono segnalate in rosso **prima** della conferma.
-- Una seduta inserita resta **programmata** finché non registri l’esito: non conta come effettuata.
-- “Trova posto” automatico resta disponibile nel menu.
+- **Pazienti in trattamento**: elenco con sedute fatte / programmate / prossima. **+ Seduta** aggiunge una seduta al suo ciclo, con la durata scelta per quella seduta (se il ciclo è completo diventa una seduta in più).
+- **Clic su una seduta → Modifica: giorno, ora, durata, fisioterapista**: solo quella seduta. Collega diverso = sostituzione (il ciclo resta del titolare). Un conflitto dice con chi; un avviso si conferma con “Salva comunque”. Quello che hai scritto non si perde.
+- **Trascina** una seduta per cambiare giorno o ora (rosso = non si può; giallo = chiede conferma).
+- **Clic sulla seduta → ✎ Correggi**: nome, “questa è la seduta n. … di …”, tipo (GC, RM…), durata delle sedute del ciclo, visita fisiatrica, **elimina** una seduta inserita per errore.
+- Una seduta inserita resta **programmata** finché non registri l’esito. “Trova posto” resta disponibile nel menu.
 
-- **Trascina** una seduta per cambiare giorno o ora (l'app controlla subito se il posto va bene).
-- **Clic sulla seduta → ✎ Correggi**: nome, “questa è la seduta n. … di …”, tipo (GC, RM…), durata, visita fisiatrica, **elimina** una seduta inserita per errore.
-- **Clic su uno spazio libero**: nuovo paziente, paziente in archivio (se è in trattamento aggiunge le sedute che mancano) o lista d'attesa; indichi le **sedute già fatte** e l'app mostra la prossima.
+### 6.1 Sostituzioni (nuova voce del menu)
+- Elenco per periodo e per fisioterapista: data e orario, titolare (assente), sostituto, paziente, durata, stato **da assegnare** / **confermata**.
+- **Chi prende i pazienti**: per ogni titolare, quante sedute vanno a ciascun collega.
+- **Assegna / Cambia sostituto** (✓ libero, ⚠ avviso, ✗ occupato), **Annulla sostituzione**, **Modifica orario / durata**, **Proponi i sostituti in automatico**.
+- Le sostituzioni confermate compaiono nei calendari: dal sostituto con bordo azzurro (“sostituisce …”), dal titolare come promemoria tratteggiato.
 
 ---
 

@@ -80,8 +80,8 @@
       res.cells.push(cell);
     });
     res.cells.forEach(c => {
-      if (c.bad) res.blocking.push(c.d + '/' + o.month.slice(5) + ': ' + c.bad + '.');
-      if (c.doubtMsg) res.blocking.push(c.d + '/' + o.month.slice(5) + ': lettura incerta (' + c.doubtMsg + '): correggi o conferma la casella.');
+      if (c.bad) res.blocking.push('Casella del ' + c.d + '/' + o.month.slice(5) + ' («' + c.raw + '»): ' + c.bad + '. Correggila o cancellala.');
+      else if (c.doubtMsg) res.blocking.push('Casella del ' + c.d + '/' + o.month.slice(5) + ': lettura incerta (' + c.doubtMsg + '). Correggila oppure confermala con ✓.');
     });
     // numeri in successione a ritroso: 10, 9, 8 … (un salto = seduta su un altro foglio).
     // Dopo l'ultima seduta (1) la stessa riga può ricominciare da capo: è un nuovo ciclo dello stesso paziente.
@@ -91,8 +91,9 @@
     num.forEach((b, i) => {
       const a = num[i - 1];
       if (a && b.num >= a.num) {
-        if (a.num === 1 || b.num === planned) { seg++; res.issues.push('Nuovo ciclo dal ' + E.fmtItDay(b.day) + ': dopo il n. ' + a.num + ' la riga ricomincia da ' + b.num + '.'); }
-        else res.blocking.push('Numeri non in successione: ' + a.num + ' il ' + a.d + ', poi ' + b.num + ' il ' + b.d + '. Controlla le caselle.');
+        seg++;
+        if (a.num === 1 || b.num === planned) res.issues.push('Nuovo ciclo dal ' + E.fmtItDay(b.day) + ': dopo il n. ' + a.num + ' la riga ricomincia da ' + b.num + '.');
+        else res.issues.push('Numeri non in successione: ' + a.num + ' il ' + a.d + ', poi ' + b.num + ' il ' + b.d + ' — considerato un nuovo ciclo dal ' + E.fmtItDay(b.day) + '. Se è un errore di lettura, correggi la casella.');
       } else if (a && a.num - b.num > 1) {
         const miss = []; for (let k = a.num - 1; k > b.num; k--) miss.push(k);
         res.issues.push('Manca il n. ' + miss.join(', ') + ' tra il ' + a.d + ' e il ' + b.d + ': forse seduta fatta con un collega (compare sul suo tabulato).');
@@ -170,6 +171,7 @@
       duration: f.durata ? Number(f.durata) : null,
       durationHint: f.durata_suggerita ? Number(f.durata_suggerita) : null,
       durationNote: f.durata_nota || '',
+      sigle: Object.assign({}, f.sigle || {}),
       planned: Number(f.sedute_ciclo) || 10,
       grid: f.griglia || null,
       rows: (f.righe || []).map((r, j) => ({

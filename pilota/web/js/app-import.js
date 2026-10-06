@@ -8,7 +8,6 @@
 (function () {
   'use strict';
   const FA = window.FA, E = FA.E, A = FA.state, esc = FA.esc, H = window.FASheet;
-  const FORCEABLE = new Set(['fuori_turno', 'blocco', 'assenza', 'chiusura', 'max_fascia', 'max_giorno', 'probabile', 'inattivo']);
   let seq = 0;
 
   function st() { if (!A.ui.imp) A.ui.imp = { sheets: [], cur: 0, paste: '', msg: null }; return A.ui.imp; }
@@ -36,12 +35,39 @@
     s.id = ++seq;
     s.th = matchTherapist(s.thName) || (FA.isFisio() ? A.me.therapist_id || '' : '');
     s.from = defaultFrom(s.month);
-    s.durSel = s.duration ? ([30, 45, 60].includes(s.duration) ? String(s.duration) : 'altro') : '';
-    s.durOther = s.duration && ![30, 45, 60].includes(s.duration) ? String(s.duration) : '';
+    // durata predefinita: quella scritta sul foglio, altrimenti quella proposta dalla trascrizione, altrimenti 30′
+    const d0 = s.duration || s.durationHint || 30;
+    s.durSel = [30, 45, 60].includes(d0) ? String(d0) : 'altro';
+    s.durOther = [30, 45, 60].includes(d0) ? '' : String(d0);
+    s.durGuess = !s.duration;
     s.category = defaultCategory(s.th);
-    s.photo = null; s.sel = null; s.result = null; s.error = null; s.zoom = false;
-    s.rows.forEach(r => { r.choice = ''; r.force = {}; r.generate = false; if (r.include == null) r.include = true; });
+    s.photo = null; s.sel = null; s.result = null; s.error = null; s.zoom = false; s.forceAll = false;
+    s.rows.forEach(r => { r.choice = ''; r.force = {}; r.generate = false; r.cellDur = {}; r.cellTh = {}; r.showCells = false; if (r.include == null) r.include = true; });
+    s.extra.forEach(x => {
+      x.decision = ''; x.pick = ''; x.pname = guessName(x.name); x.orig = guessTherapist(x.note + ' ' + x.name, s.th);
+      x.sub = ''; x.day = x.d && s.month ? H.dayOf(s.month, x.d) : ''; x.time = x.time || ''; x.dur = ''; x.force = false;
+    });
+    // sigle già note (es. "MG": "Guidetti" nella trascrizione): collega preselezionato, sempre modificabile
+    Object.entries(s.sigle || {}).forEach(([k, name]) => { const t = matchTherapist(name); if (t && t !== s.th) s.subsMap[H.normName(k)] = t; });
     return s;
+  }
+  /** nome leggibile da quanto trascritto (es. «… (forse Iagberau, di Cantarella)» → Iagberau) */
+  function guessName(t) {
+    t = String(t || '');
+    const m = t.match(/forse ([A-ZÀ-Ü][a-zà-ü']+(?: [A-ZÀ-Ü][a-zà-ü']+)?)/);
+    if (m) return m[1];
+    return /^[A-Za-zÀ-ü' ]{3,}$/.test(t.trim()) ? t.trim() : '';
+  }
+  /** fisioterapista citato nel testo (es. «di Cantarella») */
+  function guessTherapist(t, own) {
+    const words = H.normName(t).split(' ').filter(w => w.length > 3);
+    const list = FA.activeTherapists().filter(x => x.id !== own && H.normName(x.name).split(' ').some(w => w.length > 3 && words.includes(w)));
+    return list.length === 1 ? list[0].id : '';
+  }
+  function subsOf(s) {
+    const sig = {};
+    s.rows.forEach(r => Object.keys(r.subs || {}).forEach(d => { const k = H.normName(r.subs[d]); if (!k) return; if (!sig[k]) sig[k] = { label: r.subs[d], n: 0 }; sig[k].n++; }));
+    return sig;
   }
   function defaultCategory(th) {
     if (!th) return '';
@@ -188,7 +214,7 @@
   FA.actions['imp-add-row'] = () => {
     const s = cur();
     s.rows.push({ ref: 'M' + (s.rows.length + 1), include: true, name: '', time: '', freq: '', weekdays: [], tipo: '', closed: false, y: null,
-      cells: {}, subs: {}, times: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false, dur: '' });
+      cells: {}, subs: {}, times: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false, dur: '', cellDur: {}, cellTh: {}, showCells: false });
     FA.render();
   };
   FA.actions['imp-del-row'] = el => { const s = cur(); s.rows.splice(Number(el.getAttribute('data-r')), 1); FA.render(); };
@@ -258,11 +284,15 @@
 
   /* ---------------- analisi di una riga ---------------- */
   function sheetDur(s) {
-    if (s.durSel === 'altro') { const n = Number(s.durOther); return n >= 15 && n <= 120 && n % 5 === 0 ? n : 0; }
+    if (s.durSel === 'altro') { const n = Number(s.durOther); return okDur(n) ? n : 0; }
     return Number(s.durSel) || 0;
   }
-  /** durata del paziente: quella della riga se indicata, altrimenti quella del foglio */
-  function rowDur(s, r) { const n = Number(r.dur); return n >= 15 && n <= 120 && n % 5 === 0 ? n : sheetDur(s); }
+  const okDur = n => n >= 10 && n <= 240 && n % 5 === 0;
+  /** durata della seduta di un paziente: quella scelta nella riga, altrimenti quella del ciclo in corso, altrimenti la predefinita */
+  function rowDur(s, r, res) { const n = Number(r.dur); return okDur(n) ? n : res && res.cycle ? res.cycle.duration : sheetDur(s); }
+  /** durata di una singola seduta: quella scelta per la seduta, altrimenti quella della riga */
+  function cellDur(r, d, base) { const n = Number((r.cellDur || {})[d]); return okDur(n) ? n : base; }
+  const isHard = chk => FA.isHardConflict(chk);
   function candidates(s, r) {
     const n = H.normName(r.name);
     if (!n) return [];
@@ -286,50 +316,60 @@
   function existingOnDay(patientId, day) {
     return (A.data.appointments || []).find(a => a.patient_id === patientId && a.day === day && a.status !== 'spostata' && a.status !== 'liberata');
   }
-  /** analisi completa di una riga nel contesto del foglio: celle da importare, doppioni, conflitti, motivi di blocco */
+  /**
+   * Analisi di una riga nel contesto del foglio. Bloccano la riga solo i dati che mancano davvero
+   * (paziente da scegliere, nome, orario, letture incerte); le sedute con un conflitto o un avviso
+   * non bloccano la riga: quelle in conflitto restano fuori, quelle con avvisi entrano se confermate.
+   */
   function analyze(s, r, extraAcc) {
     const closures = new Set(A.ctx.closures.keys());
     const an = H.analyzeRow({ cells: r.cells, doubts: r.doubts, weekdays: r.weekdays, freq: r.freq }, { month: s.month, from: s.from, planned: s.planned, today: A.today, closures, generate: r.generate });
     const res = resolve(s, r);
-    const dur = res.cycle ? res.cycle.duration : rowDur(s, r);
+    const dur = rowDur(s, r, res);
     const time = FA.normTime(r.time);
     const block = an.blocking.slice();
-    const out = { an, res, time, cells: [], dups: [], conflicts: [], block, issues: an.issues.slice(), visits: an.visits.slice() };
+    const out = { an, res, time, dur, cells: [], dups: [], excluded: [], conflicts: [], ready: [], hard: 0, warn: 0, block, issues: an.issues.slice(), visits: an.visits.slice() };
     if (!r.include || r.imported) return out;
-    if (res.need) block.push('Paziente già presente con questo nome: scegli se è lo stesso o un omonimo.');
-    if (res.target !== 'ciclo' && !r.name.trim()) block.push('Manca il nome del paziente.');
-    if (!time) block.push(r.time ? 'Orario non valido: ' + r.time + '.' : 'Manca l’orario della fascia.');
-    r.rowDoubts.forEach(d => { if (!d.ok) block.push('Da controllare: ' + d.text); });
+    if (res.need) block.push('Il nome «' + r.name.trim() + '» è già in archivio: scegli nel menu qui sotto se è lo stesso paziente o un omonimo.');
+    if (res.target !== 'ciclo' && !r.name.trim()) block.push('Scrivi il nome (o il codice) del paziente.');
+    r.rowDoubts.forEach(d => { if (!d.ok) block.push('Da controllare: «' + d.text + '» — spunta «Controllato» se va bene.'); });
     // un nuovo ciclo iniziato sulla stessa riga riceve anche le eventuali sedute aggiunte
     const nextSet = new Set(an.next ? an.next.cells.concat(an.generated) : []);
     const cells = an.imported.concat(an.next ? an.next.cells : []).concat(an.generated);
-    if (res.target !== 'ciclo' && an.imported.length && an.prior == null) block.push('Serve almeno un numero di seduta per sapere a che punto è il ciclo.');
-    if (res.target !== 'ciclo' && !an.weekdays.length && cells.length) block.push('Indica i giorni della settimana.');
-    if (res.target !== 'ciclo' && an.prior != null && an.prior >= Number(s.planned)) block.push('Ciclo già completato (' + an.prior + ' su ' + s.planned + '): per un solo recupero collega il ciclo esistente oppure escludi la riga.');
+    const cellTime = c => c.d != null && (r.times || {})[c.d] ? FA.normTime(r.times[c.d]) : null;
+    if (!time && cells.some(c => !cellTime(c))) block.push(r.time ? 'Orario «' + r.time + '» non valido: scrivilo così, 8:15.' : 'Manca l’orario: scrivilo accanto al nome (es. 8:15).');
+    if (res.target !== 'ciclo' && an.imported.length && an.prior == null) out.issues.push('Nessun numero di seduta: il ciclo parte da 0 sedute già fatte (lo correggi poi dal calendario con ✎ Correggi).');
+    if (res.target !== 'ciclo' && an.prior != null && an.prior >= Number(s.planned) && cells.length) out.issues.push('Ciclo già completo sul foglio (' + an.prior + ' su ' + s.planned + '): le sedute in più (es. un recupero) allungano il ciclo.');
     if (res.target === 'ciclo' && res.cycle) {
       const cnt = E.cycleCounts(A.ctx, res.cycle.id);
       out.issues.unshift('Continua il ciclo in corso (' + cnt.effettuate + ' effettuate, ' + cnt.programmate + ' programmate su ' + res.cycle.planned_sessions + ').');
     }
     cells.forEach(c => {
       // orario diverso per una sola casella (seduta scritta in un'altra fascia del foglio)
-      const t0 = c.d != null && (r.times || {})[c.d] ? FA.normTime(r.times[c.d]) || time : time;
-      const end = t0 && dur ? E.fromMin(E.toMin(t0) + dur) : null;
-      const sub = c.d != null && (r.subs || {})[c.d] ? H.normName(r.subs[c.d]) : null;
-      const subTh = sub && s.subsMap[sub] ? s.subsMap[sub] : null;
-      const item = { c, day: c.day, start: t0, end, next: nextSet.has(c), th: subTh || s.th, thMain: s.th, sub: sub ? r.subs[c.d] : null };
+      const t0 = cellTime(c) || time;
+      const m = cellDur(r, c.d, dur);
+      const end = t0 && m ? E.fromMin(E.toMin(t0) + m) : null;
+      const sig = c.d != null && (r.subs || {})[c.d] ? H.normName(r.subs[c.d]) : null;
+      const sigTh = sig ? s.subsMap[sig] || '' : '';
+      const own = c.d != null ? (r.cellTh || {})[c.d] || '' : '';
+      const choice = own || sigTh;
+      const th = choice && choice !== 'no' && choice !== 'tit' ? choice : s.th;
+      const item = { c, day: c.day, start: t0, end, minutes: m, next: nextSet.has(c), th, thMain: s.th, sub: sig ? r.subs[c.d] : null };
+      if (choice === 'no') { item.why = own ? 'scelto «Non importare»' : 'sigla «' + r.subs[c.d] + '»: scelto «Non importare»'; out.excluded.push(item); return; }
       if (res.patientId && existingOnDay(res.patientId, c.day)) { out.dups.push(item); return; }
-      if (!end) { out.cells.push(item); return; } // orario o durata ancora da indicare: i controlli si fanno dopo
+      if (!end || !s.th) { out.cells.push(item); return; } // orario o fisioterapista ancora da indicare: i controlli si fanno dopo
       const chk = E.checkSlot(A.ctx, item.th, c.day, t0, end, { patientId: res.patientId || null, cycleId: res.cycleId || null, reserve: false, extra: extraAcc });
       if (chk) {
-        item.chk = chk; item.forceable = FORCEABLE.has(chk.code);
+        item.chk = chk; item.hard = isHard(chk); item.forceable = !item.hard;
+        item.forced = item.forceable && !!(s.forceAll || r.force[c.day]);
         out.conflicts.push(item);
-        if (!(item.forceable && r.force[c.day])) out.unresolved = (out.unresolved || 0) + 1;
+        if (item.hard) out.hard++; else if (!item.forced) out.warn++;
       }
       out.cells.push(item);
-      if (extraAcc) extraAcc.push({ therapist_id: item.th, day: c.day, start: t0, end, patient_id: res.patientId || 'riga-' + r.ref, ref: r.ref });
+      if (extraAcc && (!chk || item.forced)) extraAcc.push({ therapist_id: item.th, day: c.day, start: t0, end, patient_id: res.patientId || 'riga-' + r.ref, ref: r.ref });
     });
-    if (out.unresolved) block.push(out.unresolved + (out.unresolved === 1 ? ' seduta in conflitto' : ' sedute in conflitto') + ' (vedi l’elenco): correggi la casella o l’orario, oppure importa comunque quelle fuori turno.');
     if (res.patientId) out.visits = out.visits.filter(v => !(A.ctx.events.get(res.patientId + '|' + v)));
+    out.ready = out.cells.filter(x => !x.hard && (!x.chk || x.forced));
     if (!out.cells.length && !out.visits.length) out.nothing = true;
     if (res.target === 'nuovo' && !out.cells.length && out.visits.length) { out.nothing = true; out.issues.push('Solo visite, nessuna seduta da importare: riga saltata.'); }
     return out;
@@ -345,7 +385,7 @@
     if (!s.month) b.push('Indica mese e anno del tabulato.');
     if (!s.from) b.push('Indica la data da cui importare.');
     else if (s.month && s.from.slice(0, 7) !== s.month) b.push('La data di inizio deve cadere nel mese del tabulato.');
-    if (!sheetDur(s)) b.push('Scegli la durata delle sedute (predefinita: poi puoi cambiarla per ogni paziente).');
+    if (!sheetDur(s)) b.push('Scrivi i minuti della durata predefinita delle sedute (da 10 a 240).');
     if (!s.category) b.push('Scegli il percorso.');
     return b;
   }
@@ -396,9 +436,10 @@
       '<div class="field"><label>Mese e anno</label><input type="month" data-bind="' + P(i, 'month') + '" data-on="imp-month" value="' + esc(s.month) + '"' + (s.month ? '' : ' class="need"') + '></div>' +
       '<div class="field"><label>Importa dal</label><input type="date" data-bind="' + P(i, 'from') + '" data-rerender value="' + esc(s.from) + '"' + (s.month ? ' min="' + s.month + '-01" max="' + s.month + '-' + H.daysInMonth(s.month) + '"' : '') + '>' +
         '<div class="help">Le caselle precedenti non diventano appuntamenti: servono solo a sapere a che seduta è il paziente.</div></div>' +
-      '<div class="field"><label>Durata delle sedute (predefinita)</label>' + FA.seg(P(i, 'durSel'), [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], dur) +
-        (dur === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:100px;display:inline-block" data-bind="' + P(i, 'durOther') + '" data-rerender value="' + esc(s.durOther) + '" placeholder="min">' : '') +
-        (!dur ? '<div class="help need-txt">Da confermare' + (s.durationHint ? ': suggerita ' + s.durationHint + '′' + (s.durationNote ? ' (' + esc(s.durationNote) + ')' : '') : '') + '.</div>' : '') + '</div>' +
+      '<div class="field"><label>Durata predefinita delle sedute</label>' + FA.seg(P(i, 'durSel'), [['30', '30 minuti'], ['45', '45 minuti'], ['60', '1 ora'], ['altro', 'Altro']], dur) +
+        (dur === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:100px;display:inline-block" data-bind="' + P(i, 'durOther') + '" data-rerender value="' + esc(s.durOther) + '" placeholder="minuti">' : '') +
+        '<div class="help">Vale per i pazienti del foglio a cui non scegli un’altra «Durata della seduta» nella riga. Si cambia anche per una sola seduta, qui o poi dal calendario.' +
+        (s.durGuess ? ' <span class="need-txt">Proposta' + (s.durationHint ? ' in base al foglio' : '') + ': cambiala se serve.</span>' : '') + '</div></div>' +
       '<div class="field"><label>Percorso</label><select data-bind="' + P(i, 'category') + '" data-rerender>' + (cats.length ? '' : '<option value="">' + (s.th ? '— nessun percorso abilitato —' : '— scegli prima il fisioterapista —') + '</option>') + cats.map(c => FA.option(c.id, c.name, s.category)).join('') + '</select>' +
         (s.th && FA.isAdmin() && !(A.ctx.shifts.get(s.th) || []).length ? '<button class="btn small" data-act="imp-shift" data-i="' + i + '">' + esc(FA.thName(s.th)) + ' non ha un orario: assegna quello ambulatoriale standard (' + (standardWeek(s).label.includes('7:00') ? 'ingresso 7:00' : 'ingresso 8:00') + ')</button>' : '') +
         (s.th && !cats.length ? (FA.isAdmin() ? '<button class="btn small" data-act="imp-skill" data-i="' + i + '">Abilita ' + esc(FA.thName(s.th)) + ' per tutti i percorsi</button>' : '<div class="help need-txt">' + esc(FA.thName(s.th)) + ' non ha percorsi abilitati: chiedi al coordinatore.</div>') : '') + '</div>' +
@@ -417,7 +458,7 @@
   function bulkBar(s, i, ans) {
     const live = s.rows.map((r, k) => ({ r, a: ans[k] })).filter(x => x.r.include && !x.r.imported);
     const nDoubt = live.reduce((n, x) => n + Object.keys(x.r.doubts || {}).length + Object.values(x.r.cells || {}).filter(v => String(v).includes('?')).length + x.r.rowDoubts.filter(d => !d.ok).length, 0);
-    const nForce = live.reduce((n, x) => n + x.a.conflicts.filter(c => c.forceable && !x.r.force[c.day]).length, 0);
+    const nForce = 0;
     const nName = live.filter(x => x.a.res.need).length;
     if (!nDoubt && !nForce && !nName) return '';
     return '<div class="panel imp-bulk"><strong>Correzioni veloci su tutto il foglio</strong> <span class="small muted">(potrai sempre correggere dopo, dal calendario)</span><div class="row" style="margin-top:6px">' +
@@ -489,12 +530,18 @@
       '<div class="imp-band" style="' + band + '"></div><div class="imp-mark" style="' + mk + '"></div></div></div>' +
       '<p class="small muted" style="margin:6px 0 0">Clicca una casella a destra: il punto corrispondente si evidenzia sulla foto.</p></div>';
   }
+  const DUR_OPTS = [['30', '30 minuti'], ['45', '45 minuti'], ['60', '1 ora']];
+  const DUR_MORE = ['20', '40', '50', '75', '90', '120'];
+  function durOptions(cur, first) {
+    const o = [first].concat(DUR_OPTS).map(x => FA.option(x[0], x[1], cur));
+    return o.join('') + '<optgroup label="Altro">' + DUR_MORE.map(n => FA.option(n, n + ' minuti', cur)).join('') +
+      (cur && !DUR_OPTS.some(x => x[0] === cur) && !DUR_MORE.includes(cur) ? FA.option(cur, cur + ' minuti', cur) : '') + '</optgroup>';
+  }
+  /** durata della seduta per il paziente della riga (la predefinita del foglio se non scelta) */
   function durSelect(s, i, r, k, res) {
-    if (res.cycle) return '<span class="small muted" title="Durata del ciclo in corso">' + res.cycle.duration + '′</span>';
     const cur = r.dur ? String(r.dur) : '';
-    const opts = [['', 'durata del foglio' + (sheetDur(s) ? ' (' + sheetDur(s) + '′)' : '')], ['30', '30′'], ['45', '45′'], ['60', '1 ora']];
-    if (cur && !opts.some(o => o[0] === cur)) opts.push([cur, cur + '′']);
-    return '<select class="imp-dur" data-bind="' + P(i, 'rows.' + k + '.dur') + '" data-rerender aria-label="Durata della seduta">' + opts.map(o => FA.option(o[0], o[1], cur)).join('') + '</select>';
+    const base = res.cycle ? ['', 'come il ciclo in corso (' + res.cycle.duration + '′)'] : ['', 'predefinita (' + (sheetDur(s) || '?') + '′)'];
+    return '<label class="small imp-durl">Durata della seduta <select class="imp-dur" data-bind="' + P(i, 'rows.' + k + '.dur') + '" data-rerender aria-label="Durata della seduta">' + durOptions(cur, base) + '</select></label>';
   }
   function choiceSelect(s, i, r, k, res) {
     if (!res.cands.length) return '<span class="chip ok">nuovo paziente</span>';
@@ -511,9 +558,10 @@
     const nd = s.month ? H.daysInMonth(s.month) : 31;
     const imp = new Map(a.cells.map(x => [x.day, x]));
     const dup = new Set(a.dups.map(x => x.day));
+    const exc = new Set(a.excluded.map(x => x.day));
     const parsed = new Map(a.an.cells.map(c => [c.d, c]));
     const wds = r.weekdays.length ? r.weekdays : a.an.weekdays;
-    const blocked = r.include && a.block.length;
+    const blocked = r.include && !r.imported && a.block.length;
     let head = '', cells = '';
     for (let d = 1; d <= nd; d++) {
       const day = s.month ? H.dayOf(s.month, d) : null;
@@ -527,12 +575,13 @@
         else if (c.doubtMsg) { cls += ' doubt'; tip = 'Lettura incerta: ' + c.doubtMsg; }
         else if (day < s.from) { cls += ' before'; tip = 'Prima della data di inizio: non importata'; }
         else if (dup.has(day)) { cls += ' dup'; tip = 'Già presente nel calendario: saltata'; }
-        else if (x && x.chk) { cls += r.force[day] && x.forceable ? ' forced' : ' conf'; tip = x.chk.msg; }
+        else if (exc.has(day)) { cls += ' dup'; tip = 'Non importare (scelta tua)'; }
+        else if (x && x.chk) { cls += x.hard ? ' conf' : x.forced ? ' forced' : ' warnc'; tip = x.chk.msg; }
         else if (c.num != null || c.R) { cls += ' ok'; tip = c.R ? 'Recupero' : 'Seduta n. ' + c.p + ' di ' + s.planned; }
         else if (c.V) { cls += ' vis'; tip = 'Visita fisiatrica (non è una seduta)'; }
+        if (x && (x.minutes !== a.dur || x.start !== a.time)) tip += ' · ' + x.start + ', ' + x.minutes + '′';
       }
-      if (c && (r.times || {})[d]) tip = (tip ? tip + ' · ' : '') + 'Alle ' + r.times[d];
-      if (c && (r.subs || {})[d]) { const m = s.subsMap[H.normName(r.subs[d])]; cls += ' sub'; tip = (tip ? tip + ' · ' : '') + 'Sigla «' + r.subs[d] + '»: ' + (m ? 'seduta fatta da ' + FA.thName(m) : 'collega non indicato, resta al titolare'); }
+      if (c && (r.subs || {})[d]) { cls += ' sub'; tip = (tip ? tip + ' · ' : '') + 'Sigla «' + r.subs[d] + '»' + (x && x.th !== s.th ? ': seduta di ' + FA.thName(x.th) : ''); }
       if (day && s.month && A.ctx.closures.has(day)) tip = (tip ? tip + ' · ' : '') + 'Chiuso: ' + A.ctx.closures.get(day);
       const val = r.cells[d] == null ? '' : r.cells[d];
       cells += '<td class="' + cls.trim() + '"' + (tip ? ' title="' + esc(tip) + '"' : '') + '><input data-imp-cell data-r="' + k + '" data-d="' + d + '" data-bind="' + P(i, 'rows.' + k + '.cells.' + d) + '" data-on="imp-cell" value="' + esc(val) + '" maxlength="4" aria-label="Giorno ' + d + '">' +
@@ -540,19 +589,29 @@
     }
     const gen = a.an.generated;
     const doubts = r.rowDoubts.map((d, j) => '<label class="inline-check small' + (d.ok ? '' : ' need-txt') + '"><input type="checkbox" data-act-change="imp-rd" data-r="' + k + '" data-k="' + j + '"' + (d.ok ? ' checked' : '') + '> Controllato: ' + esc(d.text) + '</label>').join('');
-    const conflicts = a.conflicts.map(x => '<li>' + (x.forceable ? '<label class="inline-check"><input type="checkbox" data-act-change="imp-force" data-r="' + k + '" data-day="' + x.day + '"' + (r.force[x.day] ? ' checked' : '') + '> ' : '') +
-      '✗ ' + esc(E.fmtItDay(x.day) + ' ' + x.start + ': ' + x.chk.msg) + (x.forceable ? ' — <strong>importa comunque</strong> (finirà in “Da sistemare”)</label>' : ' — <strong>non importabile</strong>: correggi orario o casella') + '</li>').join('');
-    const nImp = a.cells.length, nNum = a.cells.filter(x => x.c.num != null && !x.next).length;
-    const nNext = a.cells.filter(x => x.next).length;
+    const conflicts = a.conflicts.map(x => '<li class="' + (x.hard ? 'hard' : 'soft') + '">' +
+      (x.hard ? '✗ ' + esc(E.fmtItDay(x.day) + ' ' + x.start + ' — ' + x.chk.msg) + ' <strong>Questa seduta non verrà importata</strong>: cambiane orario, durata o fisioterapista con «Modifica singole sedute».'
+        : '<label class="inline-check"><input type="checkbox" data-act-change="imp-force" data-r="' + k + '" data-day="' + x.day + '"' + (x.forced ? ' checked' : '') + (s.forceAll ? ' disabled' : '') + '> ⚠ ' +
+          esc(E.fmtItDay(x.day) + ' ' + x.start + ' — ' + x.chk.msg) + ' <strong>Importa comunque</strong> (finirà in «Da sistemare»)</label>') + '</li>').join('');
+    const nImp = a.ready.length, nNum = a.ready.filter(x => x.c.num != null && !x.next).length;
+    const nNext = a.ready.filter(x => x.next).length;
     const pr = a.res.target === 'ciclo' ? null : a.an.prior;
-    const summary = !r.include ? 'Riga esclusa.' : a.nothing && a.dups.length ? 'Tutte le ' + a.dups.length + ' sedute sono già presenti nel calendario: niente da importare.' :
-      a.nothing ? 'Niente da importare dal ' + E.fmtIt(s.from) + '.' :
-      nImp + ' sedut' + (nImp === 1 ? 'a' : 'e') + ' da importare' + (nNum && pr != null ? ' (dalla ' + (pr + 1) + 'ª' + (gen.length ? ', comprese ' + gen.length + ' aggiunte' : '') + ')' : '') +
-      (nNext ? ', di cui ' + nNext + ' del nuovo ciclo dal ' + E.fmtItDay(a.an.next.from) : '') + (a.dups.length ? ', ' + a.dups.length + ' già presenti' : '') + (a.an.before.length ? ', ' + a.an.before.length + ' prima del ' + E.fmtIt(s.from) + (pr != null && a.res.target !== 'ciclo' ? ' (contate come precedenti: ' + pr + ')' : '') : '') +
+    const summary = !r.include ? 'Riga esclusa: non viene importata.' : a.nothing && a.dups.length ? 'Tutte le ' + a.dups.length + ' sedute sono già nel calendario: niente da importare.' :
+      a.nothing ? 'Niente da importare dal ' + E.fmtIt(s.from) + (a.an.before.length ? ' (le caselle precedenti servono solo a contare le sedute già fatte)' : '') + '.' :
+      nImp + ' sedut' + (nImp === 1 ? 'a' : 'e') + ' pront' + (nImp === 1 ? 'a' : 'e') + ' da importare' + (nNum && pr != null ? ' (dalla ' + (pr + 1) + 'ª' + (gen.length ? ', comprese ' + gen.length + ' aggiunte' : '') + ')' : '') +
+      (nNext ? ', di cui ' + nNext + ' del nuovo ciclo dal ' + E.fmtItDay(a.an.next.from) : '') +
+      (a.warn ? ', ' + a.warn + ' con avvisi da confermare' : '') + (a.hard ? ', ' + a.hard + ' in conflitto (non importate)' : '') +
+      (a.dups.length ? ', ' + a.dups.length + ' già presenti' : '') + (a.excluded.length ? ', ' + a.excluded.length + ' escluse da te' : '') +
+      (a.an.before.length ? ', ' + a.an.before.length + ' prima del ' + E.fmtIt(s.from) + (pr != null && a.res.target !== 'ciclo' ? ' (contate come già fatte: ' + pr + ')' : '') : '') +
       (a.visits.length ? ', visite fisiatriche: ' + a.visits.map(E.fmtItDay).join(', ') : '') + '.';
-    return '<div class="panel imp-row' + (r.imported || !r.include ? ' off' : blocked ? ' blocked' : ' ready') + '" data-ref="' + esc(r.ref) + '">' +
-      '<div class="row imp-row-head"><label class="inline-check"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.include') + '" data-rerender' + (r.include ? ' checked' : '') + '> Importa</label>' +
-      '<span class="chip grey">' + esc(r.ref) + '</span>' + (r.imported ? '<span class="chip ok">✓ importata (n. ' + r.imported + ')</span>' : '') +
+    const done = r.imported ? '<span class="chip ok">✓ importata' + (typeof r.imported === 'number' ? ' (n. ' + r.imported + ')' : '') + '</span>' : '';
+    const failed = r.error && !r.imported ? '<div class="form-error small"><strong>Non importata:</strong> ' + esc(r.error) + ' Correggi qui e premi di nuovo «Importa»: le altre righe sono già salvate.</div>' : '';
+    const skipped = r.imported && (r.skipped || []).length ? '<div class="form-warn small"><strong>' + r.skipped.length + (r.skipped.length === 1 ? ' seduta non importata' : ' sedute non importate') + ':</strong><ul class="imp-issues">' +
+      r.skipped.map(x => '<li>' + esc(E.fmtItDay(x.day) + (x.start ? ' ' + x.start : '') + ' — ' + x.message) + '</li>').join('') + '</ul>' +
+      (r.cycleId ? '<button class="btn small" data-act="imp-retry" data-r="' + k + '">Correggi e riprova queste sedute</button> <span class="muted">(il paziente e le sedute già importate restano: non si creano doppioni)</span>' : '') + '</div>' : '';
+    return '<div class="panel imp-row' + (r.imported || !r.include || (a.nothing && !blocked) ? ' off' : blocked ? ' blocked' : ' ready') + '" data-ref="' + esc(r.ref) + '">' +
+      '<div class="row imp-row-head"><label class="inline-check"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.include') + '" data-rerender' + (r.include ? ' checked' : '') + (r.imported ? ' disabled' : '') + '> Importa</label>' +
+      '<span class="chip grey">' + esc(r.ref) + '</span>' + done +
       '<input type="text" class="imp-name" data-bind="' + P(i, 'rows.' + k + '.name') + '" data-rerender value="' + esc(r.name) + '" placeholder="Paziente o codice" aria-label="Paziente">' +
       FA.timeField(P(i, 'rows.' + k + '.time'), r.time, ' data-rerender aria-label="Orario"') +
       durSelect(s, i, r, k, a.res) +
@@ -560,36 +619,154 @@
       '<span class="imp-wds">' + [1, 2, 3, 4, 5, 6].map(w => '<button class="btn small ' + (wds.includes(w) ? 'primary' : '') + '" data-act="imp-wd" data-r="' + k + '" data-wd="' + w + '">' + E.WD_SHORT[w] + '</button>').join('') + '</span>' +
       (r.freq ? '<span class="small muted">sul foglio: «' + esc(r.freq) + '»</span>' : '') + '<label class="inline-check small" title="Segno // dopo il nome: fine ciclo"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.closed') + '" data-rerender' + (r.closed ? ' checked' : '') + '> // fine ciclo</label>' +
       '<button class="btn link small" data-act="imp-del-row" data-r="' + k + '" title="Togli la riga">togli</button></div>' +
-      (r.include ? '<div class="row" style="margin-top:6px">' + choiceSelect(s, i, r, k, a.res) + (r.note ? '<span class="small muted">Nota: ' + esc(r.note) + '</span>' : '') + '</div>' : '') +
+      failed + skipped +
+      (r.include && !r.imported ? '<div class="row" style="margin-top:6px">' + choiceSelect(s, i, r, k, a.res) + (r.note ? '<span class="small muted">Nota: ' + esc(r.note) + '</span>' : '') + '</div>' : '') +
       '<div class="imp-grid-wrap"><table class="imp-grid"><thead><tr>' + head + '</tr></thead><tbody><tr>' + cells + '</tr></tbody></table></div>' +
-      (r.include ? '<p class="small" style="margin:6px 0 0"><strong>' + esc(summary) + '</strong></p>' +
+      (r.include && !r.imported ? '<p class="small" style="margin:6px 0 0"><strong>' + esc(summary) + '</strong>' +
+        (a.cells.length + a.excluded.length ? ' <button class="btn small" data-act="imp-cells" data-r="' + k + '">' + (r.showCells ? 'Chiudi' : 'Modifica singole sedute (orario, durata, chi la fa)') + '</button>' : '') + '</p>' +
+        (r.showCells ? cellsEditor(s, i, r, k, a) : '') +
         (a.an.missingAfter > 0 && a.res.target !== 'ciclo' ? '<label class="inline-check small"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.generate') + '" data-rerender' + (r.generate ? ' checked' : '') + '> Programma anche le ' + a.an.missingAfter + ' sedute successive fino all’ultima, negli stessi giorni e orario (non sono sul tabulato)</label>' : '') +
         doubts + (a.issues.length ? '<ul class="small imp-issues">' + a.issues.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul>' : '') +
         (conflicts ? '<ul class="small imp-conf">' + conflicts + '</ul>' : '') +
-        (a.block.length ? '<div class="form-error small">Da sistemare prima di importare: ' + esc(a.block.join(' ')) + '</div>' : '') : '') +
+        (a.block.length ? '<div class="form-error small"><strong>Per importare questa riga:</strong><ul class="imp-issues">' + a.block.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div>' : '') : '') +
       '</div>';
   }
+  /** elenco delle sedute della riga: orario, durata e fisioterapista di ciascuna */
+  function cellsEditor(s, i, r, k, a) {
+    const ths = FA.activeTherapists();
+    const list = a.cells.concat(a.dups.map(x => Object.assign({ dup: true }, x))).concat(a.excluded).sort((x, y) => x.day < y.day ? -1 : 1);
+    return '<table class="table imp-cells"><thead><tr><th>Giorno</th><th>Ora</th><th>Durata della seduta</th><th>Chi la fa</th><th>Stato</th></tr></thead><tbody>' +
+      list.map(x => {
+        const d = x.c.d;
+        if (d == null) return '<tr><td>' + esc(E.fmtItDay(x.day)) + '</td><td colspan="4" class="small muted">seduta aggiunta (non sul foglio): stessi orario e durata della riga</td></tr>';
+        const curTh = (r.cellTh || {})[d] || '';
+        const sigTh = x.sub ? s.subsMap[H.normName(x.sub)] || '' : '';
+        const defTh = sigTh && sigTh !== 'no' && sigTh !== 'tit' ? sigTh : s.th;
+        const st = x.dup ? '<span class="chip grey">già nel calendario</span>' : x.why ? '<span class="chip grey">non importata</span>' : x.hard ? '<span class="chip bad" title="' + esc(x.chk.msg) + '">conflitto: ' + esc(x.chk.msg) + '</span>' :
+          x.chk ? '<span class="chip warn" title="' + esc(x.chk.msg) + '">' + (x.forced ? 'avviso confermato' : 'avviso: ' + esc(x.chk.msg)) + '</span>' : !x.end ? '<span class="chip warn">manca l’orario</span>' : '<span class="chip ok">pronta</span>';
+        return '<tr><td>' + esc(E.fmtItDay(x.day)) + (x.c.num != null ? ' <span class="muted small">n. ' + x.c.num + '</span>' : x.c.R ? ' <span class="muted small">R</span>' : '') + '</td>' +
+          '<td>' + FA.timeField(P(i, 'rows.' + k + '.times.' + d), (r.times || {})[d] || '', ' data-rerender aria-label="Ora della seduta"') + (!(r.times || {})[d] && a.time ? ' <span class="small muted">(' + a.time + ')</span>' : '') + '</td>' +
+          '<td><select data-bind="' + P(i, 'rows.' + k + '.cellDur.' + d) + '" data-rerender aria-label="Durata della seduta">' + durOptions(String((r.cellDur || {})[d] || ''), ['', 'come la riga (' + (a.dur || '?') + '′)']) + '</select></td>' +
+          '<td><select data-bind="' + P(i, 'rows.' + k + '.cellTh.' + d) + '" data-rerender aria-label="Chi fa la seduta">' +
+            FA.option('', (x.sub ? 'come sul foglio: ' : '') + FA.thName(defTh) + (defTh === s.th ? ' (titolare)' : ' (sostituzione)'), curTh) +
+            ths.filter(t => t.id !== defTh).map(t => FA.option(t.id, t.name + (t.id === s.th ? ' (titolare)' : ' (sostituzione)'), curTh)).join('') +
+            FA.option('no', 'Non importare questa seduta', curTh) + '</select></td><td>' + st + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  FA.actions['imp-cells'] = el => { const r = cur().rows[Number(el.getAttribute('data-r'))]; r.showCells = !r.showCells; FA.render(); };
+  FA.actions['imp-retry'] = el => {
+    const r = cur().rows[Number(el.getAttribute('data-r'))];
+    r.imported = null; r.choice = 'c:' + r.cycleId; r.skipped = []; r.generate = false; r.showCells = true; r.error = null;
+    FA.render();
+  };
   /** sigle dei colleghi scritte sotto i numeri: chi ha fatto la seduta al posto del titolare */
   function subsPanel(s, i) {
-    const sig = new Map();
-    s.rows.forEach(r => Object.keys(r.subs || {}).forEach(d => { const k = H.normName(r.subs[d]); if (!k) return; if (!sig.has(k)) sig.set(k, { label: r.subs[d], n: 0 }); sig.get(k).n++; }));
-    if (!sig.size) return '';
+    const sig = subsOf(s);
+    if (!Object.keys(sig).length) return '';
     const ths = FA.activeTherapists().filter(t => t.id !== s.th);
-    return '<div class="panel"><h3>Sigle dei colleghi sotto i numeri</h3><p class="small muted">Chi ha fatto la seduta al posto di ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') +
-      '. Scegli il collega: la seduta va nel suo calendario come sostituzione (il ciclo resta del titolare). Se non lo indichi, la seduta resta al titolare.</p><ul class="list">' +
-      [...sig.entries()].map(([k, v]) => '<li class="todo-item"><div><strong>' + esc(v.label) + '</strong> <span class="small muted">(' + v.n + ' sedute)</span></div><div>' +
-        '<select data-bind="' + P(i, 'subsMap.' + k) + '" data-rerender><option value="">Resta al titolare</option>' + ths.map(t => FA.option(t.id, t.name, s.subsMap[k] || '')).join('') + '</select></div></li>').join('') + '</ul></div>';
+    return '<div class="panel"><h3>Sostituzioni sul foglio: sigle dei colleghi sotto i numeri</h3><p class="small muted">Una sigla sotto il numero vuol dire che la seduta l’ha fatta un collega al posto di ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') +
+      '. Per ogni sigla scegli cosa fare. Il ciclo resta di ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') + '; la singola seduta si può cambiare con «Modifica singole sedute» nella riga.</p><ul class="list">' +
+      Object.entries(sig).map(([k, v]) => {
+        const cur = s.subsMap[k] || '';
+        return '<li class="todo-item"><div><strong>«' + esc(v.label) + '»</strong> <span class="small muted">(' + v.n + (v.n === 1 ? ' seduta' : ' sedute') + ')</span>' +
+          (!cur ? ' <span class="chip warn">sigla non riconosciuta: per ora le sedute vanno al titolare</span>' : '') + '</div><div>' +
+          '<select data-bind="' + P(i, 'subsMap.' + k) + '" data-rerender aria-label="Cosa fare con le sedute della sigla ' + esc(v.label) + '">' +
+          '<option value=""' + (cur ? '' : ' selected') + '>— scegli il collega —</option>' +
+          '<optgroup label="Importa come sostituzione nel calendario di">' + ths.map(t => FA.option(t.id, t.name, cur)).join('') + '</optgroup>' +
+          FA.option('tit', 'Importa nel calendario del titolare (ignora la sigla)', cur) + FA.option('no', 'Non importare queste sedute', cur) + '</select></div></li>';
+      }).join('') + '</ul></div>';
   }
+  /** pazienti di colleghi trattati su questo foglio (nomi scritti in un giorno solo) */
+  function extraInfo(s, x) {
+    const need = [];
+    let cycle = null, patientId = null, target = null, orig = x.orig;
+    const pick = x.pick || autoPick(x);
+    if (pick.startsWith('c:')) { cycle = A.ctx.cyc.get(pick.slice(2)) || null; if (cycle) { target = 'ciclo'; patientId = cycle.patient_id; orig = cycle.therapist_id; } }
+    else if (pick.startsWith('p:')) { target = 'paziente'; patientId = pick.slice(2); }
+    else if (pick === 'nuovo') { target = 'nuovo'; if (!String(x.pname || '').trim()) need.push('il nome del paziente'); }
+    if (!target) need.push('il paziente');
+    if (target && target !== 'ciclo' && !orig) need.push('il fisioterapista titolare');
+    const sub = x.sub || s.th;
+    if (!sub) need.push('chi ha fatto la seduta');
+    if (!x.day) need.push('la data');
+    const t = FA.normTime(x.time);
+    if (!t) need.push('l’orario');
+    const m = okDur(Number(x.dur)) ? Number(x.dur) : cycle ? cycle.duration : sheetDur(s) || 30;
+    const out = { target, cycle, patientId, orig, sub, t, m, need, pick };
+    if (!need.length) {
+      out.dup = patientId ? existingOnDay(patientId, x.day) : null;
+      if (!out.dup) {
+        out.chk = E.checkSlot(A.ctx, sub, x.day, t, E.fromMin(E.toMin(t) + m), { patientId, cycleId: cycle ? cycle.id : null, reserve: false });
+        if (out.chk) { out.hard = isHard(out.chk); out.forced = !out.hard && !!(s.forceAll || x.force); }
+      }
+    }
+    return out;
+  }
+  /** un solo paziente in trattamento con un nome simile (meglio se con il titolare indicato): proposto */
+  function autoPick(x) {
+    if (!String(x.pname || '').trim()) return '';
+    const mt = extraMatches(x);
+    const withOrig = x.orig ? mt.cyc.filter(c => c.therapist_id === x.orig) : [];
+    const one = withOrig.length === 1 ? withOrig[0] : mt.cyc.length === 1 ? mt.cyc[0] : null;
+    return one ? 'c:' + one.id : '';
+  }
+  function extraMatches(x) {
+    const n = H.normName(x.pname || '') || H.normName(x.name);
+    const words = n.split(' ').filter(w => w.length > 2);
+    const hit = name => { const pn = H.normName(name); return n && (pn === n || pn.startsWith(n + ' ') || words.some(w => pn.split(' ').includes(w))); };
+    const cyc = (A.data.cycles || []).filter(c => c.status === 'attivo' && hit(FA.patName(c.patient_id)));
+    const pats = (A.data.patients || []).filter(p => hit(p.name) && !cyc.some(c => c.patient_id === p.id));
+    return { cyc, pats };
+  }
+  FA.actions['imp-extra-dup'] = el => {
+    const s = cur(), j = Number(el.getAttribute('data-j')), x = s.extra[j];
+    const base = x.ref.replace(/\.\d+$/, '');
+    const n = s.extra.filter(y => y.ref === base || y.ref.startsWith(base + '.')).length;
+    s.extra.splice(j + 1, 0, Object.assign({}, x, { ref: base + '.' + (n + 1), day: '', imported: false, error: null, pick: x.pick || autoPick(x) }));
+    FA.render();
+  };
   function extraPanel(s, i) {
     if (!s.extra.length) return '';
-    const active = (A.data.cycles || []).filter(c => c.status === 'attivo');
-    return '<div class="panel"><h3>Pazienti di colleghi trattati su questo foglio</h3><p class="small muted">Nomi scritti in un giorno solo (sostituzioni): la seduta appartiene al ciclo del paziente con il suo fisioterapista. Importala solo se il paziente è già in archivio; altrimenti importa prima il tabulato del collega.</p>' +
-      '<ul class="list">' + s.extra.map((x, j) => {
-        const n = H.normName(x.name);
-        const m = active.filter(c => { const pn = H.normName(FA.patName(c.patient_id)); return n && (pn === n || pn.startsWith(n + ' ') || n.split(' ').some(w => w.length > 2 && pn.split(' ').includes(w))); });
-        return '<li class="todo-item"><div>' + esc((x.d ? x.d + '/' + (s.month || '').slice(5) + ' ' : '') + (x.time || '') + ' · «' + x.name + '»' + (x.value ? ' · casella «' + x.value + '»' : '') + (x.note ? ' · ' + x.note : '')) + '</div><div>' +
-          '<select data-bind="' + P(i, 'extra.' + j + '.cycleId') + '" data-rerender><option value="">Non importare</option>' + m.map(c => FA.option(c.id, FA.patName(c.patient_id) + ' (' + FA.thName(c.therapist_id) + ')', x.cycleId)).join('') + '</select></div></li>';
-      }).join('') + '</ul></div>';
+    const active = (A.data.cycles || []).filter(c => c.status === 'attivo').sort((a, b) => FA.patName(a.patient_id).localeCompare(FA.patName(b.patient_id)));
+    const ths = FA.activeTherapists();
+    return '<div class="panel"><h3>Sostituzioni sul foglio: pazienti di colleghi</h3><p class="small muted">Nomi scritti in un giorno solo: di solito pazienti di un collega trattati da ' + esc(s.th ? FA.thName(s.th) : 'chi ha il tabulato') +
+      ' in sua sostituzione. Per ognuno scegli <strong>Importa</strong> o <strong>Non importare</strong>. Se importi, completa i dati: la seduta va nel calendario di chi l’ha fatta, collegata al ciclo del paziente con il titolare. Nessun doppione: se il paziente ha già un appuntamento quel giorno, non se ne crea un altro.</p>' +
+      s.extra.map((x, j) => {
+        const inf = extraInfo(s, x), mt = extraMatches(x);
+        const Q = f => P(i, 'extra.' + j + '.' + f);
+        const head = '<div class="row between"><div><span class="chip grey">' + esc(x.ref) + '</span> <strong>' + esc(x.day ? E.fmtItDay(x.day) : 'giorno ?') + (x.time ? ' ' + esc(x.time) : '') + '</strong> · sul foglio: ' + (/[«»]/.test(x.name) ? esc(x.name) : '«' + esc(x.name) + '»') +
+          (x.value ? ' · casella «' + esc(x.value) + '»' : '') + (x.note ? ' <span class="small muted">· ' + esc(x.note) + '</span>' : '') + '</div>' +
+          (x.imported ? '<span class="chip ok">✓ importata</span>' : FA.seg(Q('decision'), [['importa', 'Importa'], ['no', 'Non importare']], x.decision)) + '</div>';
+        if (x.imported) return '<div class="panel imp-row off">' + head + '</div>';
+        let body = '';
+        if (x.decision === 'importa') {
+          const opts = '<option value="">— scegli il paziente —</option>' +
+            (mt.cyc.length || mt.pats.length ? '<optgroup label="Nomi simili">' + mt.cyc.map(c => FA.option('c:' + c.id, FA.patName(c.patient_id) + ' — ciclo con ' + FA.thName(c.therapist_id), inf.pick)).join('') +
+              mt.pats.map(p => FA.option('p:' + p.id, p.name + ' — in archivio, senza ciclo in corso', inf.pick)).join('') + '</optgroup>' : '') +
+            FA.option('nuovo', '+ Paziente nuovo (non ancora in archivio)', inf.pick) +
+            '<optgroup label="Tutti i pazienti in trattamento">' + active.filter(c => !mt.cyc.includes(c)).map(c => FA.option('c:' + c.id, FA.patName(c.patient_id) + ' — ciclo con ' + FA.thName(c.therapist_id), inf.pick)).join('') + '</optgroup>';
+          body = '<div class="grid3" style="margin-top:8px">' +
+            '<div class="field"><label>Paziente</label><select data-bind="' + Q('pick') + '" data-rerender' + (inf.pick ? '' : ' class="need"') + '>' + opts + '</select>' +
+              (!x.pick && inf.pick ? '<div class="help">Proposto per somiglianza del nome: controlla.</div>' : '') +
+              (inf.pick === 'nuovo' ? '<input type="text" data-bind="' + Q('pname') + '" data-rerender value="' + esc(x.pname) + '" placeholder="Nome o codice del paziente" style="margin-top:4px"' + (x.pname ? '' : ' class="need"') + '>' : '') + '</div>' +
+            '<div class="field"><label>Fisioterapista titolare (assente)</label>' + (inf.cycle ? '<div><strong>' + esc(FA.thName(inf.cycle.therapist_id)) + '</strong> <span class="small muted">(dal ciclo del paziente)</span></div>' :
+              '<select data-bind="' + Q('orig') + '" data-rerender' + (x.orig ? '' : ' class="need"') + '><option value="">— scegli —</option>' + ths.map(t => FA.option(t.id, t.name, x.orig)).join('') + '</select>') + '</div>' +
+            '<div class="field"><label>Sostituto (chi ha fatto la seduta)</label><select data-bind="' + Q('sub') + '" data-rerender>' + FA.option('', FA.thName(s.th) + ' (questo tabulato)', x.sub) +
+              ths.filter(t => t.id !== s.th).map(t => FA.option(t.id, t.name, x.sub)).join('') + '</select></div>' +
+            '<div class="field"><label>Data</label><input type="date" data-bind="' + Q('day') + '" data-rerender value="' + esc(x.day) + '"' + (x.day ? '' : ' class="need"') + '></div>' +
+            '<div class="field"><label>Ora</label>' + FA.timeField(Q('time'), x.time, ' data-rerender' + (inf.t ? '' : ' class="need"')) + '</div>' +
+            '<div class="field"><label>Durata della seduta</label><select data-bind="' + Q('dur') + '" data-rerender>' + durOptions(String(x.dur || ''), ['', (inf.cycle ? 'come il ciclo' : 'predefinita') + ' (' + inf.m + '′)']) + '</select></div></div>' +
+            (inf.need.length ? '<div class="form-warn small">Da completare: ' + esc(inf.need.join(', ')) + '. Finché manca qualcosa questa sostituzione non viene importata (le altre righe sì).</div>' :
+              inf.dup ? '<div class="form-note small">Il paziente ha già un appuntamento il ' + esc(E.fmtIt(x.day)) + ' (' + esc(inf.dup.start_time + ' con ' + FA.thName(inf.dup.therapist_id)) + '): non se ne crea un altro.</div>' :
+              inf.hard ? '<div class="form-error small">✗ ' + esc(inf.chk.msg) + ' Cambia orario, durata o sostituto: così non viene importata.</div>' :
+              inf.chk ? '<label class="inline-check small form-warn"><input type="checkbox" data-bind="' + Q('force') + '" data-rerender' + (inf.forced ? ' checked' : '') + (s.forceAll ? ' disabled' : '') + '> ⚠ ' + esc(inf.chk.msg) + ' <strong>Importa comunque</strong></label>' :
+              '<div class="small ok-txt">✓ Pronta: ' + esc(FA.thName(inf.sub)) + (inf.sub !== (inf.cycle ? inf.cycle.therapist_id : inf.orig) ? ' sostituisce ' + FA.thName(inf.cycle ? inf.cycle.therapist_id : inf.orig) : '') + ', ' + esc(E.fmtItDay(x.day) + ' ' + inf.t) + ', ' + inf.m + ' minuti.</div>') +
+            (x.error ? '<div class="form-error small"><strong>Non importata:</strong> ' + esc(x.error) + '</div>' : '') +
+            '<button class="btn small link" data-act="imp-extra-dup" data-j="' + j + '">+ Stessa sostituzione in un altro giorno</button>';
+        } else if (x.decision === 'no') body = '<p class="small muted" style="margin:4px 0 0">Non verrà importata.</p>';
+        else body = '<p class="small need-txt" style="margin:4px 0 0">Da decidere: finché non scegli, non viene importata (le altre righe sì).</p>';
+        return '<div class="panel imp-row ' + (x.decision === 'importa' && !inf.need.length && !inf.hard ? 'ready' : x.decision === 'no' ? 'off' : 'blocked') + '" data-ref="' + esc(x.ref) + '">' + head + body + '</div>';
+      }).join('') + '</div>';
   }
   /** giorni consecutivi (ignorando sabati, domeniche e chiusure) → intervalli da registrare */
   function absRanges(s, a) {
@@ -636,21 +813,33 @@
       '<p class="small muted">Non vengono importate. Un corso o un’assenza del collega si inseriscono dal suo calendario (✎ Orario o Ferie / permesso).</p></div>';
   }
   function extraPayload(s) {
-    return s.extra.filter(x => x.cycleId && x.d && s.month && FA.normTime(x.time)).map(x => ({ cycle_id: x.cycleId, day: H.dayOf(s.month, x.d), start: FA.normTime(x.time), number: (String(x.value).match(/\d+/) || [null])[0] }));
+    const out = [];
+    s.extra.forEach(x => {
+      if (x.imported || x.decision !== 'importa') return;
+      const inf = extraInfo(s, x);
+      if (inf.need.length || inf.dup || inf.hard) return;
+      out.push({ ref: x.ref, target: inf.target, cycle_id: inf.cycle ? inf.cycle.id : null, patient_id: inf.patientId, patient_name: String(x.pname || '').trim(), homonym: true,
+        original_therapist_id: inf.cycle ? inf.cycle.therapist_id : inf.orig, therapist_id: inf.sub, category_id: s.category, day: x.day, start: inf.t, minutes: inf.m,
+        number: x.value || null, force: !!inf.forced });
+    });
+    return out;
   }
-  const cellOut = r => x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!(x.chk && r.force[x.day]), start: x.start, therapist_id: x.th && x.th !== x.thMain ? x.th : null });
+  const cellOut = x => ({ day: x.day, number: x.c.num, mark: x.c.R ? 'R' : null, force: !!x.forced, start: x.start, minutes: x.minutes, therapist_id: x.th && x.th !== x.thMain ? x.th : null });
   function payload(s, ans) {
     const rows = [];
     s.rows.forEach((r, k) => {
       const a = ans[k];
       if (!r.include || r.imported || a.nothing || a.block.length) return;
       const res = a.res;
+      // tutte le sedute vanno al server, che è l'ultimo giudice: quelle con un conflitto tornano indietro con il motivo
+      const send = a.cells;
       rows.push({
         ref: r.ref, target: res.target, patient_name: r.name.trim(), patient_id: res.patientId || null, cycle_id: res.cycleId || null, homonym: !!res.homonym,
-        category_id: s.category, treatment: r.tipo.trim().toUpperCase(), planned: Number(s.planned), prior: a.an.prior == null ? 0 : a.an.prior, duration: rowDur(s, r),
+        category_id: s.category, treatment: r.tipo.trim().toUpperCase(), planned: Number(s.planned), prior: a.an.prior == null ? 0 : a.an.prior,
+        duration: res.cycle && !r.dur ? null : a.dur,
         weekdays: r.weekdays.length ? r.weekdays : a.an.weekdays, start: a.time,
-        cells: a.cells.filter(x => !x.next).map(cellOut(r)),
-        next: a.an.next ? { planned: Number(s.planned), prior: a.an.next.prior, cells: a.cells.filter(x => x.next).map(cellOut(r)) } : null,
+        cells: send.filter(x => !x.next).map(cellOut),
+        next: a.an.next ? { planned: Number(s.planned), prior: a.an.next.prior, cells: send.filter(x => x.next).map(cellOut) } : null,
         visits: a.visits, concluded: !!r.closed
       });
     });
@@ -662,19 +851,29 @@
     const blocked = inc.filter(x => x.a.block.length);
     const rows = sb.length ? [] : payload(s, ans);
     const extra = sb.length ? [] : extraPayload(s);
-    const nApp = rows.reduce((n, r) => n + r.cells.length + (r.next ? r.next.cells.length : 0), 0) + extra.length;
+    const live = inc.filter(x => !x.a.block.length);
+    const nReady = live.reduce((n, x) => n + x.a.ready.length, 0) + extra.length;
+    const nWarn = live.reduce((n, x) => n + x.a.conflicts.filter(c => !c.hard).length, 0) + s.extra.filter(x => x.decision === 'importa' && !x.imported && (() => { const f = extraInfo(s, x); return f.chk && !f.hard && !f.need.length; })()).length;
+    const nWarnOpen = live.reduce((n, x) => n + x.a.warn, 0);
+    const nHard = live.reduce((n, x) => n + x.a.hard, 0);
     const nNew = rows.filter(r => r.target === 'nuovo').length;
     const nVis = rows.reduce((n, r) => n + r.visits.length, 0);
-    const forced = rows.reduce((n, r) => n + r.cells.concat(r.next ? r.next.cells : []).filter(c => c.force).length, 0);
-    const ok = !sb.length && rows.length > 0 && (nApp > 0 || nVis > 0);
+    const xs = s.extra.filter(x => !x.imported);
+    const xUndecided = xs.filter(x => !x.decision).length, xIncomplete = xs.filter(x => x.decision === 'importa').length - extra.length;
+    const ok = !sb.length && (rows.length > 0 || extra.length > 0);
     return '<div class="panel imp-confirm"><h3>4. Conferma</h3>' +
-      (sb.length ? '<div class="form-error">' + sb.map(esc).join(' ') + '</div>' : '') +
-      (blocked.length ? '<div class="form-warn"><strong>' + blocked.length + (blocked.length === 1 ? ' riga da sistemare resta esclusa' : ' righe da sistemare restano escluse') + '</strong> da questa importazione (potrai importarle dopo averle sistemate): ' + blocked.map(x => '<a href="#" data-act="imp-goto" data-ref="' + esc(x.r.ref) + '">' + esc(x.r.ref + ' ' + (x.r.name || '')) + '</a>').join(', ') + '.</div>' : '') +
-      (!sb.length ? '<p>Verranno importati: <strong>' + rows.length + ' pazienti</strong> (' + nNew + ' nuovi), <strong>' + nApp + ' sedute</strong>' + (nVis ? ', ' + nVis + ' visite fisiatriche' : '') +
-        (forced ? ', di cui <strong>' + forced + ' fuori turno</strong> da sistemare' : '') + ' nel calendario di <strong>' + esc(FA.thName(s.th)) + '</strong> dal ' + E.fmtIt(s.from) + '.</p>' : '') +
+      (sb.length ? '<div class="form-error"><strong>Prima di importare, in alto (punto 2):</strong> ' + sb.map(esc).join(' ') + '</div>' : '') +
+      (!sb.length ? '<p>Verranno importati: <strong>' + rows.length + (rows.length === 1 ? ' paziente' : ' pazienti') + '</strong> (' + nNew + ' nuovi) e <strong>' + nReady + ' sedute</strong>' +
+        (extra.length ? ' (di cui ' + extra.length + ' sostituzioni)' : '') + (nVis ? ', ' + nVis + ' visite fisiatriche' : '') + ', dal ' + E.fmtIt(s.from) + '.</p>' : '') +
+      (nWarn ? '<label class="inline-check form-warn"><input type="checkbox" data-bind="' + P(i, 'forceAll') + '" data-rerender' + (s.forceAll ? ' checked' : '') + '> <span><strong>Importa comunque le ' + nWarn + ' sedute con avvisi organizzativi</strong> (fuori orario, assenza, chiusura, massimo pazienti…). Finiranno in «Da sistemare».' +
+        (nWarnOpen && !s.forceAll ? ' Se non spunti, restano fuori e te le ripropongo dopo con il motivo.' : '') + '</span></label>' : '') +
+      (nHard ? '<div class="form-warn"><strong>' + nHard + (nHard === 1 ? ' seduta in conflitto non verrà importata' : ' sedute in conflitto non verranno importate') + '</strong> (si sovrappongono a un altro appuntamento): sono segnate in rosso nelle righe; cambiane orario, durata o fisioterapista con «Modifica singole sedute».</div>' : '') +
+      (blocked.length ? '<div class="form-warn"><strong>' + blocked.length + (blocked.length === 1 ? ' riga resta fuori</strong> finché non la sistemi' : ' righe restano fuori</strong> finché non le sistemi') + ' (potrai importarle dopo, le altre si salvano subito):<ul class="imp-issues">' +
+        blocked.map(x => '<li><a href="#" data-act="imp-goto" data-ref="' + esc(x.r.ref) + '">' + esc(x.r.ref + ' ' + (x.r.name || '')) + '</a>: ' + esc(x.a.block[0]) + (x.a.block.length > 1 ? ' (e altro)' : '') + '</li>').join('') + '</ul></div>' : '') +
+      (xUndecided || xIncomplete > 0 ? '<div class="form-warn small">Sostituzioni: ' + (xUndecided ? xUndecided + ' da decidere (Importa / Non importare)' : '') + (xUndecided && xIncomplete > 0 ? ', ' : '') + (xIncomplete > 0 ? xIncomplete + ' da completare' : '') + '. Intanto non vengono importate.</div>' : '') +
       FA.errBox(s.error) +
-      '<button class="btn primary" data-act="imp-go" data-i="' + i + '"' + (ok ? FA.saveDisabled() : ' disabled') + '>' + (A.saving ? 'Importazione…' : 'Importa ' + (rows.length === 1 ? 'la riga pronta' : 'le ' + rows.length + ' righe pronte') + ' nel calendario') + '</button>' +
-      (!ok && !sb.length ? '<p class="small need-txt" style="margin-top:6px">Nessuna riga pronta: usa le “Correzioni veloci” in alto o sistema le righe rosse.</p>' : '') + '</div>';
+      '<button class="btn primary" data-act="imp-go" data-i="' + i + '"' + (ok ? FA.saveDisabled() : ' disabled') + '>' + (A.saving ? 'Importazione…' : 'Importa nel calendario') + '</button>' +
+      (!ok && !sb.length ? '<p class="small need-txt" style="margin-top:6px">Nessuna riga pronta: sistema le righe elencate sopra (o usa le «Correzioni veloci» in alto).</p>' : '') + '</div>';
   }
   FA.actions['imp-goto'] = el => { const e = document.querySelector('.imp-row[data-ref="' + CSS.escape(el.getAttribute('data-ref')) + '"]'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
   FA.actions['imp-go'] = async el => {
@@ -685,21 +884,44 @@
     p.source_hash = await sha256(new TextEncoder().encode(JSON.stringify({ rows, extra, th: s.th, month: s.month }))) || '';
     s.error = null;
     try {
-      s.result = await FA.save('Tabulato importato', () => FA.rpc('import_sheet', { p }));
-      const done = new Set(rows.map(r => r.ref));
-      s.rows.forEach(r => { if (done.has(r.ref)) r.imported = s.result.number; });
-      s.extra.forEach(x => { if (x.cycleId) x.cycleId = ''; });
+      const res = await FA.save('Importazione', () => FA.rpc('import_sheet', { p }));
+      // esito riga per riga: le righe riuscite sono segnate, quelle non riuscite restano con il motivo; nulla si perde
+      const byRef = new Map((res.results || []).map(x => [x.ref, x]));
+      s.rows.forEach(r => {
+        const x = byRef.get(r.ref);
+        if (!x) return;
+        if (x.ok) { r.imported = res.number || true; r.skipped = x.skipped || []; r.cycleId = x.cycle_id; r.error = null; r.showCells = false; }
+        else r.error = x.error;
+      });
+      (res.extra || []).forEach(x => { const e = s.extra.find(y => y.ref === x.ref); if (!e) return; if (x.ok) { e.imported = true; e.error = null; } else e.error = x.error; });
+      res.failed = (res.results || []).filter(x => !x.ok).concat((res.extra || []).filter(x => !x.ok));
+      res.skipped = (res.results || []).reduce((n, x) => n + (x.skipped || []).length, 0);
+      s.result = res;
+      if (res.failed.length || res.skipped) FA.toast('Importazione parziale: guarda il riepilogo in alto.', 'warn');
       FA.render(); window.scrollTo(0, 0);
-    } catch (e) { s.error = e.message; FA.render(); }
+    } catch (e) { s.error = e.message + ' Le tue correzioni sono ancora qui: puoi riprovare.'; FA.render(); }
   };
   function resultPanel(s) {
     const r = s.result;
-    const b = (A.data.import_batches || []).find(x => x.id === r.batch_id);
-    const left = s.rows.filter(x => x.include && !x.imported).length;
-    return '<div class="panel form-note"><h3>✓ Importazione n. ' + r.number + ' completata' + (left ? ' — restano ' + left + ' righe da sistemare qui sotto' : '') + '</h3><p>' + r.rows + ' pazienti (' + r.patients + ' nuovi), ' + r.appointments + ' sedute' +
-      (r.duplicates ? ', ' + r.duplicates + ' già presenti saltate' : '') + (r.visits ? ', ' + r.visits + ' visite fisiatriche' : '') + (r.forced ? ', ' + r.forced + ' fuori turno: le trovi in “Da sistemare”' : '') + '.</p>' +
-      '<p class="small">Le sedute già passate restano <strong>programmate</strong>: registra l’esito (effettuata, assenza) dal calendario o da “Da sistemare”.</p>' +
-      '<div class="row"><button class="btn primary" data-act="go" data-view="calendario" data-param="' + s.th + '/' + (s.from >= A.today ? s.from : A.today) + '/settimana">Apri il calendario di ' + esc(FA.thName(s.th)) + '</button>' +
+    const b = r.batch_id && (A.data.import_batches || []).find(x => x.id === r.batch_id);
+    const ans = analyzeSheet(s);
+    const left = s.rows.filter((x, k) => x.include && !x.imported && !ans[k].nothing).length;
+    const failRows = s.rows.filter(x => x.error && !x.imported), failExtra = s.extra.filter(x => x.error && !x.imported);
+    const skippedRows = s.rows.filter(x => x.imported === r.number && (x.skipped || []).length);
+    const head = r.number ? '✓ Importazione n. ' + r.number + ' salvata' : 'Nessuna seduta salvata';
+    return '<div class="panel ' + (failRows.length || failExtra.length || skippedRows.length || !r.number ? 'form-warn' : 'form-note') + '"><h3>' + head + (left ? ' — restano ' + left + ' righe da sistemare qui sotto' : '') + '</h3>' +
+      (r.number ? '<p>' + r.rows + ' pazienti (' + r.patients + ' nuovi), ' + r.appointments + ' sedute' + (r.substitutions ? ' (di cui ' + r.substitutions + ' sostituzioni)' : '') +
+        (r.duplicates ? ', ' + r.duplicates + ' già presenti saltate' : '') + (r.visits ? ', ' + r.visits + ' visite fisiatriche' : '') + (r.forced ? ', ' + r.forced + ' con avvisi: le trovi in «Da sistemare»' : '') + '.</p>' : '') +
+      (failRows.length || failExtra.length ? '<p><strong>Non importate (tutto il resto è salvato):</strong></p><ul class="imp-issues">' +
+        failRows.map(x => '<li><a href="#" data-act="imp-goto" data-ref="' + esc(x.ref) + '">' + esc(x.ref + ' ' + x.name) + '</a>: ' + esc(x.error) + '</li>').join('') +
+        failExtra.map(x => '<li><a href="#" data-act="imp-goto" data-ref="' + esc(x.ref) + '">' + esc(x.ref + ' sostituzione ' + (x.pname || x.name)) + '</a>: ' + esc(x.error) + '</li>').join('') + '</ul>' +
+        '<p class="small">Correggi le righe indicate e premi di nuovo «Importa nel calendario»: si importano solo quelle mancanti.</p>' : '') +
+      (skippedRows.length ? '<p><strong>Sedute rimaste fuori</strong> (il paziente è importato, mancano solo queste):</p><ul class="imp-issues">' +
+        skippedRows.map(x => '<li><a href="#" data-act="imp-goto" data-ref="' + esc(x.ref) + '">' + esc(x.ref + ' ' + x.name) + '</a>: ' +
+          esc(x.skipped.map(k => E.fmtItDay(k.day) + (k.start ? ' ' + k.start : '') + ' — ' + k.message).join('; ')) + '</li>').join('') + '</ul>' : '') +
+      (r.number ? '<p class="small">Le sedute già passate restano <strong>programmate</strong>: registra l’esito (effettuata, assenza) dal calendario o da «Da sistemare».</p>' : '') +
+      '<div class="row">' + (r.number ? '<button class="btn primary" data-act="go" data-view="calendario" data-param="' + s.th + '/' + (s.from >= A.today ? s.from : A.today) + '/settimana">Apri il calendario di ' + esc(FA.thName(s.th)) + '</button>' : '') +
+      (r.substitutions || s.rows.some(x => Object.keys(x.subs || {}).length) ? '<button class="btn" data-act="go" data-view="sostituzioni">Vedi le sostituzioni</button>' : '') +
       (b && !b.undone_at ? '<button class="btn" data-act="imp-undo" data-id="' + r.batch_id + '">Annulla questa importazione</button>' : (b && b.undone_at ? '<span class="chip grey">annullata</span>' : '')) + '</div></div>';
   }
   function historyPanel() {

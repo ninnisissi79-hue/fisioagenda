@@ -115,12 +115,17 @@
         const c = ctx.cyc.get(a.cycle_id);
         const iss = A.issues.find(i => i.appointment_id === a.id && i.kind !== 'esito_mancante');
         const n = E.sessionNumber(ctx, a), ev = ctx.events.get(a.patient_id + '|' + a.day);
-        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (iss ? ' issue' : '') + (can && a.status === 'programmata' ? ' movable' : ''),
+        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (a.original_therapist_id ? ' sub' : '') + (iss ? ' issue' : '') + (can && a.status === 'programmata' ? ' movable' : ''),
           '<strong>' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '</strong> ' + (n ? '<span class="wk-n" title="' + (n === 'R' ? 'Recupero' : 'Seduta ' + n + ' di ' + (c ? c.planned_sessions : '?')) + '">' + (n === 'R' ? 'R' : n + '/' + (c ? c.planned_sessions : '?')) + '</span> ' : '') +
           (ev ? '<span class="wk-v" title="Visita fisiatrica">V</span> ' : '') + FA.prio(c ? c.priority : 'NI') +
           '<br><span class="small">' + (c && c.treatment ? esc(c.treatment) + ' · ' : '') + esc(c ? FA.catName(c.category_id) : '') + (a.status !== 'programmata' ? ' · ' + esc(E.STATUS[a.status]) : '') +
           (a.original_therapist_id ? ' · sostituisce ' + esc(FA.thName(a.original_therapist_id)) : '') + (a.recovery_of ? ' · recupero' : '') + (iss ? ' · ⚠ ' + esc(iss.message) : '') + '</span>',
           ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0"');
+      });
+      // pazienti del titolare affidati a un collega: promemoria leggero (non occupa il posto)
+      (ctx.data.appointments || []).filter(a => a.original_therapist_id === thId && a.therapist_id !== thId && a.day === d && E.OCCUPYING.has(a.status)).forEach(a => {
+        inner += box(a.start_time, a.end_time, 'wk-given', '→ ' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '<br><span class="small">con ' + esc(FA.thName(a.therapist_id)) + ' (sostituzione)</span>',
+          ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0" title="Seduta affidata a ' + esc(FA.thName(a.therapist_id)) + '"');
       });
       ghosts.filter(g => g.day === d).forEach(g => {
         inner += box(g.start, g.end, 'wk-ghost' + (g.chk ? ' bad' : ''), (g.chk ? '✗ ' : '◌ ') + g.start + ' seduta ' + g.n + (g.chk ? '<br><span class="small">' + esc(g.chk.msg) + '</span>' : ''));
@@ -309,10 +314,10 @@
     const chk = past ? { msg: 'Una seduta futura non si sposta nel passato.' } : E.checkSlot(A.ctx, a.therapist_id, day, start, end, { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id });
     mv.target = { day, start, chk };
     if (!mv.ghost || mv.ghost.parentNode !== col) { if (mv.ghost) mv.ghost.remove(); mv.ghost = document.createElement('div'); col.appendChild(mv.ghost); }
-    mv.ghost.className = 'wk-ghost' + (chk ? ' bad' : '');
+    mv.ghost.className = 'wk-ghost' + (chk ? (chk.code && !FA.isHardConflict(chk) ? ' warn' : ' bad') : '');
     mv.ghost.style.top = ((m - Number(col.getAttribute('data-min'))) * PX) + 'px';
     mv.ghost.style.height = Math.max(12, dur * PX - 1) + 'px';
-    mv.ghost.innerHTML = (chk ? '✗ ' : '→ ') + esc(E.fmtItDay(day) + ' ' + start) + (chk ? '<br><span class="small">' + esc(chk.msg) + '</span>' : '');
+    mv.ghost.innerHTML = (chk ? (chk.code && !FA.isHardConflict(chk) ? '⚠ ' : '✗ ') : '→ ') + esc(E.fmtItDay(day) + ' ' + start) + (chk ? '<br><span class="small">' + esc(chk.msg) + '</span>' : '');
     mv.el.classList.add('dragging');
     ev.preventDefault();
   });
@@ -325,10 +330,15 @@
     swallowClick = true; setTimeout(() => { swallowClick = false; }, 0);
     const t = d.target, a = d.a;
     if (!t || (t.day === a.day && t.start === a.start_time)) return;
-    if (t.chk) { FA.toast('✗ Non spostata: ' + t.chk.msg, 'bad'); return; }
+    let force = false;
+    if (t.chk) {
+      if (!t.chk.code || FA.isHardConflict(t.chk)) { FA.toast('✗ Non spostata: ' + t.chk.msg, 'bad'); return; }
+      if (!confirm('Attenzione: ' + t.chk.msg + '\nSpostare comunque la seduta a ' + E.fmtItDay(t.day) + ' ' + t.start + '?')) return;
+      force = true;
+    }
     try {
       await FA.save('Seduta di ' + FA.patName(a.patient_id) + ' spostata a ' + E.fmtItDay(t.day) + ' ' + t.start,
-        () => FA.rpc('move_appointment', { p_id: a.id, p_version: a.version, p_therapist: a.therapist_id, p_day: t.day, p_start: t.start, p_note: '' }));
+        () => FA.rpc('edit_appointment', { p_id: a.id, p_version: a.version, p: { day: t.day, start: t.start, force } }));
     } catch (e) { /* già segnalato */ }
   });
   // dopo un trascinamento il clic non apre la finestra della seduta
@@ -553,6 +563,7 @@
   function activeCycleOf(pid) { return (A.data.cycles || []).find(c => c.patient_id === pid && c.status === 'attivo') || null; }
   function pdDur(f) {
     const c = pdCycle(f);
+    if (c && pdSingle(f) && f.sdur) return f.sdur === 'altro' ? Number(f.sdurOther) || 0 : Number(f.sdur);
     if (c) return c.duration;
     return f.duration === 'altro' ? Number(f.durOther) || 0 : Number(f.duration);
   }
@@ -565,18 +576,17 @@
     const prior = active ? planned - E.cycleCounts(ctx, c.id).mancanoDaProgrammare : c ? (c.prior_sessions || 0) : Math.max(0, Math.min(planned - 1, Number(f.done) || 0));
     const dur = pdDur(f);
     const missing = planned - prior;
-    const n = active ? (f.addN === 'tutte' ? missing : Math.min(1, missing)) : missing;
+    const n = active ? (f.addN === 'tutte' ? missing : 1) : missing;
     const slots = [];
     if (pdSingle(f)) {
       // una seduta nel giorno e all'ora scelti (anche diversi dai giorni abituali del ciclo)
       const st = FA.normTime(f.start);
-      if (st && dur >= 15 && n === 1) {
+      if (st && dur >= 10 && n === 1) {
         const en = E.fromMin(E.toMin(st) + dur);
-        const chk = f.day < A.today ? { msg: 'Data passata: scegli oggi o un giorno futuro.' } : ctx.closures.has(f.day) ? { msg: 'Servizio chiuso il ' + E.fmtIt(f.day) + '.' }
-          : E.checkSlot(ctx, f.th, f.day, st, en, { patientId: c.patient_id, cycleId: c.id });
+        const chk = E.checkSlot(ctx, f.th, f.day, st, en, { patientId: c.patient_id, cycleId: c.id }) || (f.day < A.today ? { code: 'passato', msg: 'Data già passata (la seduta resta programmata finché non registri l’esito).' } : null);
         slots.push({ day: f.day, start: st, end: en, n: prior + 1, chk });
       }
-    } else if (dur >= 15 && f.days.length) {
+    } else if (dur >= 10 && f.days.length) {
       let d = f.day, guard = 0;
       while (slots.length < n && guard++ < 500) {
         const wd = E.weekday(d);
@@ -584,15 +594,19 @@
           const st = FA.normTime(f.times[wd] || f.times[f.days[0]] || '');
           if (st) {
             const en = E.fromMin(E.toMin(st) + dur);
-            slots.push({ day: d, start: st, end: en, n: prior + slots.length + 1, chk: E.checkSlot(ctx, f.th, d, st, en, { patientId: c ? c.patient_id : (f.patient_id || null), cycleId: c ? c.id : null }) });
+            slots.push({ day: d, start: st, end: en, n: prior + slots.length + 1, chk: E.checkSlot(ctx, f.th, d, st, en, { patientId: c ? c.patient_id : (f.patient_id || null), cycleId: c ? c.id : null }) ||
+              (d < A.today ? { code: 'passato', msg: 'Data già passata.' } : null) });
           }
         }
         d = E.addDays(d, 1);
       }
     }
     f.slots = slots; f.prior = prior; f.planned2 = planned;
-    f.okAll = slots.length === n && n > 0 && slots.every(s => !s.chk) && (f.mode === 'nuovo' ? !!f.name.trim() : f.mode === 'esistente' ? !!f.patient_id : !!f.cycle_id) && (!!c || !!f.category_id) &&
-      dur >= 15 && dur <= 120 && dur % 5 === 0;
+    // le sovrapposizioni bloccano; gli avvisi organizzativi (fuori orario, assenza…) si confermano
+    f.hard = slots.filter(s => s.chk && FA.isHardConflict(s.chk)).length;
+    f.warn = slots.filter(s => s.chk && !FA.isHardConflict(s.chk)).length;
+    f.okAll = slots.length === n && n > 0 && !f.hard && (!f.warn || !!f.force) && (f.mode === 'nuovo' ? !!f.name.trim() : f.mode === 'esistente' ? !!f.patient_id : !!f.cycle_id) && (!!c || !!f.category_id) &&
+      dur >= 10 && dur <= 240 && dur % 5 === 0;
   }
   /** paziente già in trattamento a cui si aggiunge una sola seduta */
   function pdSingle(f) { const c = pdCycle(f); return !!(c && c.status === 'attivo' && f.addN !== 'tutte'); }
@@ -601,7 +615,7 @@
     pdCompute();
     const ths = FA.activeTherapists().filter(t => FA.canEditTh(t.id));
     const head = '<div class="grid2"><div class="field"><label>Fisioterapista</label><select data-bind="pd.th" data-on="pd-th">' + ths.map(t => FA.option(t.id, t.name, f.th)).join('') + '</select></div>' +
-      '<div class="field"><label>' + (pdSingle(f) ? 'Giorno' : 'Dal giorno') + '</label><input type="date" min="' + A.today + '" data-bind="pd.day" data-on="pd-chg" value="' + esc(f.day) + '"></div></div>';
+      '<div class="field"><label>' + (pdSingle(f) ? 'Giorno' : 'Dal giorno') + '</label><input type="date" data-bind="pd.day" data-on="pd-chg" value="' + esc(f.day) + '"></div></div>';
     const cats = FA.categories().filter(c => E.skillLevel(ctx, f.th, c.id));
     const waiting = (A.data.cycles || []).filter(c => c.status === 'in_attesa' && E.skillLevel(ctx, f.th, c.category_id));
     const c = pdCycle(f);
@@ -624,14 +638,19 @@
     }
     const single = pdSingle(f);
     const miss = c && c.status === 'attivo' ? E.cycleCounts(ctx, c.id).mancanoDaProgrammare : 0;
-    const addBlock = miss > 0
+    const sd = f.sdur || (c ? ([30, 45, 60].includes(c.duration) ? String(c.duration) : 'altro') : '30');
+    const addBlock = c && c.status === 'attivo'
       ? (miss > 1 ? '<div class="field"><label>Cosa aggiungere</label>' + FA.seg('pd.addN', [['1', 'Una seduta'], ['tutte', 'Tutte le ' + miss + ' mancanti']], f.addN) + '</div>' : '') +
-        (single ? '<div class="field"><label>Ora di inizio (' + c.duration + ' min)</label>' + timeField('pd.start', f.start, ' data-on="pd-chg" style="max-width:100px"') +
-          '<div class="help">Puoi anche cliccare un altro punto libero del calendario. Il ciclo e la numerazione restano quelli del paziente.</div></div>' : '') : '';
+        (!miss ? '<div class="form-note small">Il ciclo ha già tutte le sedute programmate: questa sarà una seduta <strong>in più</strong> (il ciclo passa a ' + (c.planned_sessions + 1) + ' sedute).</div>' : '') +
+        (single ? '<div class="grid2"><div class="field"><label>Ora di inizio</label>' + timeField('pd.start', f.start, ' data-on="pd-chg" style="max-width:100px"') +
+          '<div class="help">Puoi anche cliccare un altro punto del calendario. Il ciclo e la numerazione restano quelli del paziente.</div></div>' +
+          '<div class="field"><label>Durata della seduta</label>' + FA.seg('pd.sdur', [['30', '30 minuti'], ['45', '45 minuti'], ['60', '1 ora'], ['altro', 'Altro']], sd) +
+          (sd === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:100px;display:inline-block" data-bind="pd.sdurOther" data-on="pd-chg" value="' + esc(f.sdurOther || c.duration) + '" placeholder="minuti">' : '') +
+          '<div class="help">Solo per questa seduta: le altre del ciclo restano di ' + c.duration + ' minuti.</div></div></div>' : '') : '';
     return head + FA.seg('pd.mode', [['nuovo', 'Nuovo paziente'], ['esistente', 'Paziente in trattamento / in archivio'], ['attesa', 'Dalla lista d’attesa']], f.mode) + who + addBlock +
       (c ? '' : '<div class="field"><label>Percorso</label><select data-bind="pd.category_id" data-on="pd-chg">' + cats.map(x => FA.option(x.id, x.name, f.category_id)).join('') + '</select></div>' +
-        '<div class="field"><label>Durata della seduta</label>' + FA.seg('pd.duration', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], String(f.duration)) +
-        (f.duration === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:110px;display:inline-block" data-bind="pd.durOther" data-on="pd-chg" value="' + esc(f.durOther) + '" placeholder="minuti">' : '') + '</div>' +
+        '<div class="field"><label>Durata delle sedute</label>' + FA.seg('pd.duration', [['30', '30 minuti'], ['45', '45 minuti'], ['60', '1 ora'], ['altro', 'Altro']], String(f.duration)) +
+        (f.duration === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:110px;display:inline-block" data-bind="pd.durOther" data-on="pd-chg" value="' + esc(f.durOther) + '" placeholder="minuti">' : '') + '</div>' +
         '<div class="field"><label>Ciclo</label><div class="row">Sedute già fatte <input type="number" min="0" max="' + (f.planned - 1) + '" style="max-width:80px" data-bind="pd.done" data-on="pd-chg" value="' + esc(f.done) + '"> su ' +
         FA.seg('pd.planned', [['5', '5'], ['10', '10'], ['20', '20'], ['30', '30']], String(f.planned)) + '</div>' +
         '<div class="help">La prossima è la <strong>' + (f.prior + 1) + 'ª</strong>' + (f.prior ? ' (le ' + f.prior + ' già fatte contano come effettuate)' : '') + '; si programmano le ' + (f.planned2 - f.prior) + ' rimanenti.</div></div>' +
@@ -643,9 +662,11 @@
       }).join('') + '</div><div class="help">Con il pannello aperto puoi cliccare un altro spazio libero nel calendario per scegliere giorno e ora.</div></div>') +
       (c ? '' : '<div class="field"><label>Priorità</label><select data-bind="pd.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>') +
       '<h4>Anteprima (' + f.slots.length + (f.slots.length === 1 ? ' seduta' : ' sedute dal ' + E.fmtIt(f.day)) + ')</h4>' +
-      (bad.length ? '<div class="form-error">✗ ' + (bad.length === 1 && f.slots.length === 1 ? 'Orario non disponibile: ' + esc(bad[0].chk.msg) : bad.length + ' sedute non disponibili: cambia orario o giorni.') + '</div>'
+      (f.hard ? '<div class="form-error">✗ ' + (f.hard === 1 ? 'Una seduta si sovrappone a un altro appuntamento' : f.hard + ' sedute si sovrappongono ad altri appuntamenti') + ' (vedi sotto): cambia orario, giorno o fisioterapista. Il resto di quello che hai scritto resta qui.</div>'
+        : f.warn ? '<div class="form-warn">⚠ ' + (f.warn === 1 && f.slots.length === 1 ? esc(bad[0].chk.msg) : f.warn + ' sedute con avvisi (vedi sotto).') +
+          '<label class="inline-check" style="margin-top:4px"><input type="checkbox" data-bind="pd.force" data-on="pd-chg"' + (f.force ? ' checked' : '') + '> Confermo: salva comunque (la seduta comparirà in «Da sistemare»)</label></div>'
         : f.slots.length ? '<div class="form-note">✓ ' + (f.slots.length === 1 ? 'Disponibile' : 'Tutte disponibili') + '. La vedi tratteggiata sul calendario; resta <strong>programmata</strong> finché non registri l’esito.</div>' : '') +
-      '<ul class="small pd-list">' + f.slots.map(s => '<li class="' + (s.chk ? 'bad' : '') + '">' + (s.chk ? '✗ ' : '✓ ') + 'n. ' + s.n + ' · ' + esc(E.fmtItDay(s.day)) + ' ' + s.start + (s.chk ? ' — ' + esc(s.chk.msg) : '') + '</li>').join('') + '</ul>' +
+      '<ul class="small pd-list">' + f.slots.map(s => '<li class="' + (s.chk ? (FA.isHardConflict(s.chk) ? 'bad' : 'warn') : '') + '">' + (s.chk ? (FA.isHardConflict(s.chk) ? '✗ ' : '⚠ ') : '✓ ') + 'n. ' + s.n + ' · ' + esc(E.fmtItDay(s.day)) + ' ' + s.start + (s.chk ? ' — ' + esc(s.chk.msg) : '') + '</li>').join('') + '</ul>' +
       FA.errBox(f.error);
   }
   FA.actions['pd-chg'] = () => { pdCompute(); FA.render(); FA.renderModal(); };
@@ -676,7 +697,7 @@
           '<div class="small">' + k.effettuate + ' fatte · ' + k.programmate + ' programmate su ' + c.planned_sessions + (k.mancanoDaProgrammare ? ' · <strong>' + k.mancanoDaProgrammare + ' da programmare</strong>' : '') +
           (n ? ' · prossima: ' + esc(E.fmtItDay(n.day) + ' ' + n.start_time) + (n.therapist_id !== c.therapist_id ? ' (' + esc(FA.thName(n.therapist_id)) + ')' : '') : ' · nessuna seduta futura') + '</div></div><div class="row">' +
           (n ? '<button class="btn small" data-act="pl-show" data-th="' + n.therapist_id + '" data-day="' + n.day + '">Vedi</button>' : '') +
-          (FA.canEditTh(f.th) ? '<button class="btn small primary" data-act="pl-add" data-id="' + c.patient_id + '"' + (k.mancanoDaProgrammare ? '' : ' disabled title="Il ciclo ha già tutte le sedute: sposta o correggi una seduta esistente"') + '>+ Seduta</button>' : '') + '</div></li>';
+          (FA.canEditTh(f.th) ? '<button class="btn small primary" data-act="pl-add" data-id="' + c.patient_id + '"' + (k.mancanoDaProgrammare ? '' : ' title="Il ciclo ha già tutte le sedute: sarà una seduta in più"') + '>+ Seduta</button>' : '') + '</div></li>';
       }).join('') + '</ul>';
   }
   FA.actions['pl-show'] = el => { FA.closeModal(); FA.go('calendario', el.getAttribute('data-th'), el.getAttribute('data-day'), 'settimana'); };
@@ -714,7 +735,8 @@
       const act = pdCycle(f);
       if (act && act.status === 'attivo') {
         // paziente già in trattamento: si aggiungono le sedute mancanti al suo ciclo
-        await FA.save('Sedute aggiunte', () => FA.rpc('add_cycle_slots', { p_cycle: act.id, p_version: act.version, p_therapist: f.th, p_slots: f.slots.map(s => ({ day: s.day, start: s.start })) }));
+        await FA.save('Sedute aggiunte', () => FA.rpc('add_cycle_slots', { p_cycle: act.id, p_version: act.version, p_therapist: f.th,
+          p_slots: f.slots.map(s => ({ day: s.day, start: s.start, minutes: pdDur(f) })), p_force: !!f.force }));
         A.ui.pd = null; FA.closeModal(); FA.render(); return;
       }
       let cycleId = f.cycle_id, version;
@@ -725,7 +747,7 @@
         if (f.treatment.trim()) { await FA.rpc('quick_edit_cycle', { p_cycle: cycleId, p_version: 1, p: { treatment: f.treatment.trim().toUpperCase() } }); version = 2; }
       } else version = A.ctx.cyc.get(cycleId).version;
       await FA.save('Sedute programmate', () => FA.rpc('book_cycle_slots', { p_cycle: cycleId, p_version: version, p_therapist: f.th,
-        p_slots: f.slots.map(s => ({ day: s.day, start: s.start })), p_weekdays: f.days }));
+        p_slots: f.slots.map(s => ({ day: s.day, start: s.start })), p_weekdays: f.days, p_force: !!f.force }));
       A.ui.pd = null; FA.closeModal(); FA.render();
     } catch (e) {
       f.error = e.message + (f.cycle_id ? ' Il paziente è comunque in lista d’attesa: puoi riprovare.' : '');

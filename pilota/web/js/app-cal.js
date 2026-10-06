@@ -424,6 +424,39 @@
       (p.day && E.weekday(p.day) >= 6 ? '<div class="form-warn">Giorno festivo o sabato: verifica il turno.</div>' : '') +
       '<div class="field"><label>Nota (facoltativa)</label><input type="text" data-bind="am.pick.note" value="' + esc(p.note || '') + '"></div>';
   }
+  /** modifica libera di una sola seduta: giorno, ora, durata, fisioterapista; controlli prima di salvare */
+  function editBlock(am, a, cyc) {
+    const p = am.pick;
+    const curDur = E.toMin(a.end_time) - E.toMin(a.start_time);
+    if (p.dur == null) { p.dur = [30, 45, 60].includes(curDur) ? String(curDur) : 'altro'; p.durOther = String(curDur); }
+    const m = p.dur === 'altro' ? Number(p.durOther) : Number(p.dur);
+    const t = FA.normTime(p.start);
+    const okM = m >= 10 && m <= 240 && m % 5 === 0;
+    const chk = t && p.day && p.th && okM ? E.checkSlot(A.ctx, p.th, p.day, t, E.fromMin(E.toMin(t) + m), { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id }) ||
+      (p.day < A.today && a.day >= A.today ? { code: 'orario', msg: 'Una seduta futura non si sposta nel passato.' } : null) : null;
+    const hard = chk && FA.isHardConflict(chk);
+    am.ed = { t, m, okM, chk, hard, ok: !!(t && p.day && p.th && okM && !hard && (!chk || p.force)) };
+    const orig = a.original_therapist_id || cyc.therapist_id;
+    const free = p.day && p.th && okM ? E.freeStarts(A.ctx, p.th, p.day, m, { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id }) : [];
+    const changed = p.day !== a.day || t !== a.start_time || m !== curDur || p.th !== a.therapist_id;
+    return '<div class="grid2">' +
+      '<div class="field"><label>Giorno</label><input type="date"' + (a.day < A.today ? '' : ' min="' + A.today + '"') + ' data-bind="am.pick.day" data-rerender value="' + esc(p.day || '') + '"></div>' +
+      '<div class="field"><label>Ora di inizio</label>' + FA.timeField('am.pick.start', p.start, ' data-rerender style="max-width:100px"') +
+        (free.length ? '<div class="help">Posti liberi quel giorno: ' + free.slice(0, 10).map(x => '<button class="btn link small" data-act="am-start" data-t="' + x + '">' + x + '</button>').join(' ') + '</div>' : '') + '</div>' +
+      '<div class="field"><label>Durata della seduta</label>' + FA.seg('am.pick.dur', [['30', '30 minuti'], ['45', '45 minuti'], ['60', '1 ora'], ['altro', 'Altro']], p.dur) +
+        (p.dur === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:100px;display:inline-block" data-bind="am.pick.durOther" data-rerender value="' + esc(p.durOther) + '" placeholder="minuti">' : '') +
+        '<div class="help">Solo questa seduta. Per tutte le prossime del ciclo usa «✎ Correggi».</div></div>' +
+      '<div class="field"><label>Fisioterapista</label><select data-bind="am.pick.th" data-rerender>' + thOptions(cyc.category_id, p.th) + '</select>' +
+        (p.th && p.th !== orig ? '<div class="help">Sarà una <strong>sostituzione</strong>: il ciclo resta di ' + esc(FA.thName(orig)) + '. La vedi anche in «Sostituzioni».</div>' :
+          a.original_therapist_id && p.th === orig ? '<div class="help">Torna al titolare: la sostituzione viene annullata.</div>' : '') + '</div></div>' +
+      '<div class="field"><label>Nota (facoltativa)</label><input type="text" data-bind="am.pick.note" value="' + esc(p.note || '') + '"></div>' +
+      (!changed ? '<p class="small muted">Cambia giorno, ora, durata o fisioterapista: il controllo è immediato.</p>' :
+        !t ? '<div class="form-warn">Scrivi l’ora di inizio (es. 8:15).</div>' : !okM ? '<div class="form-warn">Durata non valida (da 10 a 240 minuti).</div>' :
+        hard ? '<div class="form-error">✗ ' + esc(chk.msg) + ' Non si può salvare: scegli un altro orario, giorno o fisioterapista.</div>' :
+        chk ? '<div class="form-warn">⚠ ' + esc(chk.msg) + '<label class="inline-check" style="margin-top:4px"><input type="checkbox" data-bind="am.pick.force" data-rerender' + (p.force ? ' checked' : '') + '> Confermo: salva comunque</label></div>' :
+        '<div class="form-note">✓ Posto libero: ' + esc(FA.thName(p.th) + ', ' + E.fmtItDay(p.day) + ' ' + t + '–' + E.fromMin(E.toMin(t) + m)) + '. Le altre sedute del ciclo non cambiano.</div>');
+  }
+  FA.actions['am-start'] = el => { A.ui.am.pick.start = el.getAttribute('data-t'); FA.renderModal(); };
   FA.actions['open-appt'] = el => {
     const id = el.getAttribute('data-id');
     if (!A.ctx.appt.get(id)) return;
@@ -459,7 +492,7 @@
     h += '<div class="row" style="margin:10px 0">' +
       '<button class="btn ' + (am.mode === 'correggi' ? 'primary' : '') + '" data-act="am-mode" data-m="correggi">✎ Correggi</button>' +
       (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito / assenza' : 'Correggi esito') + '</button>' : '') +
-      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Sposta / cambia fisioterapista</button>' : '') +
+      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Modifica: giorno, ora, durata, fisioterapista</button>' : '') +
       (canRecover ? '<button class="btn ' + (am.mode === 'recupero' ? 'primary' : '') + '" data-act="am-mode" data-m="recupero">Programma il recupero</button>' : '') + '</div>';
     if (am.mode === 'esito') {
       const o = am.out;
@@ -475,8 +508,8 @@
     }
     if (am.mode === 'sposta') {
       if (!am.scope) am.scope = 'solo';
-      h += '<div class="panel"><div class="field"><label>Cosa cambiare</label>' + FA.seg('am.scope', [['solo', 'Solo questa seduta'], ['successive', 'Questa e le successive'], ['intervallo', 'Dal … al …']], am.scope) + '</div>';
-      if (am.scope === 'solo') h += pickBlock(am, a, cyc, 'Nuovo giorno, ora o fisioterapista') + '<p class="small muted">Le altre sedute del ciclo restano invariate.</p>';
+      h += '<div class="panel"><div class="field"><label>Cosa cambiare</label>' + FA.seg('am.scope', [['solo', 'Solo questa seduta'], ['successive', 'Questa e le successive (orario o collega)'], ['intervallo', 'Dal … al …']], am.scope) + '</div>';
+      if (am.scope === 'solo') h += editBlock(am, a, cyc);
       else h += rangeBlock(am, a, cyc);
       h += '</div>';
     }
@@ -495,15 +528,16 @@
     return '<div class="panel"><div class="grid3">' +
       '<div class="field"><label>Nome del paziente</label><input type="text" data-bind="am.fx.name" value="' + esc(f.name) + '"></div>' +
       (typeof n === 'number' ? '<div class="field"><label>Questa è la seduta n.</label><div class="row"><input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="am.fx.n" data-num data-rerender value="' + esc(f.n) + '"> di ' +
-        '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + E.SESSION_PRESETS.map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
+        '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + [...new Set(E.SESSION_PRESETS.concat([Number(f.planned)]))].sort((x, y) => x - y).map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
         '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Sedute precedenti all’inserimento: ' + prior + '. Le altre sedute si rinumerano di conseguenza.') + '</div></div>' : '<div></div>') +
       '<div class="field"><label>Tipo di trattamento</label><input type="text" data-bind="am.fx.treatment" value="' + esc(f.treatment) + '" placeholder="es. GC, RM"></div>' +
-      '<div class="field"><label>Durata (questa e le sedute future)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], f.dur) +
-        (f.dur === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:90px;display:inline-block" data-bind="am.fx.durOther" value="' + esc(f.durOther) + '">' : '') + '</div>' +
+      '<div class="field"><label>Durata delle sedute del ciclo (questa e le prossime)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], f.dur) +
+        (f.dur === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:90px;display:inline-block" data-bind="am.fx.durOther" value="' + esc(f.durOther) + '">' : '') +
+        '<div class="help">Per una sola seduta usa «Modifica: giorno, ora, durata…».</div></div>' +
       '<div class="field"><label>Visita fisiatrica</label><label class="inline-check"><input type="checkbox" data-act-change="am-visit"' + (ev ? ' checked' : '') + FA.saveDisabled() + '> Il paziente ha la visita il ' + esc(E.fmtItDay(a.day)) + '</label>' +
         '<div class="help">Non è una seduta: è solo un promemoria sul calendario.</div></div>' +
       '</div><div class="row" style="margin-top:8px"><button class="btn primary" data-act="am-fix"' + FA.saveDisabled() + '>Salva le correzioni</button>' +
-      '<button class="btn" data-act="am-mode" data-m="sposta">Sposta (giorno, ora, collega)</button>' +
+      '<button class="btn" data-act="am-mode" data-m="sposta">Modifica solo questa seduta (giorno, ora, durata, collega)</button>' +
       (canDel ? '<button class="btn danger" data-act="am-del"' + FA.saveDisabled() + '>Elimina questa seduta (inserita per errore)</button>' : '') + '</div>' +
       '<p class="small muted" style="margin-top:6px">Per cambiare giorno o ora puoi anche <strong>trascinare</strong> la seduta sul calendario.</p></div>';
   }
@@ -520,7 +554,7 @@
     const prior = fixPrior(am, a, cyc);
     const dur = f.dur === 'altro' ? Number(f.durOther) : Number(f.dur);
     if (prior == null) { am.error = 'Numero di seduta non possibile: deve stare tra 1 e ' + f.planned + '.'; FA.renderModal(); return; }
-    if (!(dur >= 15 && dur <= 120 && dur % 5 === 0)) { am.error = 'Durata non valida (da 15 a 120 minuti, multipli di 5).'; FA.renderModal(); return; }
+    if (!(dur >= 10 && dur <= 240 && dur % 5 === 0)) { am.error = 'Durata non valida (da 10 a 240 minuti, multipli di 5).'; FA.renderModal(); return; }
     const p = {};
     if (prior !== (cyc.prior_sessions || 0)) p.prior_sessions = prior;
     if (Number(f.planned) !== cyc.planned_sessions) p.planned_sessions = Number(f.planned);
@@ -569,7 +603,7 @@
     if (am.mode === 'sposta' && am.scope && am.scope !== 'solo')
       return '<button class="btn" data-act="close-modal">Chiudi</button><button class="btn primary" data-act="am-range"' + (am.rgOk ? FA.saveDisabled() : ' disabled') + '>Applica alle ' + (am.rgRows ? am.rgRows.length : 0) + ' sedute</button>';
     const btn = !am.mode || am.mode === 'correggi' ? '' : am.mode === 'esito' ? 'am-outcome' : am.mode === 'sposta' ? 'am-move' : 'am-recover';
-    const label = { 'am-outcome': 'Salva esito', 'am-move': 'Sposta la seduta', 'am-recover': 'Prenota il recupero' }[btn];
+    const label = { 'am-outcome': 'Salva esito', 'am-move': 'Salva la modifica', 'am-recover': 'Prenota il recupero' }[btn];
     return '<button class="btn" data-act="close-modal">Chiudi</button>' + (btn ? '<button class="btn primary" data-act="' + btn + '"' + FA.saveDisabled() + '>' + (A.saving ? 'Salvataggio…' : label) + '</button>' : '');
   }
   FA.actions['am-quick'] = async el => {
@@ -605,10 +639,17 @@
     } catch (e) { am.error = e.message; FA.renderModal(); }
   };
   FA.actions['am-move'] = async () => {
-    const am = A.ui.am, a = A.ctx.appt.get(am.id), p = am.pick;
-    if (!p.day || !p.th || !p.start) { am.error = 'Scegli giorno, fisioterapista e ora.'; FA.renderModal(); return; }
-    try { await FA.save('Seduta spostata', () => FA.rpc('move_appointment', { p_id: a.id, p_version: a.version, p_therapist: p.th, p_day: p.day, p_start: p.start, p_note: p.note || '' })); FA.closeModal(); }
-    catch (e) { am.error = e.message; FA.renderModal(); }
+    const am = A.ui.am, a = A.ctx.appt.get(am.id), p = am.pick, ed = am.ed || {};
+    if (!ed.ok) { am.error = ed.hard ? 'Orario in conflitto: ' + ed.chk.msg : ed.chk ? 'Conferma l’avviso (casella «Salva comunque») oppure cambia orario.' : 'Indica giorno, ora, durata e fisioterapista.'; FA.renderModal(); return; }
+    try {
+      await FA.save('Seduta aggiornata', () => FA.rpc('edit_appointment', { p_id: a.id, p_version: a.version, p: { therapist_id: p.th, day: p.day, start: ed.t, minutes: ed.m, force: !!p.force, note: p.note || '' } }));
+      FA.closeModal();
+    } catch (e) {
+      // gli avvisi rilevati solo dal server si confermano qui, senza perdere quanto scritto
+      am.error = e.message + (e.kind === 'FA_WARN' ? ' Se va bene, spunta «Salva comunque» e salva di nuovo.' : '');
+      if (e.kind === 'FA_WARN') am.ed.chk = { code: 'server', msg: e.message };
+      FA.renderModal();
+    }
   };
   FA.actions['am-recover'] = async () => {
     const am = A.ui.am, a = A.ctx.appt.get(am.id), p = am.pick;

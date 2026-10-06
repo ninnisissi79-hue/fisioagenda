@@ -350,3 +350,21 @@ select.need, input.need { border-color: var(--warn) !important; box-shadow: 0 0 
 .pd-found { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .pd-found .btn { justify-content: flex-start; text-align: left; }
 .imp-grid td.sub::after { content: ''; position: absolute; left: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--info); }
+/* importazione: avvisi da confermare, singole sedute, durata */
+.imp-grid td.warnc { background: #fff3d6; box-shadow: inset 0 0 0 2px var(--warn); }
+.imp-conf li.soft { color: var(--ink); }
+.imp-durl { display: inline-flex; align-items: center; gap: 4px; }
+.imp-cells { margin-top: 6px; font-size: .85rem; }
+.imp-cells td, .imp-cells th { padding: 3px 6px; vertical-align: middle; }
+.imp-cells select { padding: 2px 4px; min-height: 0; }
+.imp-cells input.t-in { width: 64px; padding: 2px 4px; min-height: 0; }
+.ok-txt { color: var(--ok); }
+.wk-ghost.warn { border-color: var(--warn); background: rgba(255, 243, 214, .92); color: var(--warn); }
+.pd-list li.warn { color: var(--warn); }
+/* sostituzioni */
+.sb-table td { vertical-align: middle; }
+.sb-table select { width: auto; max-width: 240px; padding: 3px 6px; min-height: 0; }
+.sb-table tr.sb-todo td { background: var(--warn-bg); }
+.bad-txt { color: var(--bad); }
+.wk-appt.sub { border-left-color: var(--info); box-shadow: inset 0 0 0 1px var(--info-line); }
+.wk-given { border: 1px dashed var(--info-line); background: repeating-linear-gradient(135deg, rgba(230,240,251,.6), rgba(230,240,251,.6) 4px, transparent 4px, transparent 8px); color: var(--info); font-size: .75rem; cursor: pointer; z-index: 1; overflow: hidden; padding: 1px 3px; }

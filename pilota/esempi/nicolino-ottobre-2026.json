@@ -11,6 +11,7 @@
    "durata_suggerita": 30,
    "durata_nota": "fasce di 30 minuti sul foglio, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
    "sedute_ciclo": 10,
+   "sigle": { "MG": "Guidetti" },
    "griglia": {
     "x_giorno1": 22.75,
     "x_giorno31": 95.25,

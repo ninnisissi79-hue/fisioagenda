@@ -308,7 +308,7 @@
 
   /* ---------------- struttura della pagina ---------------- */
   const NAV = [
-    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['importa', 'Importa tabulato'], ['pazienti', 'Pazienti'],
+    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['sostituzioni', 'Sostituzioni'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['importa', 'Importa tabulato'], ['pazienti', 'Pazienti'],
     ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['config', 'Configurazione'], ['storico', 'Storico']
   ];
   function connLabel() {
@@ -389,6 +389,27 @@
     ev.preventDefault();
     Promise.resolve(fn(el, ev)).catch(e => { console.error(e); });
   });
+  // Clic che si perde: se si corregge un campo e si clicca subito un pulsante, l'uscita dal campo
+  // ridisegna la pagina tra la pressione e il rilascio e il browser non genera il clic.
+  // Lo si recupera cercando lo stesso pulsante nella pagina ridisegnata.
+  let pressed = null;
+  const sig = el => [...el.attributes].filter(a => /^data-/.test(a.name)).map(a => a.name + '=' + a.value).sort().join('|');
+  document.addEventListener('pointerdown', ev => {
+    const el = ev.target.closest && ev.target.closest('[data-act]');
+    pressed = el && el.tagName === 'BUTTON' ? { el, sig: sig(el), act: el.getAttribute('data-act') } : null;
+  }, true);
+  document.addEventListener('pointerup', () => {
+    const p = pressed; pressed = null;
+    if (!p || p.el.isConnected) return;
+    setTimeout(() => {
+      const twin = [...document.querySelectorAll('button[data-act="' + CSS.escape(p.act) + '"]')].find(b => sig(b) === p.sig);
+      if (twin && !twin.disabled) twin.click();
+    }, 60);
+  }, true);
+
+  /** conflitto vero (sovrapposizione con un altro appuntamento): non si può confermare; gli altri controlli sono avvisi */
+  FA.isHardConflict = chk => ['occupato', 'paziente', 'orario', 'inesistente'].includes(chk.code) || (chk.code === 'alternativa' && /^(Stesso posto|Il paziente)/.test(chk.msg));
+
   /** Orario scritto liberamente: 1220, 12.20, 12,20, 12 20, 12:20, 9 -> hh:mm. null se non valido. */
   FA.normTime = function (v) {
     v = String(v == null ? '' : v).trim();

@@ -36,7 +36,8 @@ test('salto nella numerazione (seduta con un collega) e numeri fuori ordine', ()
   const g = H.analyzeRow({ cells: { 1: '5', 6: '3' } }, O);
   assert.match(g.issues.join(' '), /Manca il n\. 4/); assert.deepEqual(g.blocking, []);
   const b = H.analyzeRow({ cells: { 1: '3', 6: '4' } }, O);
-  assert.match(b.blocking.join(' '), /non in successione/);
+  assert.deepEqual(b.blocking, [], 'non blocca: la riga si importa');
+  assert.match(b.issues.join(' '), /non in successione.*nuovo ciclo/);
 });
 
 test('dubbi del trascrittore e "?" bloccano finché non si corregge', () => {
@@ -88,6 +89,7 @@ test('nuovo ciclo sulla stessa riga: dopo l’1 si ricomincia da 10', () => {
   // se il primo ciclo è già finito prima della data di inizio, resta solo il nuovo
   const n = H.analyzeRow({ cells: { 1: '2', 6: '1', 13: '10', 20: '9' } }, Object.assign({}, O, { from: '2026-10-07' }));
   assert.equal(n.next, undefined); assert.deepEqual(n.imported.map(c => c.num), [10, 9]); assert.equal(n.prior, 0);
-  // salita senza fine ciclo: errore di lettura
-  assert.match(H.analyzeRow({ cells: { 1: '5', 6: '7' } }, O).blocking.join(' '), /non in successione/);
+  // salita senza fine ciclo: segnalata, considerata un nuovo ciclo (si può correggere la casella)
+  const up = H.analyzeRow({ cells: { 1: '5', 6: '7' } }, O);
+  assert.deepEqual(up.blocking, []); assert.match(up.issues.join(' '), /non in successione/); assert.deepEqual(up.next.cells.map(c => c.num), [7]);
 });
