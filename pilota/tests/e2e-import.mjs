@@ -228,6 +228,23 @@ try {
   assert.match(await page.textContent('.imp-tabs'), /Barile 2026-10/);
   assert.ok(!(await page.textContent('.imp-tabs')).includes('Fittizio'), 'esempio fittizio escluso');
   ok('Zip con tutte le trascrizioni caricato in un colpo: 17 tabulati, uno per scheda');
+  // foglio reale (Barile): fisioterapista creato dall'importazione, correzioni veloci, importate le righe pronte
+  assert.match(await page.textContent('.imp-tab .btn.primary'), /Barile/);
+  if (await page.$('button[data-act="imp-newth"]')) { await page.click('button[data-act="imp-newth"]'); await page.waitForSelector('button[data-act="imp-newth"]', { state: 'detached', timeout: 15000 }); }
+  await page.click('.panel button[data-act="seg"][data-val="30"]');
+  for (const k of ['dubbi', 'nomi', 'forza']) { const bt = await page.$(`button[data-act="imp-bulk"][data-k="${k}"]`); if (bt) { await bt.click(); await page.waitForTimeout(300); } }
+  if (await page.$eval('button[data-act="imp-go"]', bt => bt.disabled)) {
+    // database di prova già usato: il foglio di Barile è già tutto in calendario
+    assert.match(await page.textContent('.imp-row[data-ref="B1"]'), /già presenti/);
+  } else {
+    assert.match(await page.textContent('button[data-act="imp-go"]'), /Importa le \d+ righe pronte/);
+    await page.click('button[data-act="imp-go"]');
+    await page.waitForSelector('h3:has-text("completata")', { timeout: 20000 });
+  }
+  const barile = psql("select id from therapists where name='Barile' limit 1");
+  assert.ok(count(`select count(*) from appointments where therapist_id='${barile}'`) > 0);
+  assert.ok(count(`select count(*) from shift_versions where therapist_id='${barile}'`) > 0, 'orario standard assegnato');
+  ok('Foglio reale di Barile: fisioterapista creato con l’orario standard, letture accettate in blocco, righe pronte importate');
   assert.deepEqual(errors, [], 'nessun errore nella pagina');
 } finally {
   await browser.close(); server.kill();

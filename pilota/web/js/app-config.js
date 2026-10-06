@@ -354,6 +354,7 @@
     ambulatorio7: { label: 'Solo ambulatorio, ingresso 7:00 (pazienti 7:15–13:40)', day: [b('preparazione', '07:00', '07:15'), b('amb', '07:15', '12:00'), b('pausa', '12:00', '12:20'), b('amb', '12:20', '13:40'), b('documentazione', '13:40', '14:12')] },
     ambulatorio: { label: 'Solo ambulatorio, ingresso 8:00 (pazienti 8:15–14:40)', day: [b('preparazione', '08:00', '08:15'), b('amb', '08:15', '12:20'), b('pausa', '12:20', '12:40'), b('amb', '12:40', '14:40'), b('documentazione', '14:40', '15:12')] }
   };
+  FA.SHIFT_TEMPLATES = TEMPLATES;
   FA.actions['sh-tpl'] = () => {
     const f = A.ui.sh, t = TEMPLATES[f.tpl];
     if (t) [1, 2, 3, 4, 5].forEach(d => { f.week[d] = t.day.map(x => Object.assign({}, x)); });
