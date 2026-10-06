@@ -6,7 +6,7 @@ Questa cartella contiene tutto: le due demo che avevi online, il pilota condivis
 |---|---|---|
 | `1-DEMO-prima-versione-netlify.zip` | La prima demo (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-demo** |
 | `2-DEMO-v3-semplice-netlify.zip` | La demo v3 “semplice” (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-semplice-v3** |
-| `3-PILOTA-sito-netlify.zip` | Il pilota condiviso: importazione dei tabulati, calendario, correzioni | Un progetto Netlify **nuovo**, dopo aver compilato `config.js` |
+| `3-PILOTA-sito-netlify.zip` | Il pilota condiviso, **già collegato al vostro Supabase** (`cihywdeiyrawgcglxbcg`): importazione dei tabulati, calendario, correzioni | Progetto Netlify **fisioagenda-pilota** (non serve modificare nulla) |
 | `4-PILOTA-database/` | `setup-completo.sql` (prima installazione), `aggiornamento-database.sql` (aggiornamento), `seed.sql` (dati di esempio fittizi, facoltativo) | Supabase → SQL Editor |
 | `5-TRASCRIZIONI-tabulati.zip` | Le trascrizioni dei 17 tabulati di ottobre 2026 + un tabulato fittizio di prova | Si caricano nell'app, pagina **Importa tabulato** |
 | `6-PROGETTO-COMPLETO-codice.zip` | Tutto il codice del progetto | Copia di sicurezza |
@@ -100,6 +100,8 @@ Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei ta
 ---
 
 ## 4. Aggiornare un pilota già installato
+
+> **Il vostro caso.** Il pacchetto `3-PILOTA-sito-netlify.zip` è già collegato al vostro database: **non** va estratto né modificato. Basta il punto 1 (database) e poi trascinare lo zip, così com'è, in Netlify → **fisioagenda-pilota** → **Deploys**.
 
 1. Supabase → SQL Editor → incolla `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Si può rieseguire senza problemi e non tocca i dati.
 2. Prepara il sito come al punto 3.2 (estrai, compila `config.js` con gli **stessi** dati di prima).
