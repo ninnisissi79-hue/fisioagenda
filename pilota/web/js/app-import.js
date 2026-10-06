@@ -92,11 +92,55 @@
     S.cur = S.sheets.length - sheets.length;
     return errors;
   }
+  /**
+   * Legge un archivio .zip nel browser (nessun invio a servizi esterni): restituisce i file contenuti.
+   * Supporta i metodi "stored" e "deflate" (quelli usati da Windows, macOS e dagli strumenti comuni).
+   */
+  async function readZip(buf) {
+    const v = new DataView(buf), u8 = new Uint8Array(buf), out = [];
+    let eocd = -1;
+    for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 66000); i--) if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('Il file non è un archivio .zip valido.');
+    const n = v.getUint16(eocd + 10, true);
+    let p = v.getUint32(eocd + 16, true);
+    const dec = new TextDecoder();
+    for (let k = 0; k < n; k++) {
+      if (v.getUint32(p, true) !== 0x02014b50) break;
+      const method = v.getUint16(p + 10, true), csize = v.getUint32(p + 20, true);
+      const nl = v.getUint16(p + 28, true), xl = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true), off = v.getUint32(p + 42, true);
+      const name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+      p += 46 + nl + xl + cl;
+      if (name.endsWith('/') || /(^|\/)(__MACOSX|\.)/.test(name)) continue;
+      const start = off + 30 + v.getUint16(off + 26, true) + v.getUint16(off + 28, true);
+      const raw = u8.subarray(start, start + csize);
+      let data;
+      if (method === 0) data = raw;
+      else if (method === 8 && typeof DecompressionStream !== 'undefined') data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      else throw new Error('Archivio .zip non supportato da questo browser: estrai i file e selezionali tutti insieme.');
+      out.push({ name: name.split('/').pop(), data });
+    }
+    return out;
+  }
+  const IMG_TYPE = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', gif: 'image/gif' };
   FA.actions['imp-files'] = async el => {
-    const S = st(), files = [...(el.files || [])];
-    const photos = files.filter(f => /^image\//.test(f.type)), texts = files.filter(f => !/^image\//.test(f.type));
+    const S = st();
+    let files = [...(el.files || [])];
     const errs = [];
-    for (const f of texts) errs.push(...loadTranscript(await f.text()));
+    // archivi .zip: si aprono qui nel browser e si usano i file che contengono
+    for (const z of files.filter(f => /\.zip$/i.test(f.name))) {
+      try {
+        let items = await readZip(await z.arrayBuffer());
+        const sheets = items.filter(x => /\.json$/i.test(x.name));
+        // l'esempio fittizio si carica solo se è l'unico tabulato dell'archivio
+        if (sheets.some(x => !/^tabulato-fittizio/i.test(x.name))) items = items.filter(x => !/^tabulato-fittizio/i.test(x.name));
+        files = files.concat(items.filter(x => /\.(json|txt)$/i.test(x.name) || IMG_TYPE[(x.name.split('.').pop() || '').toLowerCase()])
+          .map(x => new File([x.data], x.name, { type: IMG_TYPE[(x.name.split('.').pop() || '').toLowerCase()] || 'application/json' })));
+      } catch (e) { errs.push(z.name + ': ' + e.message); }
+    }
+    files = files.filter(f => !/\.zip$/i.test(f.name));
+    const photos = files.filter(f => /^image\//.test(f.type)), texts = files.filter(f => !/^image\//.test(f.type));
+    const before = S.sheets.length;
+    for (const f of texts) errs.push(...loadTranscript(await f.text()).map(m => f.name + ': ' + m));
     for (const f of photos) {
       // la foto va al foglio con lo stesso nome, poi al primo foglio senza foto, altrimenti a un nuovo foglio da compilare a mano
       let s = S.sheets.find(x => !x.photo && x.photoName && H.normName(x.photoName) === H.normName(f.name))
@@ -104,7 +148,9 @@
       if (!s) { s = newSheet({ label: f.name }); S.sheets.push(s); }
       await attachPhoto(s, f);
     }
-    S.msg = errs.length ? errs.join(' ') : null;
+    const added = S.sheets.length - before;
+    S.msg = (added > 1 ? 'Caricati ' + added + ' tabulati: li trovi nelle schede qui sotto, si importano uno alla volta. ' : '') + (errs.length ? errs.join(' ') : '') || null;
+    if (added) S.cur = before;
     el.value = '';
     FA.render();
   };
@@ -312,8 +358,8 @@
     if (!FA.canEdit()) return h + '<div class="panel">Profilo di sola consultazione: non puoi importare.</div>' + historyPanel();
     h += '<div class="panel imp-steps"><strong>1. Carica</strong> le foto e la trascrizione → <strong>2.</strong> scegli fisioterapista e periodo → <strong>3.</strong> controlla l’anteprima accanto alla foto e correggi → <strong>4.</strong> conferma. Ogni importazione si può annullare.</div>';
     h += '<div class="panel"><h3>1. Foto e trascrizione</h3>' +
-      '<p class="small muted">Le foto restano su questo computer: <strong>non vengono inviate</strong> a nessun servizio. La trascrizione (file <code>.json</code>) la prepara Claude dalle foto che gli mandi, oppure compili il foglio a mano guardando la foto.</p>' +
-      '<div class="row"><label class="btn primary">Scegli foto e trascrizione…<input type="file" multiple accept="image/*,.json,.txt,application/json" data-imp-files hidden></label>' +
+      '<p class="small muted">Le foto restano su questo computer: <strong>non vengono inviate</strong> a nessun servizio. La trascrizione (file <code>.json</code>, anche più file insieme o un intero <code>.zip</code>) la prepara Claude dalle foto che gli mandi, oppure compili il foglio a mano guardando la foto.</p>' +
+      '<div class="row"><label class="btn primary">Scegli foto e trascrizione…<input type="file" multiple accept="image/*,.json,.txt,.zip,application/json,application/zip" data-imp-files hidden></label>' +
       '<button class="btn" data-act="imp-manual">+ Foglio da compilare a mano</button></div>' +
       '<details style="margin-top:8px"' + (S.paste ? ' open' : '') + '><summary class="small">Oppure incolla il testo della trascrizione</summary>' +
       '<textarea rows="4" data-bind="imp.paste" placeholder="{ &quot;formato&quot;: &quot;fisioagenda-tabulato-1&quot;, … }" style="width:100%;margin-top:6px">' + esc(S.paste) + '</textarea>' +

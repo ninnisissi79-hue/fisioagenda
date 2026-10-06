@@ -63,7 +63,7 @@ Se il database era stato installato con una versione precedente, esegui una volt
 **Costi e privacy.** Il sito **non invia le foto a nessun servizio**: restano sul computer e servono solo per il confronto accanto ai dati. La lettura delle foto la fa Claude **in chat**, cioè con lo strumento che già usi (nessuna chiave, nessun servizio da configurare, nessun costo aggiuntivo). Manda solo foto con i nomi già sostituiti, come hai fatto per gli esempi.
 
 1. **Mandami le foto** dei tabulati in chat. Ti restituisco un file di trascrizione `.json` per ogni foto: numeri, R, V, orari e giorni come li leggo, con le **caselle incerte segnalate** (mai inventate).
-2. Nell'app apri **Importa tabulato → Scegli foto e trascrizione…** e seleziona insieme la foto e il file `.json` (oppure incolla il testo della trascrizione).
+2. Nell'app apri **Importa tabulato → Scegli foto e trascrizione…** e seleziona insieme la foto e il file `.json`. Puoi anche scegliere **più file insieme** o direttamente lo **zip** con tutte le trascrizioni: si apre una scheda per ogni tabulato, da importare uno alla volta.
 3. Controlla **fisioterapista, mese, “Importa dal”, durata delle sedute** e percorso. La durata, se non è scritta sul foglio, va sempre confermata.
 4. **Anteprima:** a sinistra la foto, a destra una riga per paziente con le caselle del mese. Clicca una casella: il punto corrispondente si evidenzia sulla foto. In giallo le letture incerte: correggi il valore o conferma con ✓. Le righe con problemi hanno il bordo rosso e il motivo scritto sotto.
    - Numero sul tabulato a ritroso: **seduta n. = 11 − numero** (cicli da 10). Il numero originale resta salvato su ogni seduta.

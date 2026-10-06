@@ -216,6 +216,18 @@ try {
   assert.equal(count(`select count(*) from patients where name='${name('Gialli')}'`), 1, 'nessuna anagrafica duplicata');
   assert.equal(psql(`select a.status||' '||to_char(a.start_time,'HH24:MI') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}' order by a.created_at desc limit 1`), 'programmata 10:00');
   ok('Dal calendario: “+ Aggiungi paziente” con collega e giorno precompilati; elenco dei pazienti in trattamento → una seduta aggiunta al suo ciclo, senza nuova anagrafica né nuovo ciclo');
+  // tutto lo zip delle trascrizioni in un colpo: una scheda per tabulato (l'esempio fittizio è escluso)
+  const zipFile = path.join(tmp, 'trascrizioni.zip');
+  (await import('node:child_process')).execFileSync('zip', ['-qr', zipFile, '.'], { cwd: path.join(ROOT, 'esempi') });
+  await page.click('nav a[href="#/importa"]');
+  await page.waitForSelector('input[data-imp-files]', { state: 'attached' });
+  for (const x of await page.$$('button[data-act="imp-close"]')) { await page.click('button[data-act="imp-close"] >> nth=0'); }
+  await page.setInputFiles('input[data-imp-files]', [zipFile]);
+  await page.waitForSelector('text=Caricati 17 tabulati', { timeout: 15000 });
+  assert.equal((await page.$$('.imp-tabs button[data-act="imp-tab"]')).length, 17);
+  assert.match(await page.textContent('.imp-tabs'), /Barile 2026-10/);
+  assert.ok(!(await page.textContent('.imp-tabs')).includes('Fittizio'), 'esempio fittizio escluso');
+  ok('Zip con tutte le trascrizioni caricato in un colpo: 17 tabulati, uno per scheda');
   assert.deepEqual(errors, [], 'nessun errore nella pagina');
 } finally {
   await browser.close(); server.kill();
