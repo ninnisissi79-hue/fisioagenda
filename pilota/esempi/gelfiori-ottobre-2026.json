@@ -1,0 +1,266 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Gelfiori (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Gelfiori",
+   "mese": "2026-10",
+   "foto": "gelfiori-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 27.9,
+    "x_giorno31": 95.35,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "L1",
+     "ora": "07:15",
+     "paziente": "Bonaudi",
+     "frequenza": "Mar",
+     "giorni": [
+      2
+     ],
+     "tipo": "PAV PEL",
+     "y": 21.2,
+     "caselle": {
+      "6": "3",
+      "13": "2",
+      "20": "1"
+     },
+     "nota": "«Ma (Pav Pel)»: una seduta a settimana, il martedì"
+    },
+    {
+     "rif": "L2",
+     "ora": "07:15",
+     "paziente": "Iguti",
+     "frequenza": "Me",
+     "giorni": [
+      3
+     ],
+     "tipo": "PAV PEL",
+     "y": 26.1,
+     "caselle": {
+      "7": "8",
+      "14": "7",
+      "21": "6",
+      "28": "5"
+     },
+     "nota": "«Me (Pav Pel)», «(PP)»; oltre il 31 «+4»"
+    },
+    {
+     "rif": "L3",
+     "ora": "07:15",
+     "paziente": "Vallerga",
+     "frequenza": "Lu Gi",
+     "giorni": [
+      1,
+      4
+     ],
+     "tipo": "GC",
+     "y": 28.6,
+     "caselle": {
+      "1": "6",
+      "2": "5",
+      "5": "4",
+      "8": "3",
+      "9": "2",
+      "12": "1"
+     },
+     "dubbi": {
+      "2": "«5» di venerdì 2? (Lu-Gi)",
+      "9": "«2» di venerdì 9? (Lu-Gi)"
+     }
+    },
+    {
+     "rif": "L4",
+     "ora": "08:15",
+     "paziente": "Panetta",
+     "frequenza": "Mar",
+     "giorni": [
+      2
+     ],
+     "tipo": "PAV PEL",
+     "y": 41.6,
+     "caselle": {
+      "7": "3",
+      "14": "2",
+      "21": "1"
+     },
+     "dubbi": {
+      "7": "colonna incerta (Mar 6 o Mer 7)",
+      "14": "colonna incerta",
+      "21": "colonna incerta"
+     },
+     "dubbi_riga": [
+      "riga sovrapposta a quella sotto: controlla"
+     ]
+    },
+    {
+     "rif": "L5",
+     "ora": "08:15",
+     "paziente": "Attraghi",
+     "frequenza": "Mar",
+     "giorni": [
+      2
+     ],
+     "tipo": "PAV PEL",
+     "y": 43.7,
+     "caselle": {
+      "6": "?",
+      "13": "?",
+      "20": "?",
+      "27": "2V"
+     },
+     "dubbi": {
+      "6": "5 o 3?",
+      "13": "5 o 4?",
+      "20": "5 o 3?",
+      "27": "2V?"
+     },
+     "dubbi_riga": [
+      "numeri sovrapposti a quelli di Panetta"
+     ]
+    },
+    {
+     "rif": "L6",
+     "ora": "08:15",
+     "paziente": "Russo",
+     "frequenza": "Lu Gi",
+     "giorni": [
+      1,
+      4
+     ],
+     "tipo": "GC",
+     "y": 45.5,
+     "caselle": {
+      "1": "10",
+      "5": "9",
+      "8": "8",
+      "12": "7",
+      "15": "6",
+      "19": "5",
+      "22": "4",
+      "26": "3",
+      "29": "2"
+     },
+     "nota": "oltre il 31 «+1»"
+    },
+    {
+     "rif": "L7",
+     "ora": "12:20",
+     "paziente": "Stella",
+     "frequenza": "3v",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 69.5,
+     "caselle": {
+      "2": "2",
+      "5": "1"
+     },
+     "nota": "«//» il 5: fine ciclo",
+     "chiuso": true
+    },
+    {
+     "rif": "L8",
+     "ora": "12:20",
+     "paziente": "Tortorici",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 72.6,
+     "caselle": {
+      "6": "10",
+      "8": "9",
+      "13": "8",
+      "15": "7",
+      "20": "6",
+      "22": "5",
+      "27": "4",
+      "29": "3"
+     },
+     "dubbi": {
+      "29": "«3» di Mer 28 o Gio 29?"
+     },
+     "nota": "oltre il 31 «+2»"
+    },
+    {
+     "rif": "L9",
+     "ora": "12:50",
+     "paziente": "Milani",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 77.6,
+     "caselle": {
+      "1": "R",
+      "6": "10",
+      "8": "9",
+      "13": "8",
+      "15": "7",
+      "20": "6",
+      "22": "5",
+      "27": "4",
+      "29": "3"
+     },
+     "nota": "oltre il 31 «+2»"
+    },
+    {
+     "rif": "L10",
+     "ora": "12:50",
+     "paziente": "Brunetti",
+     "frequenza": "Mer Ven",
+     "giorni": [
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 82.2,
+     "caselle": {
+      "2": "5",
+      "7": "4",
+      "9": "3",
+      "14": "2",
+      "16": "1",
+      "20": "V"
+     },
+     "dubbi": {
+      "20": "V di Lun 19 o Mar 20?"
+     }
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "nomi in verticale (GG CB PA…)",
+     "giorno": 5,
+     "ora": "12:50",
+     "valore": "",
+     "nota": "anche il 12"
+    },
+    {
+     "paziente": "nome in verticale (GC RF…)",
+     "giorno": 1,
+     "ora": "12:20",
+     "valore": "",
+     "nota": ""
+    }
+   ],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "PAV PEL / PP = pavimento pelvico: una seduta a settimana"
+    }
+   ]
+  }
+ ]
+}

@@ -583,7 +583,7 @@
     }
     return FA.seg('pd.mode', [['nuovo', 'Nuovo paziente'], ['esistente', 'Paziente in archivio'], ['attesa', 'Dalla lista d’attesa']], f.mode) + who +
       (c ? '' : '<div class="field"><label>Percorso</label><select data-bind="pd.category_id" data-on="pd-chg">' + cats.map(x => FA.option(x.id, x.name, f.category_id)).join('') + '</select></div>' +
-        '<div class="field"><label>Durata della seduta</label>' + FA.seg('pd.duration', [['30', '30′'], ['45', '45′'], ['altro', 'Altro']], String(f.duration)) +
+        '<div class="field"><label>Durata della seduta</label>' + FA.seg('pd.duration', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], String(f.duration)) +
         (f.duration === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:110px;display:inline-block" data-bind="pd.durOther" data-on="pd-chg" value="' + esc(f.durOther) + '" placeholder="minuti">' : '') + '</div>' +
         '<div class="field"><label>Ciclo</label><div class="row">Sedute già fatte <input type="number" min="0" max="' + (f.planned - 1) + '" style="max-width:80px" data-bind="pd.done" data-on="pd-chg" value="' + esc(f.done) + '"> su ' +
         FA.seg('pd.planned', [['5', '5'], ['10', '10'], ['20', '20'], ['30', '30']], String(f.planned)) + '</div>' +

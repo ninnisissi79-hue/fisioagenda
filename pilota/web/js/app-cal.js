@@ -488,7 +488,7 @@
   function fixBlock(am, a, cyc) {
     const n = E.sessionNumber(A.ctx, a);
     if (!am.fx) am.fx = { name: FA.patName(a.patient_id), n: typeof n === 'number' ? n : '', planned: cyc.planned_sessions, treatment: cyc.treatment || '',
-      dur: [30, 45].includes(cyc.duration) ? String(cyc.duration) : 'altro', durOther: String(cyc.duration) };
+      dur: [30, 45, 60].includes(cyc.duration) ? String(cyc.duration) : 'altro', durOther: String(cyc.duration) };
     const f = am.fx, ev = A.ctx.events.get(a.patient_id + '|' + a.day);
     const canDel = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const prior = fixPrior(am, a, cyc);
@@ -498,7 +498,7 @@
         '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + E.SESSION_PRESETS.map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
         '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Sedute precedenti all’inserimento: ' + prior + '. Le altre sedute si rinumerano di conseguenza.') + '</div></div>' : '<div></div>') +
       '<div class="field"><label>Tipo di trattamento</label><input type="text" data-bind="am.fx.treatment" value="' + esc(f.treatment) + '" placeholder="es. GC, RM"></div>' +
-      '<div class="field"><label>Durata (questa e le sedute future)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['altro', 'Altro']], f.dur) +
+      '<div class="field"><label>Durata (questa e le sedute future)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], f.dur) +
         (f.dur === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:90px;display:inline-block" data-bind="am.fx.durOther" value="' + esc(f.durOther) + '">' : '') + '</div>' +
       '<div class="field"><label>Visita fisiatrica</label><label class="inline-check"><input type="checkbox" data-act-change="am-visit"' + (ev ? ' checked' : '') + FA.saveDisabled() + '> Il paziente ha la visita il ' + esc(E.fmtItDay(a.day)) + '</label>' +
         '<div class="help">Non è una seduta: è solo un promemoria sul calendario.</div></div>' +

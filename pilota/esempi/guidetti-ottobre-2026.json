@@ -1,0 +1,169 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Guidetti (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Guidetti",
+   "mese": "2026-10",
+   "foto": "guidetti-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 28.6,
+    "x_giorno31": 97.5,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "U1",
+     "ora": "07:15",
+     "paziente": "Fiora",
+     "frequenza": "Lu",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 20.7,
+     "caselle": {
+      "1": "1"
+     },
+     "nota": "«//»: ciclo finito il 1",
+     "chiuso": true
+    },
+    {
+     "rif": "U2",
+     "ora": "07:15",
+     "paziente": "Ghigo",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 23.1,
+     "caselle": {
+      "2": "4",
+      "5": "3",
+      "7": "2V",
+      "9": "1"
+     }
+    },
+    {
+     "rif": "U3",
+     "ora": "07:45",
+     "paziente": "Lupo",
+     "frequenza": "3v",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 30.4,
+     "caselle": {
+      "1": "6",
+      "5": "5",
+      "7": "4",
+      "8": "3",
+      "12": "2",
+      "13": "1",
+      "15": "R"
+     },
+     "dubbi": {
+      "8": "«3» di giovedì 8 o venerdì 9?"
+     },
+     "nota": "tipo «RM + GC + ET»"
+    },
+    {
+     "rif": "U4",
+     "ora": "12:20",
+     "paziente": "Dabba",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "GC",
+     "y": 68.0,
+     "caselle": {
+      "1": "?",
+      "7": "6",
+      "9": "5",
+      "13": "4",
+      "15": "3",
+      "20": "2V",
+      "22": "1"
+     },
+     "dubbi": {
+      "1": "4 o 7?",
+      "7": "colonna incerta (Mar 6?)",
+      "9": "colonna incerta (Gio 8?)"
+     }
+    },
+    {
+     "rif": "U5",
+     "ora": "12:20",
+     "paziente": "Bruzzone",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 70.0,
+     "caselle": {
+      "2": "3",
+      "5": "2",
+      "7": "1V"
+     },
+     "dubbi": {
+      "7": "«1V» di mercoledì 7 o giovedì 8?"
+     }
+    },
+    {
+     "rif": "U6",
+     "ora": "12:50",
+     "paziente": "Leone",
+     "frequenza": "3v",
+     "giorni": [
+      1,
+      3,
+      5
+     ],
+     "tipo": "RM",
+     "y": 75.9,
+     "caselle": {
+      "2": "R",
+      "5": "10",
+      "7": "9",
+      "9": "8",
+      "12": "7",
+      "14": "6",
+      "16": "5",
+      "19": "4",
+      "21": "3",
+      "23": "2",
+      "26": "1"
+     }
+    }
+   ],
+   "estemporanei": [
+    {
+     "paziente": "nomi in verticale (LA… LN)",
+     "giorno": 6,
+     "ora": "07:15",
+     "valore": "",
+     "nota": "anche l’8"
+    },
+    {
+     "paziente": "nomi in verticale (CA PO LO LN)",
+     "giorno": 6,
+     "ora": "07:45",
+     "valore": "",
+     "nota": "anche il 9"
+    }
+   ],
+   "note": [
+    {
+     "giorni": [],
+     "testo": "In alto «F F F» sopra gli ultimi giorni (ferie?)"
+    }
+   ]
+  }
+ ]
+}

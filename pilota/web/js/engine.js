@@ -49,7 +49,7 @@
   const CYCLE_STATUS = { in_attesa: 'In lista d’attesa', attivo: 'Attivo', sospeso: 'Sospeso', chiuso: 'Chiuso' };
   const ABSENCE_KIND = { malattia: 'Malattia', ferie: 'Ferie', permesso: 'Permesso', formazione: 'Formazione', altro: 'Altro' };
   const SESSION_PRESETS = [5, 10, 20, 30];
-  const DURATIONS = [30, 45];
+  const DURATIONS = [30, 45, 60];
 
   /* ---------------- indice dei dati ---------------- */
   function normalize(data) {

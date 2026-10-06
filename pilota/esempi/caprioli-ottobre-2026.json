@@ -1,0 +1,195 @@
+{
+ "formato": "fisioagenda-tabulato-1",
+ "nota": "Trascrizione del tabulato di Caprioli (ottobre 2026), nomi già sostituiti. Foto ricevuta a bassa risoluzione: molte caselle sono segnalate come incerte e vanno controllate sulla foto originale. «//» = fine ciclo.",
+ "fogli": [
+  {
+   "fisioterapista": "Caprioli",
+   "mese": "2026-10",
+   "foto": "caprioli-ottobre-2026.jpg",
+   "rotazione": 90,
+   "durata": null,
+   "durata_suggerita": 30,
+   "durata_nota": "le fasce sul foglio distano 30 minuti, ma la durata dipende dal paziente: puoi cambiarla per ogni riga",
+   "sedute_ciclo": 10,
+   "griglia": {
+    "x_giorno1": 25.85,
+    "x_giorno31": 94.75,
+    "h_riga": 2.4
+   },
+   "righe": [
+    {
+     "rif": "K1",
+     "ora": "08:15",
+     "paziente": "Dassira",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 24.6,
+     "caselle": {
+      "1": "?",
+      "5": "V",
+      "6": "1"
+     },
+     "dubbi": {
+      "1": "2 o 3?",
+      "6": "1 seguito da // (fine ciclo): Mar 6 o Mer 7?"
+     },
+     "chiuso": true
+    },
+    {
+     "rif": "K2",
+     "ora": "08:15",
+     "paziente": "Bertuzzi",
+     "frequenza": "2v",
+     "giorni": [
+      2,
+      4
+     ],
+     "tipo": "RM",
+     "y": 28.3,
+     "caselle": {
+      "2": "1",
+      "5": "10",
+      "8": "9",
+      "13": "8",
+      "15": "7",
+      "20": "6",
+      "22": "5",
+      "27": "4",
+      "29": "3"
+     },
+     "dubbi": {
+      "5": "«10» di lunedì: con Mar/Gio ci si aspetterebbe martedì 6"
+     },
+     "nota": "l’1 del 2 chiude il ciclo precedente, dal 5 nuovo ciclo; oltre il 31 «+2»"
+    },
+    {
+     "rif": "K3",
+     "ora": "12:50",
+     "paziente": "Caviglia",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 61.7,
+     "caselle": {
+      "2": "?",
+      "7": "V",
+      "12": "5",
+      "21": "4",
+      "26": "3",
+      "27": "V",
+      "28": "2"
+     },
+     "dubbi": {
+      "2": "«2» in grassetto: chiude un ciclo precedente o è un altro numero?"
+     },
+     "nota": "oltre il 31 «+1»; giorni irregolari (Lun, Mer)"
+    },
+    {
+     "rif": "K4",
+     "ora": "12:50",
+     "paziente": "Carcerenchi",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 63.8,
+     "caselle": {
+      "6": "8",
+      "8": "7"
+     },
+     "dubbi": {
+      "8": "7 il giovedì 8 o il mercoledì 7?"
+     },
+     "dubbi_riga": [
+      "nome poco leggibile; dopo l’8 la riga non si legge"
+     ]
+    },
+    {
+     "rif": "K5",
+     "ora": "13:20",
+     "paziente": "Torchi",
+     "frequenza": "2v",
+     "giorni": [],
+     "tipo": "GC",
+     "y": 70.9,
+     "caselle": {
+      "1": "5",
+      "7": "4",
+      "9": "3",
+      "13": "?"
+     },
+     "dubbi": {
+      "7": "colonna incerta",
+      "9": "colonna incerta",
+      "13": "«V» con un segno (2A?)"
+     },
+     "nota": "sopra il nome «Ga»"
+    },
+    {
+     "rif": "K6",
+     "ora": "13:50",
+     "paziente": "Fenoglio",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 86.3,
+     "caselle": {
+      "2": "6",
+      "5": "5",
+      "8": "4",
+      "9": "3",
+      "12": "2",
+      "14": "1V",
+      "21": "7",
+      "23": "6",
+      "26": "5",
+      "27": "4",
+      "29": "3"
+     },
+     "dubbi": {
+      "8": "4 barrato",
+      "21": "«7» dopo l’1: nuovo ciclo partito dalla 4ª?"
+     },
+     "dubbi_riga": [
+      "orario: 13:50 o 14:40 (scritto «14.40» accanto)?"
+     ],
+     "nota": "oltre il 31 «+2»"
+    },
+    {
+     "rif": "K7",
+     "ora": "14:20",
+     "paziente": "Gozzo",
+     "frequenza": "",
+     "giorni": [],
+     "tipo": "RM",
+     "y": 88.0,
+     "caselle": {
+      "1": "3",
+      "2": "2",
+      "6": "1",
+      "8": "10",
+      "9": "9",
+      "12": "8"
+     },
+     "dubbi_riga": [
+      "dopo il 12 la riga è sovrapposta a quella di Fenoglio: controlla"
+     ],
+     "nota": "sotto il nome «TF»"
+    }
+   ],
+   "estemporanei": [],
+   "note": [
+    {
+     "giorni": [
+      13,
+      14,
+      15,
+      16,
+      20
+     ],
+     "testo": "In alto, sopra i giorni, lettere «F» (ferie?)"
+    }
+   ]
+  }
+ ]
+}

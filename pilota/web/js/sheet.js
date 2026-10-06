@@ -173,7 +173,7 @@
       planned: Number(f.sedute_ciclo) || 10,
       grid: f.griglia || null,
       rows: (f.righe || []).map((r, j) => ({
-        ref: r.rif || ('R' + (j + 1)), include: r.importa !== false, name: r.paziente || '', time: r.ora || '', freq: r.frequenza || '',
+        ref: r.rif || ('R' + (j + 1)), include: r.importa !== false, dur: r.durata ? String(r.durata) : '', name: r.paziente || '', time: r.ora || '', freq: r.frequenza || '',
         weekdays: Array.isArray(r.giorni) ? r.giorni.map(Number) : [], tipo: r.tipo || '', closed: !!r.chiuso, y: r.y == null ? null : Number(r.y),
         cells: Object.assign({}, r.caselle || {}), doubts: Object.assign({}, r.dubbi || {}), rowDoubts: (r.dubbi_riga || []).map(t => ({ text: t, ok: false })),
         note: r.nota || ''

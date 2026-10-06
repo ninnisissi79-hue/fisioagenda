@@ -35,8 +35,8 @@
     s.id = ++seq;
     s.th = matchTherapist(s.thName) || (FA.isFisio() ? A.me.therapist_id || '' : '');
     s.from = defaultFrom(s.month);
-    s.durSel = s.duration ? (s.duration === 30 || s.duration === 45 ? String(s.duration) : 'altro') : '';
-    s.durOther = s.duration && s.duration !== 30 && s.duration !== 45 ? String(s.duration) : '';
+    s.durSel = s.duration ? ([30, 45, 60].includes(s.duration) ? String(s.duration) : 'altro') : '';
+    s.durOther = s.duration && ![30, 45, 60].includes(s.duration) ? String(s.duration) : '';
     s.category = defaultCategory(s.th);
     s.photo = null; s.sel = null; s.result = null; s.error = null; s.zoom = false;
     s.rows.forEach(r => { r.choice = ''; r.force = {}; r.generate = false; if (r.include == null) r.include = true; });
@@ -140,7 +140,7 @@
   FA.actions['imp-add-row'] = () => {
     const s = cur();
     s.rows.push({ ref: 'M' + (s.rows.length + 1), include: true, name: '', time: '', freq: '', weekdays: [], tipo: '', closed: false, y: null,
-      cells: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false });
+      cells: {}, doubts: {}, rowDoubts: [], note: '', choice: '', force: {}, generate: false, dur: '' });
     FA.render();
   };
   FA.actions['imp-del-row'] = el => { const s = cur(); s.rows.splice(Number(el.getAttribute('data-r')), 1); FA.render(); };
@@ -213,6 +213,8 @@
     if (s.durSel === 'altro') { const n = Number(s.durOther); return n >= 15 && n <= 120 && n % 5 === 0 ? n : 0; }
     return Number(s.durSel) || 0;
   }
+  /** durata del paziente: quella della riga se indicata, altrimenti quella del foglio */
+  function rowDur(s, r) { const n = Number(r.dur); return n >= 15 && n <= 120 && n % 5 === 0 ? n : sheetDur(s); }
   function candidates(s, r) {
     const n = H.normName(r.name);
     if (!n) return [];
@@ -241,7 +243,7 @@
     const closures = new Set(A.ctx.closures.keys());
     const an = H.analyzeRow({ cells: r.cells, doubts: r.doubts, weekdays: r.weekdays, freq: r.freq }, { month: s.month, from: s.from, planned: s.planned, today: A.today, closures, generate: r.generate });
     const res = resolve(s, r);
-    const dur = res.cycle ? res.cycle.duration : sheetDur(s);
+    const dur = res.cycle ? res.cycle.duration : rowDur(s, r);
     const time = FA.normTime(r.time);
     const block = an.blocking.slice();
     const out = { an, res, time, cells: [], dups: [], conflicts: [], block, issues: an.issues.slice(), visits: an.visits.slice() };
@@ -255,6 +257,7 @@
     const cells = an.imported.concat(an.next ? an.next.cells : []).concat(an.generated);
     if (res.target !== 'ciclo' && an.imported.length && an.prior == null) block.push('Serve almeno un numero di seduta per sapere a che punto è il ciclo.');
     if (res.target !== 'ciclo' && !an.weekdays.length && cells.length) block.push('Indica i giorni della settimana.');
+    if (res.target !== 'ciclo' && an.prior != null && an.prior >= Number(s.planned)) block.push('Ciclo già completato (' + an.prior + ' su ' + s.planned + '): per un solo recupero collega il ciclo esistente oppure escludi la riga.');
     if (res.target === 'ciclo' && res.cycle) {
       const cnt = E.cycleCounts(A.ctx, res.cycle.id);
       out.issues.unshift('Continua il ciclo in corso (' + cnt.effettuate + ' effettuate, ' + cnt.programmate + ' programmate su ' + res.cycle.planned_sessions + ').');
@@ -290,7 +293,7 @@
     if (!s.month) b.push('Indica mese e anno del tabulato.');
     if (!s.from) b.push('Indica la data da cui importare.');
     else if (s.month && s.from.slice(0, 7) !== s.month) b.push('La data di inizio deve cadere nel mese del tabulato.');
-    if (!sheetDur(s)) b.push('Scegli la durata delle sedute.');
+    if (!sheetDur(s)) b.push('Scegli la durata delle sedute (predefinita: poi puoi cambiarla per ogni paziente).');
     if (!s.category) b.push('Scegli il percorso.');
     return b;
   }
@@ -340,7 +343,7 @@
       '<div class="field"><label>Mese e anno</label><input type="month" data-bind="' + P(i, 'month') + '" data-on="imp-month" value="' + esc(s.month) + '"' + (s.month ? '' : ' class="need"') + '></div>' +
       '<div class="field"><label>Importa dal</label><input type="date" data-bind="' + P(i, 'from') + '" data-rerender value="' + esc(s.from) + '"' + (s.month ? ' min="' + s.month + '-01" max="' + s.month + '-' + H.daysInMonth(s.month) + '"' : '') + '>' +
         '<div class="help">Le caselle precedenti non diventano appuntamenti: servono solo a sapere a che seduta è il paziente.</div></div>' +
-      '<div class="field"><label>Durata delle sedute</label>' + FA.seg(P(i, 'durSel'), [['30', '30′'], ['45', '45′'], ['altro', 'Altro']], dur) +
+      '<div class="field"><label>Durata delle sedute (predefinita)</label>' + FA.seg(P(i, 'durSel'), [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], dur) +
         (dur === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:100px;display:inline-block" data-bind="' + P(i, 'durOther') + '" data-rerender value="' + esc(s.durOther) + '" placeholder="min">' : '') +
         (!dur ? '<div class="help need-txt">Da confermare' + (s.durationHint ? ': suggerita ' + s.durationHint + '′' + (s.durationNote ? ' (' + esc(s.durationNote) + ')' : '') : '') + '.</div>' : '') + '</div>' +
       '<div class="field"><label>Percorso</label><select data-bind="' + P(i, 'category') + '" data-rerender>' + (cats.length ? '' : '<option value="">— scegli prima il fisioterapista —</option>') + cats.map(c => FA.option(c.id, c.name, s.category)).join('') + '</select></div>' +
@@ -364,6 +367,13 @@
       '<div class="imp-ph-scroll' + (s.zoom ? ' zoom' : '') + '"><div class="imp-ph-wrap"><img src="' + esc(s.photo.view || s.photo.url) + '" alt="Foto del tabulato">' +
       '<div class="imp-band" style="' + band + '"></div><div class="imp-mark" style="' + mk + '"></div></div></div>' +
       '<p class="small muted" style="margin:6px 0 0">Clicca una casella a destra: il punto corrispondente si evidenzia sulla foto.</p></div>';
+  }
+  function durSelect(s, i, r, k, res) {
+    if (res.cycle) return '<span class="small muted" title="Durata del ciclo in corso">' + res.cycle.duration + '′</span>';
+    const cur = r.dur ? String(r.dur) : '';
+    const opts = [['', 'durata del foglio' + (sheetDur(s) ? ' (' + sheetDur(s) + '′)' : '')], ['30', '30′'], ['45', '45′'], ['60', '1 ora']];
+    if (cur && !opts.some(o => o[0] === cur)) opts.push([cur, cur + '′']);
+    return '<select class="imp-dur" data-bind="' + P(i, 'rows.' + k + '.dur') + '" data-rerender aria-label="Durata della seduta">' + opts.map(o => FA.option(o[0], o[1], cur)).join('') + '</select>';
   }
   function choiceSelect(s, i, r, k, res) {
     if (!res.cands.length) return '<span class="chip ok">nuovo paziente</span>';
@@ -422,6 +432,7 @@
       '<span class="chip grey">' + esc(r.ref) + '</span>' +
       '<input type="text" class="imp-name" data-bind="' + P(i, 'rows.' + k + '.name') + '" data-rerender value="' + esc(r.name) + '" placeholder="Paziente o codice" aria-label="Paziente">' +
       FA.timeField(P(i, 'rows.' + k + '.time'), r.time, ' data-rerender aria-label="Orario"') +
+      durSelect(s, i, r, k, a.res) +
       '<input type="text" class="imp-tipo" data-bind="' + P(i, 'rows.' + k + '.tipo') + '" data-rerender value="' + esc(r.tipo) + '" placeholder="Tipo (GC, RM…)" aria-label="Tipo di trattamento">' +
       '<span class="imp-wds">' + [1, 2, 3, 4, 5, 6].map(w => '<button class="btn small ' + (wds.includes(w) ? 'primary' : '') + '" data-act="imp-wd" data-r="' + k + '" data-wd="' + w + '">' + E.WD_SHORT[w] + '</button>').join('') + '</span>' +
       (r.freq ? '<span class="small muted">sul foglio: «' + esc(r.freq) + '»</span>' : '') + '<label class="inline-check small" title="Segno // dopo il nome: fine ciclo"><input type="checkbox" data-bind="' + P(i, 'rows.' + k + '.closed') + '" data-rerender' + (r.closed ? ' checked' : '') + '> // fine ciclo</label>' +
@@ -463,7 +474,7 @@
       const res = a.res;
       rows.push({
         ref: r.ref, target: res.target, patient_name: r.name.trim(), patient_id: res.patientId || null, cycle_id: res.cycleId || null, homonym: !!res.homonym,
-        category_id: s.category, treatment: r.tipo.trim().toUpperCase(), planned: Number(s.planned), prior: a.an.prior == null ? 0 : a.an.prior, duration: sheetDur(s),
+        category_id: s.category, treatment: r.tipo.trim().toUpperCase(), planned: Number(s.planned), prior: a.an.prior == null ? 0 : a.an.prior, duration: rowDur(s, r),
         weekdays: r.weekdays.length ? r.weekdays : a.an.weekdays, start: a.time,
         cells: a.cells.filter(x => !x.next).map(cellOut(r)),
         next: a.an.next ? { planned: Number(s.planned), prior: a.an.next.prior, cells: a.cells.filter(x => x.next).map(cellOut(r)) } : null,

@@ -112,10 +112,13 @@ try {
   await page.click('.panel button[data-act="seg"][data-val="30"]');
   await page.click('.imp-row[data-ref="F3"] .imp-okc');
   await page.uncheck('.imp-row[data-ref="F4"] input[data-bind$=".include"]');
+  await page.selectOption('.imp-row[data-ref="F2"] select.imp-dur', '60');
   await page.waitForFunction(() => !document.querySelector('button[data-act="imp-go"]').disabled, null, { timeout: 5000 });
   await page.click('button[data-act="imp-go"]');
   await page.waitForSelector('h3:has-text("completata")', { timeout: 15000 });
   assert.equal(count(`select count(*) from appointments where patient_id in ${pats}`), 14);
+  assert.equal(psql(`select string_agg(distinct (extract(epoch from end_time - start_time)/60)::int::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Neri')}'`), '60', 'durata di 1 ora scelta per il paziente');
+  assert.equal(psql(`select string_agg(distinct (extract(epoch from end_time - start_time)/60)::int::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}'`), '30', 'gli altri con la durata del foglio');
 
   // trascinamento: Bianchi dalle 7:15 alle 9:00 dello stesso giorno
   await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, bi[0]]);
@@ -129,7 +132,7 @@ try {
   await page.mouse.up();
   await page.waitForFunction(id => { const e = document.querySelector('.wk-appt[data-id="' + id + '"]'); return e && e.textContent.includes('09:00'); }, b0, { timeout: 15000 });
   assert.equal(psql(`select to_char(start_time,'HH24:MI') from appointments where id='${b0}'`), '09:00');
-  ok('Seduta trascinata sul calendario: spostata alle 9:00, con controllo del posto');
+  ok('Durata per paziente (1 ora per Neri, 30′ gli altri); seduta trascinata sul calendario alle 9:00, con controllo del posto');
 
   // ✎ Correggi: numerazione, tipo, visita, elimina
   await page.click(`.wk-appt[data-id="${b0}"]`);
