@@ -98,6 +98,8 @@
     ctx.byCycle.forEach(l => l.sort((a, b) => (a.day + a.start_time) < (b.day + b.start_time) ? -1 : 1));
     ctx.activeCyclesByTh = new Map();
     (data.cycles || []).forEach(c => { if (c.status === 'attivo' && c.therapist_id) push(ctx.activeCyclesByTh, c.therapist_id, c); });
+    // visite fisiatriche (eventi del paziente, non sedute)
+    ctx.events = new Map((data.patient_events || []).map(e => [e.patient_id + '|' + e.day, e]));
     return ctx;
   }
   function push(map, k, v) { if (!map.has(k)) map.set(k, []); map.get(k).push(v); }
@@ -429,6 +431,20 @@
     return c;
   }
 
+  /**
+   * Numero della seduta nel ciclo (1 = prima): sedute precedenti + posizione tra quelle che
+   * consumano un numero (effettuate, programmate, trattenute, da riprogrammare). I recuperi → 'R'.
+   */
+  function sessionNumber(ctx, a) {
+    if (a.recovery_of || a.sheet_mark === 'R') return 'R';
+    const c = ctx.cyc.get(a.cycle_id);
+    if (!c) return null;
+    const counting = x => !x.recovery_of && x.sheet_mark !== 'R' && (OCCUPYING.has(x.status) || x.status === 'da_riprogrammare');
+    if (!counting(a)) return null;
+    const list = (ctx.byCycle.get(a.cycle_id) || []).filter(counting);
+    return (c.prior_sessions || 0) + list.indexOf(a) + 1;
+  }
+
   /** Attività da sistemare calcolate dai dati (le incompatibilità vengono dal server). */
   function cycleTodos(ctx) {
     const out = [];
@@ -454,6 +470,6 @@
     SESSION_PRESETS, DURATIONS,
     normalize, makeCtx, skillLevel, therapistName, patientName, categoryName, shiftFor, dayBlocks, absenceAt, absenceOnDay,
     checkSlot, candidateStarts, substitutionOptions, proposeDistribution, validateSelections, affectedByAbsence, toVerifyAfter,
-    cycleDates, searchCycle, freeStarts, freeSeats, cycleCounts, cycleTodos
+    cycleDates, searchCycle, freeStarts, freeSeats, cycleCounts, cycleTodos, sessionNumber
   };
 });

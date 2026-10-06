@@ -417,7 +417,7 @@
     const starts = p.day && p.th ? E.freeStarts(A.ctx, p.th, p.day, dur, { patientId: a.patient_id, ignoreId: am.mode === 'recupero' ? null : a.id, cycleId: a.cycle_id }) : [];
     if (p.start && !starts.includes(p.start)) p.start = '';
     return '<h4>' + esc(title) + '</h4><div class="grid3">' +
-      '<div class="field"><label>Giorno</label><input type="date" min="' + A.today + '" data-bind="am.pick.day" data-rerender value="' + esc(p.day || '') + '"></div>' +
+      '<div class="field"><label>Giorno</label><input type="date"' + (am.mode === 'sposta' && a.day < A.today ? '' : ' min="' + A.today + '"') + ' data-bind="am.pick.day" data-rerender value="' + esc(p.day || '') + '"></div>' +
       '<div class="field"><label>Fisioterapista</label><select data-bind="am.pick.th" data-rerender>' + thOptions(cyc.category_id, p.th) + '</select></div>' +
       '<div class="field"><label>Ora (' + dur + ' min)</label><select data-bind="am.pick.start" data-rerender><option value="">' + (starts.length ? '— scegli —' : 'nessun posto libero') + '</option>' +
       starts.map(s => FA.option(s, s + (s === a.start_time ? ' (stesso orario)' : ''), p.start)).join('') + '</select></div></div>' +
@@ -428,7 +428,7 @@
     const id = el.getAttribute('data-id');
     if (!A.ctx.appt.get(id)) return;
     const a = A.ctx.appt.get(id);
-    A.ui.am = { id, mode: a.status === 'da_riprogrammare' ? 'sposta' : null, out: {}, pick: { day: a.day < A.today ? A.today : a.day, th: a.therapist_id, start: a.start_time } };
+    A.ui.am = { id, mode: a.status === 'da_riprogrammare' ? 'sposta' : (el.getAttribute('data-mode') || null), out: {}, pick: { day: a.day < A.today && a.status !== 'programmata' ? A.today : a.day, th: a.therapist_id, start: a.start_time } };
     FA.openModal({ title: 'Appuntamento', live: true, body: apptBody, foot: apptFoot, wide: true });
   };
   function apptBody() {
@@ -436,8 +436,11 @@
     if (!a) return '<p>L’appuntamento non esiste più (modificato da un collega).</p>';
     const cyc = A.ctx.cyc.get(a.cycle_id), cnt = E.cycleCounts(A.ctx, a.cycle_id);
     const iss = A.issues.filter(i => i.appointment_id === a.id);
+    const n = E.sessionNumber(A.ctx, a), ev = A.ctx.events.get(a.patient_id + '|' + a.day);
     let h = '<div class="row between"><div><h3 style="margin:0">' + esc(FA.patName(a.patient_id)) + ' ' + FA.prio(cyc.priority) + '</h3>' +
-      '<div class="muted">' + esc(FA.catName(cyc.category_id)) + ' · ciclo di ' + cyc.planned_sessions + ' sedute (' + cnt.effettuate + ' effettuate)</div></div>' +
+      '<div class="muted">' + (n ? '<strong>' + (n === 'R' ? 'Recupero' : 'Seduta ' + n + ' di ' + cyc.planned_sessions) + '</strong> · ' : '') + (cyc.treatment ? esc(cyc.treatment) + ' · ' : '') +
+      esc(FA.catName(cyc.category_id)) + ' · ciclo di ' + cyc.planned_sessions + ' sedute (' + cnt.effettuate + ' effettuate)' +
+      (a.sheet_number ? ' · sul tabulato: ' + a.sheet_number : '') + (ev ? ' · <span class="chip info">V visita fisiatrica</span>' : '') + '</div></div>' +
       '<button class="btn small" data-act="open-patient" data-id="' + a.patient_id + '">Scheda paziente</button></div>' +
       '<p style="margin-top:10px"><strong>' + esc(FA.dayLabel(a.day)) + ', ' + a.start_time + '–' + a.end_time + '</strong> con <strong>' + esc(FA.thName(a.therapist_id)) + '</strong> ' + FA.statusChip(a) +
       (a.original_therapist_id ? ' <span class="chip info">sostituzione (' + (a.substitute_kind === 'periodo' ? 'periodo' : 'singola seduta') + ') di ' + esc(FA.thName(a.original_therapist_id)) + '</span>' : '') + '</p>' +
@@ -454,6 +457,7 @@
       '<button class="btn small" data-act="am-quick" data-s="assente"' + FA.saveDisabled() + '>Assente</button>' +
       '<button class="btn small" data-act="am-quick" data-s="annullata"' + FA.saveDisabled() + '>Annullata dal paziente</button></div>';
     h += '<div class="row" style="margin:10px 0">' +
+      '<button class="btn ' + (am.mode === 'correggi' ? 'primary' : '') + '" data-act="am-mode" data-m="correggi">✎ Correggi</button>' +
       (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito / assenza' : 'Correggi esito') + '</button>' : '') +
       (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Sposta solo questa seduta</button>' : '') +
       (canRecover ? '<button class="btn ' + (am.mode === 'recupero' ? 'primary' : '') + '" data-act="am-mode" data-m="recupero">Programma il recupero</button>' : '') + '</div>';
@@ -477,8 +481,68 @@
       h += '</div>';
     }
     if (am.mode === 'recupero') h += '<div class="panel">' + pickBlock(am, a, cyc, 'Data e ora del recupero') + '</div>';
+    if (am.mode === 'correggi') h += fixBlock(am, a, cyc);
     return h + FA.errBox(am.error);
   }
+  /* -------- correzione rapida: nome, numerazione, sedute previste, durata, tipo, visita, elimina -------- */
+  function fixBlock(am, a, cyc) {
+    const n = E.sessionNumber(A.ctx, a);
+    if (!am.fx) am.fx = { name: FA.patName(a.patient_id), n: typeof n === 'number' ? n : '', planned: cyc.planned_sessions, treatment: cyc.treatment || '',
+      dur: [30, 45].includes(cyc.duration) ? String(cyc.duration) : 'altro', durOther: String(cyc.duration) };
+    const f = am.fx, ev = A.ctx.events.get(a.patient_id + '|' + a.day);
+    const canDel = a.status === 'programmata' || a.status === 'da_riprogrammare';
+    const prior = fixPrior(am, a, cyc);
+    return '<div class="panel"><div class="grid3">' +
+      '<div class="field"><label>Nome del paziente</label><input type="text" data-bind="am.fx.name" value="' + esc(f.name) + '"></div>' +
+      (typeof n === 'number' ? '<div class="field"><label>Questa è la seduta n.</label><div class="row"><input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="am.fx.n" data-num data-rerender value="' + esc(f.n) + '"> di ' +
+        '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + E.SESSION_PRESETS.map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
+        '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Sedute precedenti all’inserimento: ' + prior + '. Le altre sedute si rinumerano di conseguenza.') + '</div></div>' : '<div></div>') +
+      '<div class="field"><label>Tipo di trattamento</label><input type="text" data-bind="am.fx.treatment" value="' + esc(f.treatment) + '" placeholder="es. GC, RM"></div>' +
+      '<div class="field"><label>Durata (questa e le sedute future)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['altro', 'Altro']], f.dur) +
+        (f.dur === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:90px;display:inline-block" data-bind="am.fx.durOther" value="' + esc(f.durOther) + '">' : '') + '</div>' +
+      '<div class="field"><label>Visita fisiatrica</label><label class="inline-check"><input type="checkbox" data-act-change="am-visit"' + (ev ? ' checked' : '') + FA.saveDisabled() + '> Il paziente ha la visita il ' + esc(E.fmtItDay(a.day)) + '</label>' +
+        '<div class="help">Non è una seduta: è solo un promemoria sul calendario.</div></div>' +
+      '</div><div class="row" style="margin-top:8px"><button class="btn primary" data-act="am-fix"' + FA.saveDisabled() + '>Salva le correzioni</button>' +
+      '<button class="btn" data-act="am-mode" data-m="sposta">Sposta (giorno, ora, collega)</button>' +
+      (canDel ? '<button class="btn danger" data-act="am-del"' + FA.saveDisabled() + '>Elimina questa seduta (inserita per errore)</button>' : '') + '</div>' +
+      '<p class="small muted" style="margin-top:6px">Per cambiare giorno o ora puoi anche <strong>trascinare</strong> la seduta sul calendario.</p></div>';
+  }
+  /** sedute precedenti che rendono "a" la seduta n. f.n */
+  function fixPrior(am, a, cyc) {
+    const f = am.fx;
+    const cur = E.sessionNumber(A.ctx, a);
+    if (typeof cur !== 'number' || !f.n) return cyc.prior_sessions || 0;
+    const p = (cyc.prior_sessions || 0) + (Number(f.n) - cur);
+    return p >= 0 && p < Number(f.planned) ? p : null;
+  }
+  FA.actions['am-fix'] = async () => {
+    const am = A.ui.am, a = A.ctx.appt.get(am.id), cyc = A.ctx.cyc.get(a.cycle_id), f = am.fx, pat = A.ctx.pat.get(a.patient_id);
+    const prior = fixPrior(am, a, cyc);
+    const dur = f.dur === 'altro' ? Number(f.durOther) : Number(f.dur);
+    if (prior == null) { am.error = 'Numero di seduta non possibile: deve stare tra 1 e ' + f.planned + '.'; FA.renderModal(); return; }
+    if (!(dur >= 15 && dur <= 120 && dur % 5 === 0)) { am.error = 'Durata non valida (da 15 a 120 minuti, multipli di 5).'; FA.renderModal(); return; }
+    const p = {};
+    if (prior !== (cyc.prior_sessions || 0)) p.prior_sessions = prior;
+    if (Number(f.planned) !== cyc.planned_sessions) p.planned_sessions = Number(f.planned);
+    if (f.treatment.trim().toUpperCase() !== (cyc.treatment || '')) p.treatment = f.treatment.trim().toUpperCase();
+    if (dur !== cyc.duration) p.duration = dur;
+    try {
+      if (f.name.trim() && f.name.trim() !== pat.name) await FA.save('Nome del paziente', () => FA.rpc('update_patient', { p_id: pat.id, p_version: pat.version, p_name: f.name.trim(), p_note: pat.note || '' }));
+      if (Object.keys(p).length) await FA.save('Ciclo corretto', () => FA.rpc('quick_edit_cycle', { p_cycle: cyc.id, p_version: A.ctx.cyc.get(cyc.id).version, p }));
+      am.fx = null; am.mode = null; am.error = null; FA.renderModal();
+    } catch (e) { am.error = e.message; FA.renderModal(); }
+  };
+  FA.actions['am-del'] = async () => {
+    const am = A.ui.am, a = A.ctx.appt.get(am.id);
+    if (!confirm('Eliminare la seduta di ' + FA.patName(a.patient_id) + ' del ' + E.fmtItDay(a.day) + ' alle ' + a.start_time + '?\nUsalo solo per una seduta inserita per errore: per un’assenza registra invece l’esito.')) return;
+    try { await FA.save('Seduta eliminata', () => FA.rpc('delete_appointment', { p_id: a.id, p_version: a.version, p_note: 'inserita per errore' })); FA.closeModal(); }
+    catch (e) { am.error = e.message; FA.renderModal(); }
+  };
+  FA.actions['am-visit'] = async el => {
+    const am = A.ui.am, a = A.ctx.appt.get(am.id);
+    try { await FA.save(el.checked ? 'Visita fisiatrica segnata' : 'Visita fisiatrica tolta', () => FA.rpc('save_patient_event', { p_patient: a.patient_id, p_day: a.day, p_note: '', p_delete: !el.checked })); }
+    catch (e) { am.error = e.message; FA.renderModal(); }
+  };
   /** variazione di orario/fisioterapista per più sedute del ciclo (stessi giorni) */
   function rangeBlock(am, a, cyc) {
     const r = am.rg || (am.rg = { th: a.therapist_id, time: a.start_time, all: false, to: E.addDays(a.day, 28) });
@@ -504,7 +568,7 @@
     const am = A.ui.am;
     if (am.mode === 'sposta' && am.scope && am.scope !== 'solo')
       return '<button class="btn" data-act="close-modal">Chiudi</button><button class="btn primary" data-act="am-range"' + (am.rgOk ? FA.saveDisabled() : ' disabled') + '>Applica alle ' + (am.rgRows ? am.rgRows.length : 0) + ' sedute</button>';
-    const btn = !am.mode ? '' : am.mode === 'esito' ? 'am-outcome' : am.mode === 'sposta' ? 'am-move' : 'am-recover';
+    const btn = !am.mode || am.mode === 'correggi' ? '' : am.mode === 'esito' ? 'am-outcome' : am.mode === 'sposta' ? 'am-move' : 'am-recover';
     const label = { 'am-outcome': 'Salva esito', 'am-move': 'Sposta la seduta', 'am-recover': 'Prenota il recupero' }[btn];
     return '<button class="btn" data-act="close-modal">Chiudi</button>' + (btn ? '<button class="btn primary" data-act="' + btn + '"' + FA.saveDisabled() + '>' + (A.saving ? 'Salvataggio…' : label) + '</button>' : '');
   }
@@ -528,7 +592,7 @@
       FA.closeModal();
     } catch (e) { am.error = e.message; FA.renderModal(); }
   };
-  FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.error = null; FA.renderModal(); };
+  FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.error = null; A.ui.am.fx = null; FA.renderModal(); };
   FA.actions['open-patient'] = el => { FA.closeModal(); FA.go('paziente', el.getAttribute('data-id')); };
   FA.actions['am-outcome'] = async () => {
     const am = A.ui.am, a = A.ctx.appt.get(am.id), o = am.out;

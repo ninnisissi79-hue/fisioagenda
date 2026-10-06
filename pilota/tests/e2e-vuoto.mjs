@@ -302,12 +302,12 @@ try {
   await page.waitForSelector('.drawer');
   await page.fill('.drawer input[data-bind="pd.name"]', 'Quarta Seduta');
   await page.dispatchEvent('.drawer input[data-bind="pd.name"]', 'change');
-  await page.fill('.drawer input[data-bind="pd.at"]', '4');
-  await page.dispatchEvent('.drawer input[data-bind="pd.at"]', 'change');
+  await page.fill('.drawer input[data-bind="pd.done"]', '3');
+  await page.dispatchEvent('.drawer input[data-bind="pd.done"]', 'change');
   await page.click('.drawer button[data-act="pd-day"][data-wd="3"]');
   await page.click('.drawer button[data-act="pd-day"][data-wd="5"]');
   await page.waitForSelector('.drawer .form-note:has-text("Tutte disponibili")', { timeout: 10000 });
-  assert.match(await page.textContent('.drawer'), /3 sedute già svolte/);
+  assert.match(await page.textContent('.drawer'), /La prossima è la 4ª \(le 3 già fatte contano come effettuate\)/);
   assert.equal((await page.$$('.wk-ghost')).length >= 3, true, 'anteprima delle sedute sul calendario');
   await page.click('.drawer button:has-text("Conferma")');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });

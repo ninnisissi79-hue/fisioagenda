@@ -1,0 +1,39 @@
+{
+  "formato": "fisioagenda-tabulato-1",
+  "nota": "Trascrizione della foto del tabulato di Perato (ottobre 2026), nomi dei pazienti già sostituiti. Numeri a ritroso: seduta n. = 11 − numero. Le caselle incerte sono segnalate e vanno controllate sulla foto.",
+  "fogli": [{
+    "fisioterapista": "Perato",
+    "mese": "2026-10",
+    "foto": "perato-ottobre-2026.jpg",
+    "rotazione": 270,
+    "durata": null,
+    "durata_suggerita": 30,
+    "durata_nota": "le fasce sul foglio distano 30 minuti: 12:50, 13:20, 13:50, 14:20",
+    "sedute_ciclo": 10,
+    "griglia": { "x_giorno1": 27.0, "x_giorno31": 90.8, "h_riga": 2.6 },
+    "righe": [
+      { "rif": "P1", "ora": "12:50", "paziente": "Gracefa", "frequenza": "Lu", "giorni": [1], "tipo": "GC", "y": 64.0,
+        "caselle": { "5": "2", "7": "V", "12": "1" },
+        "nota": "sopra i numeri una sigla «GG/EG», non interpretata" },
+      { "rif": "P2", "ora": "12:50", "paziente": "Vacca", "frequenza": "2v", "giorni": [2, 4], "tipo": "GC", "y": 67.7,
+        "caselle": { "1": "8", "6": "7", "8": "6", "13": "5", "15": "4", "20": "3", "22": "2", "27": "1V" },
+        "dubbi": { "6": "colonna incerta (Mar 6 o Mer 7): scelta per la frequenza Mar/Gio", "8": "colonna incerta (Gio 8 o Ven 9)", "13": "colonna incerta (Mar 13 o Mer 14)", "15": "colonna incerta (Gio 15 o Ven 16)", "27": "V1 sbiadito" } },
+      { "rif": "P3", "ora": "13:50", "paziente": "Margiotta", "frequenza": "2v", "giorni": [], "tipo": "GC", "y": 81.0,
+        "caselle": { "1": "2", "6": "?" },
+        "dubbi": { "6": "segno scuro: 1?" } },
+      { "rif": "P4", "ora": "13:50", "paziente": "Bouzerda", "frequenza": "", "giorni": [], "tipo": "", "y": 85.0,
+        "caselle": { "2": "3", "5": "2", "8": "V", "9": "1" },
+        "dubbi_riga": ["giorni della settimana non scritti (caselle Ven 2, Lun 5, Ven 9)", "il 5 sembra scritto anche «Recupero»: è un recupero?"],
+        "nota": "dopo il nome una sigla «BC…»" }
+    ],
+    "estemporanei": [
+      { "paziente": "nome in verticale (Bonacc…?)", "giorno": 5, "ora": "", "valore": "", "y": 31.0, "nota": "prima fascia (8:15 o 9:15?)" },
+      { "paziente": "GRA CEF … GC", "giorno": 19, "ora": "", "valore": "", "y": 31.0, "nota": "prima fascia (8:15 o 9:15?): forse Gracefa" }
+    ],
+    "note": [
+      { "giorni": [20], "testo": "Corso" },
+      { "giorni": [26, 27], "testo": "Gruppo …" },
+      { "giorni": [], "testo": "Orario della prima fascia: 8:15 o 9:15? (seconda fascia 8:45)" }
+    ]
+  }]
+}

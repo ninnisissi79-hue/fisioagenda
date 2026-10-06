@@ -10,8 +10,10 @@
   'use strict';
 
   const TABLES = ['categories', 'therapists', 'therapist_skills', 'shift_versions', 'shift_templates', 'day_overrides', 'closures',
-    'absences', 'patients', 'cycles', 'appointments', 'profiles'];
+    'absences', 'patients', 'cycles', 'appointments', 'profiles', 'import_batches', 'patient_events'];
   const PAGE = 1000;
+  // tabelle aggiunte con l'aggiornamento del database: se mancano l'app funziona lo stesso (senza importazione)
+  const OPTIONAL = new Set(['import_batches', 'patient_events']);
 
   async function fetchAll(sb, table, build) {
     const rows = [];
@@ -29,6 +31,7 @@
   /** Carica tutti i dati necessari. Gli appuntamenti da `sinceDay` in avanti. */
   async function loadAll(sb, sinceDay) {
     const out = {};
+    out.missing = [];
     await Promise.all(TABLES.map(async t => {
       out[t] = await fetchAll(sb, t, q => {
         if (t === 'appointments') return q.gte('day', sinceDay).order('id');
@@ -37,7 +40,12 @@
         if (t === 'closures') return q.order('day');
         if (t === 'shift_templates') return q.order('name');
         if (t === 'profiles') return q.order('user_id');
+        if (t === 'patient_events') return q.gte('day', sinceDay).order('id');
         return q.order('id');
+      }).catch(e => {
+        if (!OPTIONAL.has(t)) throw e;
+        out.missing.push(t);
+        return [];
       });
     }));
     return out;

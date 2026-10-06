@@ -1,7 +1,7 @@
 # FisioAgenda — versione pilota condivisa
 
 Progetto **separato** dalle demo precedenti, che restano invariate: v3 nel branch `fisioagenda-semplice-v3` e nella cartella principale, con i loro siti Netlify.
-Parte dalla versione semplice concordata: percorsi *Mano* e *Chirurgia della mano*, categoria di priorità, prima seduta oppure continuazione del ciclo. Non gestisce fisiatri né visite fisiatriche.
+Parte dalla versione semplice concordata: percorsi *Mano* e *Chirurgia della mano*, categoria di priorità, prima seduta oppure continuazione del ciclo. Non gestisce l'agenda dei fisiatri: le visite fisiatriche (la «V» dei tabulati) sono solo promemoria sul paziente.
 
 > **Solo pazienti fittizi.** Non inserire dati reali: il pilota non è stato valutato per dati sanitari reali (privacy, contratti, sede dei dati).
 
@@ -31,6 +31,8 @@ Browser (PC/tablet)  ──HTTPS──▶  Supabase (piano gratuito)
 | Assenza imprevista | Fisioterapista → oggi / altro giorno / più giorni → giornata intera o fascia oraria → “rientro non noto”, con data fino a cui organizzare. Appuntamenti coinvolti con sostituti: stesso orario e competenza specifica, poi gli altri abilitati, poi gli orari diversi (⚠). La proposta distribuisce i pazienti su più colleghi ed è modificabile. Due scelte sullo stesso posto sono marcate come alternative e bloccano la conferma. Senza soluzione: “da riprogrammare” con motivo. Si distinguono sostituzione per una seduta, sostituzione per il periodo e cambio stabile del fisioterapista. Riepilogo prima della conferma, esito per ogni voce. |
 | Calendario e paziente | Spostare una sola seduta (giorno, ora, fisioterapista); modificare le sedute future da una data; esito della seduta (effettuata, assenza, annullata dal paziente o dal servizio) con recupero; sospensione con motivo (ticket, clinico, indisponibilità, altro) e scelta esplicita tra posti mantenuti (con rivalutazione) o liberati; ripresa con nuova verifica; chiusura anticipata con anteprima dei posti liberati. |
 | Calendario del fisioterapista | Posto di lavoro unico: navigazione libera tra le date (giorno/settimana). “✎ Orario” (coordinatore/programmatore): pennelli per ambulatorio, reparto, pausa, cartelle/adempimenti, segreteria, corso, permesso a ore, recupero ore, briefing; trascina per dipingere (15′ con aggancio ai bordi), sposta e ridimensiona, orari precisi scritti liberamente (12:20), duplica e copia giornate, schemi riutilizzabili; bozza + Salva per solo quelle date, da una data in poi o per un periodo (con ritorno automatico), con verifica dei conflitti e elenco degli appuntamenti da sistemare. Clic su uno spazio libero: paziente (anche già alla seduta n. X di Y) con orari diversi per giorno e anteprima delle sedute sul calendario; variazioni “solo questa seduta / questa e le successive / dal … al …”. |
+| Importa tabulato | Foto del tabulato cartaceo + trascrizione (preparata da Claude in chat, nessun servizio esterno dal sito): fisioterapista, mese, “importa dal”, durata; anteprima con la foto accanto e la casella evidenziata; numeri a ritroso (seduta n. = 11 − numero, originale conservato), R recupero, V visita fisiatrica (evento del paziente, non seduta); letture incerte in giallo da correggere o confermare; pazienti già presenti, doppioni, foto già importate o sovrapposte, conflitti con “importa comunque” solo per fuori turno; date passate solo programmate; sedute oltre quelle lette solo su scelta esplicita; pazienti di colleghi trattati in sostituzione; annullamento dell'importazione. |
+| Correzioni rapide | Dal calendario del collega: trascina una seduta per cambiarne giorno/ora; “✎ Correggi” per nome, numero della seduta, sedute previste, tipo, durata, visita fisiatrica ed eliminazione di una seduta inserita per errore; spazio libero → paziente in archivio (aggiunge le sedute mancanti al ciclo in corso), sedute già fatte → prossima seduta. |
 | Configurazione | 18 fisioterapisti, competenze (specifica/abilitato), solo ambulatorio o anche reparto, turni settimanali individuali con decorrenza e storico (conflitti mostrati prima del salvataggio), variazioni giornaliere, ferie e assenze, percorsi, festività, utenti, backup e ripristino. |
 | Regole mantenute | Sedute da 30 o 45 minuti; giorni e orario ricorrenti; cicli da 5, 10, 20 o 30 sedute; posti certi distinti da quelli solo probabili, che non sono prenotabili. |
 
@@ -38,8 +40,8 @@ Browser (PC/tablet)  ──HTTPS──▶  Supabase (piano gratuito)
 
 Verifiche su un'installazione **locale completa** di Supabase (stessi componenti del servizio online, avviati con Docker): database, login, permessi e tempo reale **reali**, non simulati. Non è ancora stato verificato sul progetto online, che va creato (vedi sotto).
 
-- `npm test`: **10 test del motore**, senza server. Turni individuali, distribuzione tra più sostituti, nessun sostituto, cambio orario, alternative, assenza parziale o senza rientro, posti probabili, festività, conteggi.
-- `npm run test:server`: **21 test sul server** (tra cui ruolo fisioterapista, previsione dei cicli, programmatore, ciclo già in corso, calendario flessibile):
+- `npm test`: **10 test del motore** e **9 test della lettura dei tabulati** (numeri a ritroso, R, V, salti, frequenza, data di inizio), senza server. Turni individuali, distribuzione tra più sostituti, nessun sostituto, cambio orario, alternative, assenza parziale o senza rientro, posti probabili, festività, conteggi.
+- `npm run test:server`: **21 test sul server** più **5 sull'importazione e le correzioni rapide** (numeri a ritroso, date passate solo programmate, nessun doppione, conflitti tutto-o-niente, annullamento, mese successivo, sostituzioni, ruolo fisioterapista, elimina/rinumera/durata/sedute aggiunte/visite, spostamento di una seduta passata) (tra cui ruolo fisioterapista, previsione dei cicli, programmatore, ciclo già in corso, calendario flessibile):
   - permessi (sola consultazione, operatore che tenta modifiche riservate, scrittura diretta sulle tabelle, utente non autenticato, account disattivato);
   - **prenotazione simultanea dello stesso posto** da parte di due utenti, ripetuta tre volte;
   - modifiche contemporanee;
@@ -57,6 +59,7 @@ Verifiche su un'installazione **locale completa** di Supabase (stessi componenti
   - tempo reale;
   - backup e ripristino.
 - `node tests/e2e-vuoto.mjs`: **15 prove nel browser partendo da archivio vuoto** (inserimento colleghi, turni dipinti sul calendario con orari precisi, paziente dal calendario, variazioni per periodo, recupero, account fisioterapista).
+- `npm run test:e2e-import`: **8 prove nel browser** con un tabulato fittizio: foto accanto ai dati, letture incerte, conferma, ricarica senza doppioni, annullamento, trascinamento, ✎ Correggi, paziente in archivio dallo spazio libero.
 - `npm run test:e2e`: **20 prove nel browser** con tre colleghi collegati insieme. Comprende la stessa prenotazione confermata da due utenti nello stesso momento, l'aggiornamento visibile senza ricaricare, la mancanza di connessione e il layout su tablet 1024×768.
 
 ## Cosa resta da fare (da parte tua)
@@ -74,6 +77,7 @@ Finché questi passi non sono fatti, la condivisione **non è attiva**: il pilot
 - La ricerca di un nuovo ciclo cerca lo stesso fisioterapista e lo stesso orario per tutte le date. Orari diversi o un cambio di collega si gestiscono poi seduta per seduta.
 - Dati caricati: appuntamenti degli ultimi 120 giorni e futuri. È adeguato per il pilota; per anni di storico servirà la paginazione per periodo.
 - Nessuna stampa o esportazione PDF/Excel dell'agenda.
+- La lettura delle foto dei tabulati non avviene nel sito (nessun servizio esterno, nessun costo): la trascrizione la prepara Claude in chat dalle foto anonimizzate, oppure si compila il foglio a mano nell'anteprima. Le foto non vengono salvate sul server, solo la loro impronta per riconoscere i doppioni.
 
 ## Per chi sviluppa
 
@@ -82,7 +86,8 @@ supabase/migrations/   schema, vincoli, permessi, funzioni (le regole di riferim
 supabase/seed.sql      dati dimostrativi fittizi
 supabase/setup-completo.sql   le migrazioni in un unico file per l'editor SQL (npm run build)
 web/                   sito statico (index.html, css, js); config.example.js → config.js
-tests/                 engine.test.mjs, server.test.mjs, e2e.mjs
+tests/                 engine.test.mjs, sheet.test.mjs, server.test.mjs, import.test.mjs, e2e*.mjs
+esempi/                tabulato fittizio (foto + trascrizione) e trascrizioni dei tabulati di prova
 tools/                 serve.js (server locale), local-config.mjs, build.mjs
 ```
 

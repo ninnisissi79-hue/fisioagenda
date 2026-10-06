@@ -308,7 +308,7 @@
 
   /* ---------------- struttura della pagina ---------------- */
   const NAV = [
-    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['pazienti', 'Pazienti'],
+    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['importa', 'Importa tabulato'], ['pazienti', 'Pazienti'],
     ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['config', 'Configurazione'], ['storico', 'Storico']
   ];
   function connLabel() {
@@ -437,6 +437,11 @@
     const hook = el.getAttribute('data-on');
     if (hook && FA.actions[hook]) FA.actions[hook](el, ev, path);
     if (el.hasAttribute('data-rerender')) { if (A.modal && document.getElementById('modal-root').contains(el)) renderModal(); else render(); }
+  });
+  // caselle di controllo con un'azione immediata al cambio (data-act-change="nome-azione")
+  document.addEventListener('change', ev => {
+    const t = ev.target, k = t.getAttribute && t.getAttribute('data-act-change');
+    if (k && FA.actions[k]) Promise.resolve(FA.actions[k](t, ev)).catch(e => console.error(e));
   });
   document.addEventListener('submit', ev => {
     const f = ev.target.closest('[data-submit]');

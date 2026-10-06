@@ -114,9 +114,11 @@
       occ.forEach(a => {
         const c = ctx.cyc.get(a.cycle_id);
         const iss = A.issues.find(i => i.appointment_id === a.id && i.kind !== 'esito_mancante');
-        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (iss ? ' issue' : ''),
-          '<strong>' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '</strong> ' + FA.prio(c ? c.priority : 'NI') +
-          '<br><span class="small">' + esc(c ? FA.catName(c.category_id) : '') + (a.status !== 'programmata' ? ' · ' + esc(E.STATUS[a.status]) : '') +
+        const n = E.sessionNumber(ctx, a), ev = ctx.events.get(a.patient_id + '|' + a.day);
+        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (iss ? ' issue' : '') + (can && a.status === 'programmata' ? ' movable' : ''),
+          '<strong>' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '</strong> ' + (n ? '<span class="wk-n" title="' + (n === 'R' ? 'Recupero' : 'Seduta ' + n + ' di ' + (c ? c.planned_sessions : '?')) + '">' + (n === 'R' ? 'R' : n + '/' + (c ? c.planned_sessions : '?')) + '</span> ' : '') +
+          (ev ? '<span class="wk-v" title="Visita fisiatrica">V</span> ' : '') + FA.prio(c ? c.priority : 'NI') +
+          '<br><span class="small">' + (c && c.treatment ? esc(c.treatment) + ' · ' : '') + esc(c ? FA.catName(c.category_id) : '') + (a.status !== 'programmata' ? ' · ' + esc(E.STATUS[a.status]) : '') +
           (a.original_therapist_id ? ' · sostituisce ' + esc(FA.thName(a.original_therapist_id)) : '') + (a.recovery_of ? ' · recupero' : '') + (iss ? ' · ⚠ ' + esc(iss.message) : '') + '</span>',
           ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0"');
       });
@@ -162,7 +164,7 @@
         (nDraft ? '<div class="draft-bar"><span><strong>Bozza:</strong> ' + nDraft + ' giornat' + (nDraft === 1 ? 'a modificata' : 'e modificate') + ' (non ancora salvat' + (nDraft === 1 ? 'a' : 'e') + ')</span><span class="grow"></span>' +
           '<button class="btn small" data-act="pt-discard">Annulla bozza</button><button class="btn small primary" data-act="pt-save"' + FA.saveDisabled() + '>Salva…</button></div>' : '');
     } else {
-      html += '<p class="small muted" style="margin:6px 0 0">' + (can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (anche già in trattamento); clicca un paziente per effettuata, assenza, recupero o spostamento.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p>';
+      html += '<p class="small muted" style="margin:6px 0 0">' + (can ? 'Clicca uno spazio <strong>libero</strong> per inserire un paziente (anche già in trattamento); clicca un paziente per effettuata, assenza, recupero o ✎ correzioni; <strong>trascinalo</strong> per cambiare giorno od ora.' : 'Consultazione: puoi modificare solo il tuo calendario.') + '</p>';
     }
     html += '</div>';
     if (P.effects && P.effects.length) {
@@ -188,7 +190,7 @@
 
   /* ---------------- disegno con il puntatore ---------------- */
   let drag = null;
-  FA.gestureActive = () => !!drag;
+  FA.gestureActive = () => !!drag || !!(mv && mv.moved);
   const snapM = (m, step) => Math.round(m / step) * step;
   /** minuto sotto il puntatore: si aggancia ai bordi delle fasce vicine (entro 6′), altrimenti alla griglia (15′, Alt = 5′) */
   function pointerMin(col, clientY, step, edges) {
@@ -278,6 +280,57 @@
     }
     FA.render();
   });
+
+  /* ---------------- trascinamento di una seduta (cambio di giorno o di ora) ---------------- */
+  let mv = null, swallowClick = false;
+  document.addEventListener('pointerdown', ev => {
+    if (painting() || ev.button !== 0) return;
+    const el = ev.target.closest('.wk-appt.movable');
+    if (!el || A.view !== 'calendario') return;
+    const a = A.ctx.appt.get(el.getAttribute('data-id'));
+    if (!a) return;
+    const col = el.closest('.wk-col');
+    const grab = Number(col.getAttribute('data-min')) + (ev.clientY - col.getBoundingClientRect().top) / PX - E.toMin(a.start_time);
+    mv = { a, el, x0: ev.clientX, y0: ev.clientY, grab, moved: false, target: null };
+  });
+  document.addEventListener('pointermove', ev => {
+    if (!mv) return;
+    if (!mv.moved && Math.hypot(ev.clientX - mv.x0, ev.clientY - mv.y0) < 6) return;
+    mv.moved = true;
+    const under = document.elementFromPoint(ev.clientX, ev.clientY);
+    const col = under && under.closest('.wk-col');
+    if (!col) return;
+    const a = mv.a, dur = E.toMin(a.end_time) - E.toMin(a.start_time);
+    const m = Math.max(0, snapM(Number(col.getAttribute('data-min')) + (ev.clientY - col.getBoundingClientRect().top) / PX - mv.grab, 5));
+    const day = col.getAttribute('data-day'), start = E.fromMin(m), end = E.fromMin(m + dur);
+    const past = day < A.today && a.day >= A.today;
+    const chk = past ? { msg: 'Una seduta futura non si sposta nel passato.' } : E.checkSlot(A.ctx, a.therapist_id, day, start, end, { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id });
+    mv.target = { day, start, chk };
+    if (!mv.ghost || mv.ghost.parentNode !== col) { if (mv.ghost) mv.ghost.remove(); mv.ghost = document.createElement('div'); col.appendChild(mv.ghost); }
+    mv.ghost.className = 'wk-ghost' + (chk ? ' bad' : '');
+    mv.ghost.style.top = ((m - Number(col.getAttribute('data-min'))) * PX) + 'px';
+    mv.ghost.style.height = Math.max(12, dur * PX - 1) + 'px';
+    mv.ghost.innerHTML = (chk ? '✗ ' : '→ ') + esc(E.fmtItDay(day) + ' ' + start) + (chk ? '<br><span class="small">' + esc(chk.msg) + '</span>' : '');
+    mv.el.classList.add('dragging');
+    ev.preventDefault();
+  });
+  document.addEventListener('pointerup', async () => {
+    if (!mv) return;
+    const d = mv; mv = null;
+    if (d.ghost) d.ghost.remove();
+    d.el.classList.remove('dragging');
+    if (!d.moved) return; // semplice clic: si apre la seduta
+    swallowClick = true; setTimeout(() => { swallowClick = false; }, 0);
+    const t = d.target, a = d.a;
+    if (!t || (t.day === a.day && t.start === a.start_time)) return;
+    if (t.chk) { FA.toast('✗ Non spostata: ' + t.chk.msg, 'bad'); return; }
+    try {
+      await FA.save('Seduta di ' + FA.patName(a.patient_id) + ' spostata a ' + E.fmtItDay(t.day) + ' ' + t.start,
+        () => FA.rpc('move_appointment', { p_id: a.id, p_version: a.version, p_therapist: a.therapist_id, p_day: t.day, p_start: t.start, p_note: '' }));
+    } catch (e) { /* già segnalato */ }
+  });
+  // dopo un trascinamento il clic non apre la finestra della seduta
+  document.addEventListener('click', ev => { if (swallowClick && ev.target.closest('.wk-appt')) { ev.stopPropagation(); ev.preventDefault(); swallowClick = false; } }, true);
 
   /* ---------------- fascia: orari precisi, duplica, elimina ---------------- */
   function viewDays() {
@@ -458,23 +511,32 @@
       pdCompute(); FA.render(); FA.renderModal(); return;
     }
     const cats = FA.categories().filter(c => E.skillLevel(A.ctx, th, c.id));
-    A.ui.pd = { th, day, mode: 'nuovo', name: '', cycle_id: '', category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id || '', duration: 30, durOther: '',
-      planned: 10, at: 1, days: [E.weekday(day)], times: { [E.weekday(day)]: start }, priority: 'NI', slots: [], error: null };
+    A.ui.pd = { th, day, mode: 'nuovo', name: '', cycle_id: '', patient_id: '', q: '', category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id || '', duration: 30, durOther: '',
+      planned: 10, done: 0, treatment: '', days: [E.weekday(day)], times: { [E.weekday(day)]: start }, priority: 'NI', slots: [], error: null };
     pdCompute();
-    FA.openModal({ title: 'Nuovo paziente · ' + FA.thName(th), drawer: true, live: true, body: pdBody,
+    FA.openModal({ title: 'Paziente · ' + FA.thName(th), drawer: true, live: true, body: pdBody,
       foot: () => '<button class="btn" data-act="pd-close">Chiudi</button><button class="btn primary" data-act="pd-save"' + (A.ui.pd.okAll ? FA.saveDisabled() : ' disabled') + '>' + (A.saving ? 'Salvataggio…' : 'Conferma') + '</button>' });
     FA.render();
   };
+  /** ciclo già esistente da completare: dalla lista d'attesa oppure il ciclo in corso del paziente scelto */
+  function pdCycle(f) {
+    if (f.mode === 'attesa' && f.cycle_id) return A.ctx.cyc.get(f.cycle_id) || null;
+    if (f.mode === 'esistente' && f.patient_id) return activeCycleOf(f.patient_id);
+    return null;
+  }
+  function activeCycleOf(pid) { return (A.data.cycles || []).find(c => c.patient_id === pid && c.status === 'attivo') || null; }
   function pdDur(f) {
-    const c = f.mode === 'attesa' && f.cycle_id ? A.ctx.cyc.get(f.cycle_id) : null;
+    const c = pdCycle(f);
     if (c) return c.duration;
     return f.duration === 'altro' ? Number(f.durOther) || 0 : Number(f.duration);
   }
   function pdCompute() {
     const f = A.ui.pd, ctx = A.ctx;
-    const c = f.mode === 'attesa' && f.cycle_id ? ctx.cyc.get(f.cycle_id) : null;
+    const c = pdCycle(f);
+    const active = c && c.status === 'attivo';
     const planned = c ? c.planned_sessions : Number(f.planned);
-    const prior = c ? (c.prior_sessions || 0) : Math.max(0, Math.min(planned - 1, (Number(f.at) || 1) - 1));
+    // ciclo in corso: si programmano solo le sedute che mancano
+    const prior = active ? planned - E.cycleCounts(ctx, c.id).mancanoDaProgrammare : c ? (c.prior_sessions || 0) : Math.max(0, Math.min(planned - 1, Number(f.done) || 0));
     const dur = pdDur(f);
     const n = planned - prior;
     const slots = [];
@@ -486,14 +548,14 @@
           const st = FA.normTime(f.times[wd] || f.times[f.days[0]] || '');
           if (st) {
             const en = E.fromMin(E.toMin(st) + dur);
-            slots.push({ day: d, start: st, end: en, n: prior + slots.length + 1, chk: E.checkSlot(ctx, f.th, d, st, en, { patientId: c ? c.patient_id : null, cycleId: c ? c.id : null }) });
+            slots.push({ day: d, start: st, end: en, n: prior + slots.length + 1, chk: E.checkSlot(ctx, f.th, d, st, en, { patientId: c ? c.patient_id : (f.patient_id || null), cycleId: c ? c.id : null }) });
           }
         }
         d = E.addDays(d, 1);
       }
     }
     f.slots = slots; f.prior = prior; f.planned2 = planned;
-    f.okAll = slots.length === n && n > 0 && slots.every(s => !s.chk) && (f.mode === 'nuovo' ? !!f.name.trim() : !!f.cycle_id) && !!f.category_id &&
+    f.okAll = slots.length === n && n > 0 && slots.every(s => !s.chk) && (f.mode === 'nuovo' ? !!f.name.trim() : f.mode === 'esistente' ? !!f.patient_id : !!f.cycle_id) && (!!c || !!f.category_id) &&
       dur >= 15 && dur <= 120 && dur % 5 === 0;
   }
   function pdBody() {
@@ -501,17 +563,32 @@
     pdCompute();
     const cats = FA.categories().filter(c => E.skillLevel(ctx, f.th, c.id));
     const waiting = (A.data.cycles || []).filter(c => c.status === 'in_attesa' && E.skillLevel(ctx, f.th, c.category_id));
-    const c = f.mode === 'attesa' && f.cycle_id ? ctx.cyc.get(f.cycle_id) : null;
+    const c = pdCycle(f);
     const bad = f.slots.filter(s => s.chk);
-    return FA.seg('pd.mode', [['nuovo', 'Nuovo paziente'], ['attesa', 'Dalla lista d’attesa']], f.mode) +
-      (f.mode === 'nuovo' ? '<div class="field" style="margin-top:8px"><label>Nome (fittizio)</label><input type="text" data-bind="pd.name" data-on="pd-chg" value="' + esc(f.name) + '" placeholder="es. Bianchi L."></div>'
-        : '<div class="field" style="margin-top:8px"><label>Richiesta</label><select data-bind="pd.cycle_id" data-on="pd-chg"><option value="">— scegli —</option>' + waiting.map(w => FA.option(w.id, '[' + w.priority + '] ' + FA.patName(w.patient_id) + ' · ' + FA.catName(w.category_id) + ' · ' + w.duration + '′ × ' + w.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
+    let who;
+    if (f.mode === 'nuovo') who = '<div class="field" style="margin-top:8px"><label>Nome (fittizio)</label><input type="text" data-bind="pd.name" data-on="pd-chg" value="' + esc(f.name) + '" placeholder="es. Bianchi L."></div>';
+    else if (f.mode === 'attesa') who = '<div class="field" style="margin-top:8px"><label>Richiesta</label><select data-bind="pd.cycle_id" data-on="pd-chg"><option value="">— scegli —</option>' + waiting.map(w => FA.option(w.id, '[' + w.priority + '] ' + FA.patName(w.patient_id) + ' · ' + FA.catName(w.category_id) + ' · ' + w.duration + '′ × ' + w.planned_sessions, f.cycle_id)).join('') + '</select></div>';
+    else {
+      const qn = FA.E && window.FASheet ? window.FASheet.normName(f.q) : String(f.q || '').toLowerCase();
+      const found = qn ? (A.data.patients || []).filter(p => window.FASheet.normName(p.name).includes(qn)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8) : [];
+      const sel = f.patient_id ? A.ctx.pat.get(f.patient_id) : null;
+      who = '<div class="field" style="margin-top:8px"><label>Paziente in archivio</label>' + (sel ? '<div class="row"><strong>' + esc(sel.name) + '</strong><button class="btn link small" data-act="pd-pick" data-id="">cambia</button></div>'
+        : '<input type="text" data-bind="pd.q" data-on="pd-chg" value="' + esc(f.q) + '" placeholder="Cerca per nome…">' +
+          (found.length ? '<div class="pd-found">' + found.map(p => { const ac = activeCycleOf(p.id); return '<button class="btn small" data-act="pd-pick" data-id="' + p.id + '">' + esc(p.name) + (ac ? ' · in trattamento con ' + esc(FA.thName(ac.therapist_id)) : '') + '</button>'; }).join('') + '</div>' : (qn ? '<div class="help">Nessun paziente con questo nome: usa “Nuovo paziente”.</div>' : ''))) + '</div>';
+      if (c) {
+        const cnt = E.cycleCounts(ctx, c.id);
+        who += '<div class="form-note small">Ciclo in corso' + (c.therapist_id !== f.th ? ' con <strong>' + esc(FA.thName(c.therapist_id)) + '</strong> (qui come sostituzione)' : '') + ': ' + cnt.effettuate + ' sedute fatte, ' + cnt.programmate + ' programmate su ' + c.planned_sessions +
+          '. ' + (cnt.mancanoDaProgrammare ? 'Si aggiungono le <strong>' + cnt.mancanoDaProgrammare + '</strong> che mancano.' : '<strong>Nessuna seduta da aggiungere</strong>: correggi la numerazione dalla seduta (✎ Correggi).') + '</div>';
+      }
+    }
+    return FA.seg('pd.mode', [['nuovo', 'Nuovo paziente'], ['esistente', 'Paziente in archivio'], ['attesa', 'Dalla lista d’attesa']], f.mode) + who +
       (c ? '' : '<div class="field"><label>Percorso</label><select data-bind="pd.category_id" data-on="pd-chg">' + cats.map(x => FA.option(x.id, x.name, f.category_id)).join('') + '</select></div>' +
         '<div class="field"><label>Durata della seduta</label>' + FA.seg('pd.duration', [['30', '30′'], ['45', '45′'], ['altro', 'Altro']], String(f.duration)) +
         (f.duration === 'altro' ? ' <input type="number" min="15" max="120" step="5" style="max-width:110px;display:inline-block" data-bind="pd.durOther" data-on="pd-chg" value="' + esc(f.durOther) + '" placeholder="minuti">' : '') + '</div>' +
-        '<div class="field"><label>Ciclo</label><div class="row">È alla seduta n. <input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="pd.at" data-on="pd-chg" value="' + esc(f.at) + '"> di ' +
+        '<div class="field"><label>Ciclo</label><div class="row">Sedute già fatte <input type="number" min="0" max="' + (f.planned - 1) + '" style="max-width:80px" data-bind="pd.done" data-on="pd-chg" value="' + esc(f.done) + '"> su ' +
         FA.seg('pd.planned', [['5', '5'], ['10', '10'], ['20', '20'], ['30', '30']], String(f.planned)) + '</div>' +
-        '<div class="help">' + (f.prior ? f.prior + ' sedute già svolte (contate come effettuate); ' : '') + 'si programmano le ' + (f.planned2 - f.prior) + ' rimanenti.</div></div>') +
+        '<div class="help">La prossima è la <strong>' + (f.prior + 1) + 'ª</strong>' + (f.prior ? ' (le ' + f.prior + ' già fatte contano come effettuate)' : '') + '; si programmano le ' + (f.planned2 - f.prior) + ' rimanenti.</div></div>' +
+        '<div class="field"><label>Tipo di trattamento (facoltativo)</label><input type="text" data-bind="pd.treatment" value="' + esc(f.treatment) + '" placeholder="es. GC, RM"></div>') +
       '<div class="field"><label>Giorni e orari</label><div class="days-times">' + [1, 2, 3, 4, 5, 6].map(wd => {
         const on = f.days.includes(wd);
         return '<div class="dt' + (on ? ' on' : '') + '"><button class="btn small ' + (on ? 'primary' : '') + '" data-act="pd-day" data-wd="' + wd + '">' + E.WD_SHORT[wd] + '</button>' +
@@ -524,6 +601,13 @@
       FA.errBox(f.error);
   }
   FA.actions['pd-chg'] = () => { pdCompute(); FA.render(); FA.renderModal(); };
+  FA.actions['pd-pick'] = el => {
+    const f = A.ui.pd, id = el.getAttribute('data-id');
+    f.patient_id = id; if (!id) f.q = '';
+    const c = id ? activeCycleOf(id) : null;
+    if (c) { const w = Object.keys(c.weekday_times || {}).map(Number); if (w.length) { f.days = w.filter(x => x <= 6).sort(); f.days.forEach(x => { if (!f.times[x]) f.times[x] = f.times[E.weekday(f.day)] || E.hhmm(c.weekday_times[x]); }); } }
+    pdCompute(); FA.render(); FA.renderModal();
+  };
   FA.actions['pd-day'] = el => {
     const f = A.ui.pd, wd = Number(el.getAttribute('data-wd'));
     if (f.days.includes(wd)) { if (f.days.length > 1) f.days = f.days.filter(x => x !== wd); }
@@ -536,11 +620,18 @@
     pdCompute();
     if (!f.okAll) return;
     try {
+      const act = pdCycle(f);
+      if (act && act.status === 'attivo') {
+        // paziente già in trattamento: si aggiungono le sedute mancanti al suo ciclo
+        await FA.save('Sedute aggiunte', () => FA.rpc('add_cycle_slots', { p_cycle: act.id, p_version: act.version, p_therapist: f.th, p_slots: f.slots.map(s => ({ day: s.day, start: s.start })) }));
+        A.ui.pd = null; FA.closeModal(); FA.render(); return;
+      }
       let cycleId = f.cycle_id, version;
-      if (f.mode === 'nuovo') {
-        const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), category_id: f.category_id, priority: f.priority,
+      if (f.mode === 'nuovo' || f.mode === 'esistente') {
+        const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), patient_id: f.mode === 'esistente' ? f.patient_id : null, category_id: f.category_id, priority: f.priority,
           request_type: f.prior > 0 ? 'continuazione' : 'prima', duration: pdDur(f), planned_sessions: Number(f.planned), prior_sessions: f.prior, weekdays: f.days } }));
         cycleId = r.cycle_id; version = 1; f.mode = 'attesa'; f.cycle_id = cycleId;
+        if (f.treatment.trim()) { await FA.rpc('quick_edit_cycle', { p_cycle: cycleId, p_version: 1, p: { treatment: f.treatment.trim().toUpperCase() } }); version = 2; }
       } else version = A.ctx.cyc.get(cycleId).version;
       await FA.save('Sedute programmate', () => FA.rpc('book_cycle_slots', { p_cycle: cycleId, p_version: version, p_therapist: f.th,
         p_slots: f.slots.map(s => ({ day: s.day, start: s.start })), p_weekdays: f.days }));

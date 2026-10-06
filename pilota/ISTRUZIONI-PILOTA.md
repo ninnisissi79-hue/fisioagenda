@@ -54,6 +54,35 @@ Sono dati **pubblici per progetto**: la protezione è data dagli account e dai p
 
 Con questi due dati preparo il pacchetto del sito (`npm run build` con `FA_URL` e `FA_KEY`) e lo provo collegato al tuo progetto. La pubblicazione avverrà **solo su tua richiesta**, in un **nuovo** progetto Netlify separato. I siti esistenti non vengono toccati. Dopo la pubblicazione andrà aggiornato il *Site URL* indicato al passo 3.
 
+## Aggiornare un database già installato
+
+Se il database era stato installato con una versione precedente, esegui una volta [`supabase/aggiornamento-database.sql`](supabase/aggiornamento-database.sql) (SQL Editor → New query → incolla → Run). Si può rieseguire senza problemi e non tocca i dati. Senza questo passo l'app funziona, ma la pagina **Importa tabulato** chiede di aggiornare il database.
+
+## Importare i tabulati cartacei
+
+**Costi e privacy.** Il sito **non invia le foto a nessun servizio**: restano sul computer e servono solo per il confronto accanto ai dati. La lettura delle foto la fa Claude **in chat**, cioè con lo strumento che già usi (nessuna chiave, nessun servizio da configurare, nessun costo aggiuntivo). Manda solo foto con i nomi già sostituiti, come hai fatto per gli esempi.
+
+1. **Mandami le foto** dei tabulati in chat. Ti restituisco un file di trascrizione `.json` per ogni foto: numeri, R, V, orari e giorni come li leggo, con le **caselle incerte segnalate** (mai inventate).
+2. Nell'app apri **Importa tabulato → Scegli foto e trascrizione…** e seleziona insieme la foto e il file `.json` (oppure incolla il testo della trascrizione).
+3. Controlla **fisioterapista, mese, “Importa dal”, durata delle sedute** e percorso. La durata, se non è scritta sul foglio, va sempre confermata.
+4. **Anteprima:** a sinistra la foto, a destra una riga per paziente con le caselle del mese. Clicca una casella: il punto corrispondente si evidenzia sulla foto. In giallo le letture incerte: correggi il valore o conferma con ✓. Le righe con problemi hanno il bordo rosso e il motivo scritto sotto.
+   - Numero sul tabulato a ritroso: **seduta n. = 11 − numero** (cicli da 10). Il numero originale resta salvato su ogni seduta.
+   - **R** = recupero (non consuma un numero); **V** = visita fisiatrica (promemoria del paziente, non è una seduta). Se la visita cade in un giorno senza trattamento, l'app suggerisce i giorni di trattamento più vicini.
+   - Le caselle prima di “Importa dal” non diventano appuntamenti: servono a sapere a che seduta è il paziente.
+   - Le sedute già passate entrano **programmate**: il tabulato non dimostra la presenza. L'esito si registra dal calendario o da “Da sistemare”.
+   - Se un nome esiste già in archivio, scegli se è lo stesso paziente (continua il suo ciclo o ne apre uno nuovo) o un omonimo.
+   - Conflitti (fuori turno, assenza, chiusura): correggi, oppure spunta “importa comunque” e la seduta finirà in “Da sistemare”. Due pazienti alla stessa ora non sono mai importabili.
+   - Le sedute non scritte sul foglio si aggiungono solo se lo chiedi (“Programma anche le sedute successive…”).
+5. **Importa nel calendario.** Ricaricare la stessa foto o lo stesso foglio non crea doppioni. Ogni importazione compare in **Importazioni recenti** con il pulsante **Annulla**, che elimina ciò che ha creato (le sedute con un esito già registrato restano).
+
+Per provare senza dati reali: crea un fisioterapista di nome **Fittizio** e importa [`esempi/tabulato-fittizio.png`](esempi/tabulato-fittizio.png) con [`esempi/tabulato-fittizio.json`](esempi/tabulato-fittizio.json).
+
+## Correggere dal calendario del collega
+
+- **Trascina** una seduta per cambiare giorno o ora: mentre trascini vedi subito se il posto va bene (turni, assenze, sovrapposizioni).
+- **Clicca una seduta → ✎ Correggi:** nome del paziente, “questa è la seduta n. … di …” (rinumera il ciclo), tipo di trattamento (GC, RM…), durata (questa e le future), visita fisiatrica del giorno, **elimina** una seduta inserita per errore.
+- **Clicca uno spazio libero:** nuovo paziente, **paziente in archivio** (se è già in trattamento si aggiungono le sedute che mancano) o dalla lista d'attesa; per chi è già in trattamento indichi le **sedute già fatte** e l'app mostra qual è la prossima.
+
 ## Backup e ripristino
 
 Il piano gratuito **non** include backup automatici scaricabili. Procedura consigliata:
