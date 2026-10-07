@@ -1,14 +1,14 @@
 # FisioAgenda — istruzioni complete
 
-Questa cartella contiene tutto: le due demo che avevi online, il pilota condiviso con importazione dei tabulati, gli script del database, le trascrizioni dei tabulati e il codice completo.
+Questa cartella contiene tutto: le due demo che avevi online, il pilota condiviso (tabulato mensile), gli script del database, le trascrizioni dei tabulati e il codice completo.
 
 | File | Cosa contiene | Dove va |
 |---|---|---|
 | `1-DEMO-prima-versione-netlify.zip` | La prima demo (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-demo** |
 | `2-DEMO-v3-semplice-netlify.zip` | La demo v3 “semplice” (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-semplice-v3** |
-| `3-PILOTA-sito-netlify.zip` | Il pilota condiviso, **già collegato al vostro Supabase** (`cihywdeiyrawgcglxbcg`): importazione dei tabulati, calendario, correzioni | Progetto Netlify **fisioagenda-pilota** (non serve modificare nulla) |
+| `3-PILOTA-sito-netlify.zip` | Il pilota condiviso, **già collegato al vostro Supabase** (`cihywdeiyrawgcglxbcg`): tabulato mensile, spie, orari | Progetto Netlify **fisioagenda-pilota** (non serve modificare nulla) |
 | `4-PILOTA-database/` | `setup-completo.sql` (prima installazione), `aggiornamento-database.sql` (aggiornamento), `seed.sql` (dati di esempio fittizi, facoltativo) | Supabase → SQL Editor |
-| `5-TRASCRIZIONI-tabulati.zip` | Le trascrizioni dei 17 tabulati di ottobre 2026 + un tabulato fittizio di prova | Si caricano nell'app, pagina **Importa tabulato** |
+| `5-TRASCRIZIONI-tabulati.zip` | Le trascrizioni dei tabulati di ottobre 2026 (solo archivio: l'importazione è stata tolta) | Non serve caricarle |
 | `6-PROGETTO-COMPLETO-codice.zip` | Tutto il codice del progetto | Copia di sicurezza |
 
 > **Regola d'oro:** ogni zip va nel **suo** progetto Netlify. Se trascini uno zip nel progetto sbagliato, quel sito viene sostituito.
@@ -56,7 +56,7 @@ Le demo funzionano da sole: dati fittizi salvati solo nel browser di chi le usa,
 
 ## 3. Il pilota condiviso — prima installazione
 
-Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei tabulati e correzioni dal calendario. Servono **Supabase** (database, gratuito) e un **nuovo** progetto Netlify.
+Il pilota è l'app con archivio comune per tutti i colleghi: il tabulato mensile di ognuno, orari, ferie e sostituzioni. Servono **Supabase** (database, gratuito) e un **nuovo** progetto Netlify.
 
 ### 3.1 Supabase (circa 10 minuti)
 
@@ -91,74 +91,85 @@ Il pilota è l'app con archivio comune per tutti i colleghi, importazione dei ta
 ### 3.3 Colleghi
 
 1. Supabase → **Authentication → Users → Add user** per ogni collega (password temporanea, *Auto Confirm User*).
-2. Nell'app: **Configurazione → Utenti** → assegna il ruolo (Fisioterapista, Operatore, Sola consultazione) e collega ogni fisioterapista al suo nome.
+2. Nell'app: **Impostazioni → Utenti e permessi** → assegna il ruolo (Fisioterapista, Operatore/segreteria, Sola consultazione) e collega ogni fisioterapista al suo nome. Per chi fa le veci della segreteria compila **«Agende dei colleghi fino al…»**.
 3. Comunica la password temporanea **di persona**; al primo accesso ognuno la cambia.
 
-### 3.4 Fisioterapisti e turni
-**Configurazione → Fisioterapisti**: inserisci i colleghi **con il cognome scritto sui tabulati** (Barile, Battistel, Bizzo, …): così l'importazione li riconosce da sola. Poi il turno di ognuno (anche dal calendario con **✎ Orario**).
+### 3.4 Fisioterapisti e orari
+**Impostazioni → Fisioterapisti** (coordinatore, segreteria, programmatore): aggiungi o togli i colleghi. L'orario di ognuno si cambia dal tabulato con il pulsante **Orario**.
 
 ---
 
 ## 4. Aggiornare un pilota già installato
 
-> **Il vostro caso.** Il pacchetto `3-PILOTA-sito-netlify.zip` è già collegato al vostro database: **non** va estratto né modificato. Basta il punto 1 (database) e poi trascinare lo zip, così com'è, in Netlify → **fisioagenda-pilota** → **Deploys**.
+> **Il vostro caso.** Il pacchetto `3-PILOTA-sito-netlify.zip` è già collegato al vostro database: **non** va estratto né modificato.
 
-1. Supabase → SQL Editor → **New query** → incolla **tutto** `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Si può rieseguire senza problemi e non tocca i dati. Deve finire con “Success”.
-2. Netlify → progetto **fisioagenda-pilota** → **Deploys** → trascina `3-PILOTA-sito-netlify.zip` così com’è. Il link resta lo stesso.
-3. Apri l’app e premi **Ctrl+F5** (sul telefono: chiudi e riapri la pagina) per caricare la versione nuova.
-
----
-
-## 5. Importare i tabulati
-
-1. Puoi caricare **direttamente** `5-TRASCRIZIONI-tabulati.zip` (senza estrarlo): si apre una scheda per ogni tabulato. Oppure scegli i singoli `.json`, anche insieme alla foto del foglio (la foto resta sul computer).
-2. Controlla **fisioterapista, mese, “Importa dal”** e percorso. Se il fisioterapista non esiste: **Crea il fisioterapista «…»**.
-3. **Durata predefinita delle sedute** (già proposta: 30 minuti, 45 minuti, 1 ora o altro): vale per i pazienti a cui non scegli un’altra durata. Nella riga del paziente: **Durata della seduta**. Per una sola seduta: **Modifica singole sedute** (orario, durata, chi la fa). Durate diverse sullo stesso foglio vanno benissimo.
-4. **Anteprima**: una riga per paziente, foto accanto.
-    - **Giallo** = lettura incerta: correggi o conferma con ✓ (oppure “Accetta le letture incerte” per tutto il foglio).
-    - **Avvisi** (fuori orario, assenza, chiusura): non bloccano. In **4. Conferma** spunta “Importa comunque le sedute con avvisi”.
-    - **Conflitti** (due pazienti alla stessa ora): resta fuori solo quella seduta; la sistemi con “Modifica singole sedute”.
-    - Una riga resta fuori solo se manca davvero qualcosa (nome, orario, lettura da confermare, omonimo da scegliere): il motivo è scritto nella riga e nell’elenco della Conferma, con il link.
-5. **Sostituzioni sul foglio**
-    - **Sigle** sotto i numeri (es. MG = Manuela Guidetti): per ogni sigla scegli il collega, “nel calendario del titolare” o “Non importare”.
-    - **Pazienti di colleghi** scritti in un giorno solo: per ognuno **Importa** o **Non importare**. Se importi, completa paziente, titolare, sostituto, data, ora e durata (“+ Stessa sostituzione in un altro giorno” se serve). Nessun doppione.
-6. **Importa nel calendario.** Ogni riga si salva per conto suo: in alto compare il riepilogo di **cosa è entrato** e di **cosa no, con il motivo** (riga, giorno). Le correzioni restano sul foglio: sistemi e premi di nuovo “Importa”, senza doppioni. Per le sedute rimaste fuori: “Correggi e riprova queste sedute”.
-7. Riquadro **Assenze segnate sul foglio** (F ferie, M malattia, P permesso): premi **Registra** se sono corrette.
-8. Le sedute già passate entrano **programmate**: registra l’esito (effettuata / assenza) dal calendario o da **Da sistemare**.
-
-Regole di lettura: numero a ritroso (seduta n. = 11 − numero), **R** recupero, **V** visita fisiatrica (promemoria, non è una seduta), **//** fine ciclo; se la numerazione riparte da capo è un nuovo ciclo.
-Un’importazione sbagliata si annulla da **Importazioni recenti → Annulla**.
-
-**Per provare senza dati veri:** crea un fisioterapista di nome **Fittizio** e importa `tabulato-fittizio.png` con `tabulato-fittizio.json`.
+1. Supabase → SQL Editor → **New query** → incolla **tutto** `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Deve finire con “Success”. Si può rieseguire e non tocca i dati.
+2. Netlify → progetto **fisioagenda-pilota** → **Deploys** → trascina **solo** `3-PILOTA-sito-netlify.zip`, così com’è (non `FisioAgenda-TUTTO.zip`: darebbe “Pagina non trovata”). Il link resta lo stesso.
+3. Apri l’app e premi **Ctrl+F5** (sul telefono: chiudi e riapri la pagina).
+4. Per ripartire da zero con i pazienti: **Impostazioni → Backup → Svuota pazienti e sedute** (vedi sotto).
 
 ---
 
-## 6. Gestire gli appuntamenti dal calendario del collega
-- **+ Aggiungi paziente** (in alto): fisioterapista e giorno già impostati, modificabili; paziente nuovo, in trattamento o dalla lista d’attesa; ora di inizio e durata.
-- **Pazienti in trattamento**: elenco con sedute fatte / programmate / prossima. **+ Seduta** aggiunge una seduta al suo ciclo, con la durata scelta per quella seduta (se il ciclo è completo diventa una seduta in più).
-- **Clic su una seduta → Modifica: giorno, ora, durata, fisioterapista**: solo quella seduta. Collega diverso = sostituzione (il ciclo resta del titolare). Un conflitto dice con chi; un avviso si conferma con “Salva comunque”. Quello che hai scritto non si perde.
-- **Trascina** una seduta per cambiare giorno o ora (rosso = non si può; giallo = chiede conferma).
-- **Clic sulla seduta → ✎ Correggi**: nome, “questa è la seduta n. … di …”, tipo (GC, RM…), durata delle sedute del ciclo, visita fisiatrica, **elimina** una seduta inserita per errore.
-- Una seduta inserita resta **programmata** finché non registri l’esito. “Trova posto” resta disponibile nel menu.
+## 5. Usare il pilota
 
-### 6.1 Sostituzioni (nuova voce del menu)
-- Elenco per periodo e per fisioterapista: data e orario, titolare (assente), sostituto, paziente, durata, stato **da assegnare** / **confermata**.
-- **Chi prende i pazienti**: per ogni titolare, quante sedute vanno a ciascun collega.
-- **Assegna / Cambia sostituto** (✓ libero, ⚠ avviso, ✗ occupato), **Annulla sostituzione**, **Modifica orario / durata**, **Proponi i sostituti in automatico**.
-- Le sostituzioni confermate compaiono nei calendari: dal sostituto con bordo azzurro (“sostituisce …”), dal titolare come promemoria tratteggiato.
+### Il tabulato del mese (come i fogli di carta)
+
+Ogni fisioterapista, appena entra, vede **Oggi**: i suoi pazienti del giorno con le sedute che restano. Dal menu **Tabulato** si apre il foglio del mese, pensato anche per il cellulare.
+
+- **Righe = pazienti** (nome, orario e giorni della settimana), **colonne = giorni**. Nella casella c'è il **numero che scende** come sulla carta: 10, 9, 8 … 1.
+- **‹ ›** per andare ai mesi precedenti o successivi, senza limiti; **Oggi** per tornare al mese corrente. Toccando il numero di un giorno in alto si apre la **vista Giorno**.
+- Caselle **grigie** = sedute passate (contano da sole: **la presenza non si segna**). **A** = assente. **!** = da ricollocare. Un piccolo orario in alto = quella seduta è a un'ora diversa dal solito.
+- **Paziente nuovo:** scrivi il nome in una delle **righe vuote** in fondo e premi Invio (o tocca una casella della riga). Si apre la scheda già compilata: giorni della settimana, ora (si scrive a mano, es. 12:20), durata (30, 45, 60 o altro), numero di sedute. Le sedute si mettono da sole nei giorni scelti.
+
+#### Toccare una casella (una seduta)
+
+Pulsanti grandi, nessun trascinamento:
+
+- **Sposta** (giorno e ora) · **Durata** · **Assente** (con o senza recupero in fondo al ciclo) · **Altro fisioterapista** (solo questa, un periodo dal… al…, o tutte le prossime) · **Scambia** con un altro paziente · **Cancella** (solo questa o anche le successive) · **Togli l’assenza** se segnata per errore.
+- Dopo ogni modifica compare **Annulla** per qualche secondo.
+- Una casella vuota (giorno futuro) aggiunge una seduta a quel paziente.
+
+#### Toccare il nome (il paziente)
+
+Nome · numero di sedute · **Cambia ora dal…** (anche solo per alcuni giorni della settimana) · durata · **passa a un collega dal…** · aggiungi altre sedute · togli le sedute future · **Sospendi** / **Riprendi** / **Concludi**.
+
+Una seduta data a un collega resta nel tabulato del titolare con la **sigla del collega** e lo stesso numero; il collega la vede nel suo tabulato come paziente di un altro.
+
+#### Orario, pause, ortesi, gruppi e progetti
+
+Pulsante **Orario** nel tabulato: per ogni giorno della settimana le fasce (ambulatorio, pausa, **ambulatorio ortesi**, **gruppo**, **progetto**…) con inizio, fine e un nome scritto a mano (es. «Gruppo schiena»; **mai i nomi dei pazienti** nei gruppi). **copia su tutti i giorni feriali**, poi **Vale dal…**: il passato non cambia. **Controlla** mostra prima se qualche paziente resta fuori orario.
+
+Ognuno cambia il **proprio** orario; segreteria, coordinatore e programmatore cambiano quello di tutti. Un'attività di un giorno solo: tocca la giornata nella vista Giorno → **Attività**.
+
+#### Segreteria, coordinatore, programmatore
+
+- Menu **Trova posto** (cerca il primo posto libero) e **Assenze e sostituzioni**.
+- Nel tabulato, **Tutti i colleghi**: una colonna per ogni fisioterapista con l'orario di quel giorno.
+- **Ferie / permesso** dal tabulato o da Assenze.
+- **Le due spie in alto:**
+    - **Rossa** (lampeggia): qualcuno ha segnato ferie, permesso o malattia e ci sono **pazienti da ricollocare**. Toccandola si apre l'elenco di quei pazienti.
+    - **Gialla**: qualcuno ha cambiato il proprio tabulato (spostamenti, pazienti nuovi…); non serve fare nulla. Si può aprire e premere **Visto**, oppure ignorarla. Segnare un'assenza del paziente non la accende.
+- **Impostazioni → Fisioterapisti**: aggiungere o togliere colleghi (anche la segreteria).
+- **Impostazioni → Utenti e permessi** (coordinatore/programmatore): ruolo di ognuno e, per un fisioterapista che fa le veci della segreteria, **«Agende dei colleghi fino al…»**: fino a quella data può modificare tutte le agende e vede le spie; dopo torna a vedere solo la sua.
+
+#### Svuotare pazienti e sedute (per ripartire da zero)
+
+**Impostazioni → Backup → Svuota pazienti e sedute** (coordinatore/programmatore): scrivi `SVUOTA` e conferma. Prima viene scaricato **in automatico** un file di backup (conservalo). Si cancellano **tutti i pazienti e tutte le sedute**; restano fisioterapisti, account, orari e ferie. Non si può annullare se non ripristinando quel backup.
+
+Tolte in questa versione: l'**importazione dei tabulati da foto** e la **lista d'attesa**.
 
 ---
 
-## 7. Problemi frequenti
+## 6. Problemi frequenti
 | Cosa vedi | Cosa fare |
 |---|---|
 | “Configurazione mancante” | `config.js` non compilato: ripeti il punto 3.2 |
 | “Server non raggiungibile” | Supabase in pausa dopo una settimana senza uso: pannello Supabase → **Restore project** |
 | “Page not found” | Su Netlify è stato caricato lo zip sbagliato o la cartella sbagliata: vedi capitolo 1 |
-| “Il database non è ancora aggiornato per l'importazione” | Esegui `aggiornamento-database.sql` (capitolo 4) |
+| Mancano le spie o «Svuota pazienti» dà errore | Esegui `aggiornamento-database.sql` (capitolo 4) |
 | “Modificato nel frattempo da …” | Un collega ha cambiato lo stesso dato: i dati sono già ricaricati, ripeti |
 
-## 8. Sicurezza
+## 7. Sicurezza
 
 - Non inviare **mai** a nessuno la *secret key*, la chiave *service_role* o la password del database.
 - Il pilota è stato verificato con **dati fittizi o nomi sostituiti**. Prima di usarlo con i dati reali dei pazienti serve una valutazione privacy (sede dei dati, contratti con i fornitori).

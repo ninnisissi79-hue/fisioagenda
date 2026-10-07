@@ -80,7 +80,7 @@
           '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="te.active"' + (f.active ? ' checked' : '') + officeOnly() + '> Attivo</label></div></div>' +
           '<h4>Competenze e percorsi trattabili</h4><div class="table-wrap"><table><tbody>' + FA.categories().map(c => '<tr><td>' + esc(c.name) + '</td><td style="width:240px"><select data-bind="te.skills.' + c.id + '"' + officeOnly() + '>' +
             FA.option('', 'Non abilitato', f.skills[c.id]) + FA.option('abilitato', 'Abilitato', f.skills[c.id]) + FA.option('specifica', '★ Competenza specifica', f.skills[c.id]) + '</select></td></tr>').join('') + '</tbody></table></div>' +
-          (f.id ? '' : '<p class="muted small">Dopo il salvataggio definisci il turno settimanale nella scheda “Turni”.</p>') + FA.errBox(f.error);
+          (f.id ? '' : '<p class="muted small">Dopo il salvataggio definisci il turno settimanale nella scheda “Orari”.</p>') + FA.errBox(f.error);
       },
       foot: () => '<button class="btn" data-act="close-modal">Chiudi</button>' + (FA.isAdmin() ? '<button class="btn primary" data-act="th-save"' + officeSave() + '>Salva</button>' : '') });
   };

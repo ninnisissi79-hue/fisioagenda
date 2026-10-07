@@ -259,7 +259,7 @@ try {
   // ---------------------------------------------------------------- cambio turno con conflitti (coordinatore)
   const { page: pc } = await session('coord@pilota.test');
   await go(pc, '#/config');
-  await pc.click('.tabs button:has-text("Turni")');
+  await pc.click('.tabs button:has-text("Orari")');
   await pc.selectOption('select[data-bind="shTh"]', { label: 'Federico Serra' });
   await pc.waitForTimeout(300);
   await pc.click('button:has-text("Nuovo turno con decorrenza")');
