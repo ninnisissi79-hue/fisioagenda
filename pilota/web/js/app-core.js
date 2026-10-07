@@ -33,7 +33,7 @@
     const left = FA.leftOf(a), c = A.ctx.cyc.get(a.cycle_id);
     if (left == null) return '';
     if (left === 'R') return '<span class="cnt rec" title="Recupero">R</span>';
-    const done = a.status === 'effettuata';
+    const done = a.status === 'effettuata' || (a.status === 'programmata' && a.day < A.today);
     return '<span class="cnt' + (done ? ' done' : '') + (left <= 0 ? ' over' : '') + '" title="' + (done ? 'Seduta effettuata' : 'Seduta prevista') + ': ' + (left === 1 ? 'ultima' : 'ne restano ' + left + ' compresa questa') + ' (' + (c.planned_sessions + 1 - left) + 'ª di ' + c.planned_sessions + ')">' + left + '</span>';
   };
   FA.isAdmin = () => !!A.me && (A.me.role === 'admin' || A.me.role === 'programmatore');
@@ -85,7 +85,6 @@
       el.remove();
       try {
         await FA.save('Modifica annullata', () => FA.rpc('undo_appointment_change', { p_ids: ids, p_versions: versions }));
-        if (A.modal) FA.closeModal();
       } catch (e) { /* già segnalato */ }
     };
     const root = document.getElementById('toast-root');
@@ -194,9 +193,11 @@
       const who = await S.rpc(A.sb, 'whoami', {});
       if (!who.role) { A.me = Object.assign({}, A.me, { role: null }); render(); return; }
       A.me = who; A.today = who.today || E.todayRome();
-      const data = E.normalize(await S.loadAll(A.sb, E.addDays(A.today, -120)));
+      const data = E.normalize(await S.loadAll(A.sb, E.addDays(A.today, -400)));
       const issues = await S.rpc(A.sb, 'appointment_issues', { p_from: A.today, p_to: E.addDays(A.today, 120) });
-      A.data = data; A.ctx = E.makeCtx(data, { today: A.today }); A.issues = issues || [];
+      // spia gialla: modifiche ai tabulati fatte da altri (solo per chi gestisce le agende)
+      A.changes = ['programmatore', 'admin', 'operatore'].includes(who.role) ? (await S.rpc(A.sb, 'my_changes', {}).catch(() => [])) || [] : [];
+      A.data = data; A.ctx = E.makeCtx(data, { today: A.today }); A.issues = (issues || []).filter(i => i.kind !== 'esito_mancante');
       A.lastSync = new Date(); A.loadError = null;
     } catch (e) {
       A.loadError = e.kind ? e : S.toError(e);
@@ -368,10 +369,12 @@
 
   /* ---------------- struttura della pagina ---------------- */
   // il tabulato (calendario del fisioterapista) è il centro: subito dopo «Oggi»
-  const NAV = [
-    ['oggi', 'Oggi'], ['calendario', 'Tabulato'], ['trova', 'Trova posto'], ['assenze', 'Fisioterapista assente'], ['sostituzioni', 'Sostituzioni'], ['agenda', 'Agende del giorno'],
-    ['pazienti', 'Pazienti'], ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['importa', 'Importa (facoltativo)'], ['config', 'Configurazione'], ['storico', 'Storico']
-  ];
+  /** strumenti della segreteria: coordinatore, programmatore, segreteria e chi ne fa le veci (autorizzazione a tempo) */
+  FA.isOffice = () => !!A.me && ['programmatore', 'admin', 'operatore'].includes(A.me.role);
+  // menu corto: il tabulato al centro; gli strumenti della segreteria solo a chi li usa
+  const nav = () => [['oggi', 'Oggi'], ['calendario', 'Tabulato']]
+    .concat(FA.isOffice() ? [['trova', 'Trova posto'], ['sostituzioni', 'Assenze e sostituzioni']] : [['sostituzioni', 'Sostituzioni']])
+    .concat([['pazienti', 'Pazienti'], ['config', 'Impostazioni'], ['storico', 'Storico']]);
   function connLabel() {
     if (!A.online) return '<span class="conn bad">Non connesso</span>';
     if (A.loadError) return '<span class="conn bad" title="' + esc(A.loadError.message) + '">Errore di aggiornamento</span>';
@@ -379,15 +382,60 @@
     if (A.rt === 'ok') return '<span class="conn ok" title="Le modifiche dei colleghi compaiono automaticamente">Connesso · aggiornato alle ' + t + '</span>';
     return '<span class="conn warn" title="Aggiornamento automatico in tempo reale non attivo: i dati si aggiornano ogni minuto">Connesso · aggiornato alle ' + t + ' (ogni minuto)</span>';
   }
+  /** pazienti da ricollocare (spia rossa): sedute future rimaste senza posto per ferie, permessi, orari cambiati */
+  FA.toRelocate = () => {
+    const seen = new Set(), out = [];
+    (A.issues || []).forEach(i => {
+      if (!['conflitto', 'da_riprogrammare', 'da_verificare'].includes(i.kind) || seen.has(i.appointment_id)) return;
+      const a = A.ctx && A.ctx.appt.get(i.appointment_id);
+      if (!a || a.day < A.today) return;
+      seen.add(i.appointment_id); out.push({ a, msg: i.message });
+    });
+    return out;
+  };
+  function spie() {
+    const red = FA.toRelocate().length, yellow = (A.changes || []).length;
+    return '<button class="spia red' + (red ? ' on' : '') + '" data-act="spia-red" title="Pazienti da ricollocare">' + (red ? '● ' + red + (red === 1 ? ' paziente da ricollocare' : ' pazienti da ricollocare') : '✓ Nessun paziente da ricollocare') + '</button>' +
+      (yellow ? '<button class="spia yellow on" data-act="spia-yellow" title="Cambiamenti ai tabulati fatti da altri">● ' + yellow + (yellow === 1 ? ' cambiamento' : ' cambiamenti') + '</button>' : '');
+  }
+  FA.actions['spia-red'] = () => { A.ui.sb = Object.assign(A.ui.sb || {}, { show: 'da_assegnare', from: A.today, to: E.addDays(A.today, 60), th: '', sel: (A.ui.sb || {}).sel || {}, force: (A.ui.sb || {}).force || {} }); FA.go('sostituzioni'); };
+  FA.actions['spia-yellow'] = () => FA.openModal({ title: 'Cambiamenti ai tabulati', live: true, wide: true, body: changesBody,
+    foot: () => '<button class="btn" data-act="close-modal">Chiudi</button>' + ((A.changes || []).length ? '<button class="btn primary" data-act="chg-all"' + FA.saveDisabled() + '>Segna tutti come visti</button>' : '') });
+  /** dove guardare: tabulato e giorno della modifica */
+  function changeTarget(c) {
+    const ctx = A.ctx;
+    if (c.entity === 'appointment') { const a = ctx.appt.get(c.entity_id); if (a) return [a.therapist_id, a.day]; }
+    if (c.entity === 'cycle') { const cy = ctx.cyc.get(c.entity_id); if (cy) return [cy.therapist_id, A.today]; }
+    if (c.entity === 'absence') { const ab = (A.data.absences || []).find(x => x.id === c.entity_id); if (ab) return [ab.therapist_id, ab.start_date]; }
+    if (c.entity === 'therapist' && ctx.th.get(c.entity_id)) return [c.entity_id, A.today];
+    return null;
+  }
+  function changesBody() {
+    const list = A.changes || [];
+    if (!list.length) return '<p>✓ Hai visto tutti i cambiamenti.</p>';
+    return '<p class="small muted">Modifiche ai tabulati fatte da altri negli ultimi 30 giorni: non serve intervenire. Spunta «Visto» quando vuoi (vale solo per te).</p><ul class="list">' + list.map(c => {
+      const t = changeTarget(c);
+      return '<li class="todo-item"><div><span class="small muted">' + esc(new Date(c.at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + c.user_name) + '</span><br>' + esc(c.summary) + '</div><div class="row">' +
+        (t ? '<button class="btn small" data-act="chg-open" data-th="' + t[0] + '" data-day="' + t[1] + '" data-id="' + c.id + '">Apri</button>' : '') +
+        '<button class="btn small" data-act="chg-seen" data-id="' + c.id + '">✓ Visto</button></div></li>';
+    }).join('') + '</ul>';
+  }
+  async function markSeen(ids) {
+    try { await S.rpc(A.sb, 'mark_changes_seen', { p_ids: ids }); A.changes = ids ? (A.changes || []).filter(c => !ids.includes(c.id)) : []; render(true); renderModal(); }
+    catch (e) { FA.toast(e.message || 'Non salvato', 'bad'); }
+  }
+  FA.actions['chg-seen'] = el => markSeen([Number(el.getAttribute('data-id'))]);
+  FA.actions['chg-all'] = () => markSeen(null);
+  FA.actions['chg-open'] = el => { markSeen([Number(el.getAttribute('data-id'))]); FA.closeModal(); FA.go('calendario', el.getAttribute('data-th'), el.getAttribute('data-day'), 'giorno'); };
   function header() {
     const n = FA.todoBadge();
     return '<header class="top"><div class="top-inner">' +
       '<div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Pilota condiviso</div></div></div>' +
       '<span id="conn">' + connLabel() + '</span>' +
-      '<button class="todo-pill ' + (n ? '' : 'zero') + '" data-act="go" data-view="dasistemare">' + (n ? '⚠ Da sistemare: ' + n : '✓ Nulla da sistemare') + '</button>' +
+      (FA.isOffice() ? spie() : (n ? '<button class="todo-pill" data-act="go" data-view="dasistemare">⚠ Da sistemare: ' + n + '</button>' : '')) +
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
-      '</div><nav class="nav">' + NAV.map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
+      '</div><nav class="nav">' + nav().map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
       '<div class="pilot-banner">Versione pilota: <strong>solo pazienti fittizi</strong>, non inserire dati reali.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
         (A.me.edit_all_until && A.me.role === 'operatore' && A.me.base_role !== 'operatore' ? ' Sei <strong>autorizzato a gestire tutte le agende</strong> fino al ' + esc(E.fmtIt(A.me.edit_all_until)) + '.' : '') +
         (FA.isFisio() ? ' Puoi modificare <strong>il tuo tabulato</strong> e consultare quelli dei colleghi' + (A.me.therapist_id ? (A.ctx ? ' (' + esc(FA.thName(A.me.therapist_id)) + ')' : '') : ' — account non ancora collegato al tuo nome: chiedi al coordinatore') + '.' : '') + '</div>' +
@@ -422,6 +470,7 @@
     root.innerHTML = header() + '<main>' + body + '</main>';
     if (soft) window.scrollTo(0, y);
     restoreFocus(root, focused);
+    (FA.afterRender || []).forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
   });
   FA.render = render;
   FA.flushPending = () => { if (pending) render(true); };
@@ -560,14 +609,13 @@
       '<div class="row"><button class="btn primary" data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/mese">Il mio tabulato</button>' +
       '<button class="btn" data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/giorno">Agenda di oggi</button></div></div>' +
       abs.map(x => '<div class="form-warn small">Assente oggi (' + esc(E.ABSENCE_KIND[x.kind]) + ')' + (x.start_time ? ' ' + x.start_time + '–' + x.end_time : '') + '</div>').join('') +
-      (list.length ? '<p class="small muted" style="margin:6px 0">' + list.length + ' pazienti · ' + done + ' già registrati come effettuati. Il numero è il conto alla rovescia: le sedute che restano, compresa questa.</p><ul class="list">' + list.map(a => {
+      (list.length ? '<p class="small muted" style="margin:6px 0">' + list.length + ' pazienti. Il numero è il conto alla rovescia (le sedute che restano, compresa questa). La presenza non va segnata: segna solo chi è assente.</p><ul class="list">' + list.map(a => {
         const c = ctx.cyc.get(a.cycle_id), left = FA.leftOf(a);
         return '<li class="todo-item td-' + a.status + '"><div><strong>' + a.start_time + '–' + a.end_time + '</strong> <span class="muted small">(' + (E.toMin(a.end_time) - E.toMin(a.start_time)) + '′)</span> ' +
           '<a href="#" data-act="open-appt" data-id="' + a.id + '"><strong>' + esc(FA.patName(a.patient_id)) + '</strong></a> ' + FA.countBadge(a) +
           (c && c.treatment ? ' <span class="chip grey">' + esc(c.treatment) + '</span>' : '') + (a.original_therapist_id ? ' <span class="chip info">sostituisce ' + esc(FA.thName(a.original_therapist_id)) + '</span>' : '') +
           ' ' + FA.statusChip(a) + (left != null && typeof left === 'number' ? '<div class="small muted">' + (left === 1 ? 'ultima seduta del ciclo' : 'restano ' + left + ' sedute, compresa questa') + '</div>' : '') + '</div>' +
-          (can && a.status === 'programmata' ? '<div class="row"><button class="btn small ok" data-act="today-out" data-id="' + a.id + '" data-s="effettuata"' + FA.saveDisabled() + '>✓ Effettuata</button>' +
-            '<button class="btn small" data-act="today-out" data-id="' + a.id + '" data-s="assente_rec"' + FA.saveDisabled() + '>Assente</button></div>' : '') + '</li>';
+          (can && a.status === 'programmata' ? '<div class="row"><button class="btn small" data-act="today-out" data-id="' + a.id + '" data-s="assente_rec"' + FA.saveDisabled() + '>Assente</button></div>' : '') + '</li>';
       }).join('') + '</ul>' : '<p class="muted">Nessun paziente in agenda oggi.</p>') + '</div>';
   }
   FA.myDay = myDay;

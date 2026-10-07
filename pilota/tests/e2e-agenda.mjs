@@ -1,9 +1,9 @@
-// Prova nel browser dei casi d'uso quotidiani del tabulato (dati fittizi, database LOCALE):
-// 1 il fisioterapista entra e vede subito i pazienti di oggi; 2 la segreteria scrive un paziente toccando un posto vuoto
-// (su più giorni, orario 12:20 scritto a mano); 3 un'attività toccando il tabulato; 4 spostamento con «Annulla» e scambio;
-// 5 passaggio temporaneo a un collega con il conteggio invariato; 6 assenza che non scala ed effettuata che scala una volta;
-// 7 ferie con i pazienti da ricollocare; 8 mesi precedenti consultabili e non modificabili con un tocco;
-// 9 modifiche visibili agli altri utenti in tempo reale, nel rispetto dei permessi.
+// Prova nel browser del tabulato mensile a griglia (dati fittizi, database LOCALE), anche a misura di cellulare:
+// 1 il fisioterapista entra e vede i pazienti di oggi (la presenza non si segna); 2 paziente nuovo scritto in una riga vuota
+// del tabulato (lun-mer-ven alle 12:20, 6 sedute: 6…1 nelle caselle); 3 attività scritta a mano (gruppo con un nome);
+// 4 seduta spostata dalla casella con «Annulla», poi scambio; 5 una seduta a un collega con il conteggio invariato;
+// 6 assenza che non scala, seduta passata che conta da sola; 7 ferie → spia rossa e pazienti da ricollocare;
+// 8 mesi precedenti consultabili e non modificabili; 9 tempo reale, permessi e spia gialla; 10 orario della settimana.
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -33,13 +33,14 @@ const A = await mk('Agenda'), B = await mk('Collega');
 const fisioUid = q("select user_id from profiles where email='fisio-e2e@pilota.test'");
 await S.rpc(admin, 'admin_set_user', { p_user: fisioUid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Prova', p_therapist: A });
 const seg = await login('seg-e2e@pilota.test');
-// pazienti di oggi per il fisioterapista (anche oggi è un giorno di lavoro nella settimana tipo di prova)
+const fisioSb = await login('fisio-e2e@pilota.test');
 const imp = async (th, rows, from) => S.rpc(seg, 'import_sheet', { p: { therapist_id: th, month: from.slice(0, 8) + '01', from_date: from, rows } });
-const F = work(E.addDays(T0, 7), 6);   // giorni futuri di lavoro
+const P = work(E.addDays(T0, -12), 3);        // giorni passati
+const F = work(E.addDays(T0, 3), 6);          // giorni futuri
 const r0 = await imp(A, [
-  { ref: 'o1', target: 'nuovo', patient_name: 'Oggi Uno ' + RUN, category_id: 'mano', planned: 10, prior: 6, duration: 30, weekdays: [], start: '07:30', cells: [{ day: T0 }, { day: F[0] }] },
+  { ref: 'o1', target: 'nuovo', patient_name: 'Oggi Uno ' + RUN, category_id: 'mano', planned: 10, prior: 4, duration: 30, weekdays: [], start: '07:30', cells: [{ day: P[0] }, { day: P[1] }, { day: T0 }, { day: F[0] }] },
   { ref: 'o2', target: 'nuovo', patient_name: 'Oggi Due ' + RUN, category_id: 'mano', planned: 10, prior: 2, duration: 45, weekdays: [], start: '08:30', cells: [{ day: T0 }, { day: F[0] }, { day: F[1] }] },
-  { ref: 'o3', target: 'nuovo', patient_name: 'Scambio ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '10:00', cells: [{ day: F[0] }] }], T0);
+  { ref: 'o3', target: 'nuovo', patient_name: 'Scambio ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '10:00', cells: [{ day: F[0] }] }], P[0]);
 assert.ok(r0.results.every(x => x.ok), JSON.stringify(r0.results));
 const cyc = n => q(`select c.id from cycles c join patients p on p.id=c.patient_id where p.name='${n} ${RUN}'`);
 const ap = (n, d) => row(`select row_to_json(a) from appointments a join patients p on p.id=a.patient_id where p.name='${n} ${RUN}' and a.day='${d}' and a.status not in ('spostata','liberata')`);
@@ -59,128 +60,122 @@ async function open(email, viewport) {
   return page;
 }
 const goCal = (page, th, d, mode) => page.evaluate(([t, x, m]) => { location.hash = '#/calendario/' + t + '/' + x + '/' + m; }, [th, d, mode]);
-/** tocco su un punto del tabulato all'ora indicata */
+/** casella del tabulato: riga del paziente, colonna del giorno */
+const cell = (n, d) => `.tg tr:has(.tg-name:has-text("${n} ${RUN}")) td:nth-child(${Number(d.slice(8)) + 1}) button`;
 async function tap(page, d, hhmm) {
-  const col = page.locator(`.wk-col[data-day="${d}"]`);
+  const col = page.locator(`.wk-col[data-day="${d}"]`).first();
   await col.waitFor();
   const min0 = Number(await col.getAttribute('data-min'));
   await col.click({ position: { x: 12, y: (E.toMin(hhmm) - min0) * 1.25 + 2 } });
 }
 try {
   // ------------------------------------------------------------------ 1
-  const fp = await open('fisio-e2e@pilota.test', { width: 820, height: 1000 });
+  const fp = await open('fisio-e2e@pilota.test', { width: 390, height: 844 });
   await fp.waitForSelector('.today-list');
   const tl = await fp.textContent('.today-list');
-  assert.match(tl, new RegExp('Oggi Uno ' + RUN)); assert.match(tl, new RegExp('Oggi Due ' + RUN));
-  assert.match(tl, /07:30–08:00/); assert.match(tl, /\(45′\)/);
-  assert.match(tl, /restano 4 sedute, compresa questa/, 'Oggi Uno: 6 fatte su 10 → oggi è la 7ª, ne restano 4');
+  assert.match(tl, new RegExp('Oggi Uno ' + RUN)); assert.match(tl, /\(45′\)/);
+  assert.match(tl, /restano 4 sedute, compresa questa/, 'Oggi Uno: 4 prima + 2 passate (contano da sole) → oggi la 7ª, ne restano 4');
+  assert.ok(!(await fp.$('.today-list button:has-text("Effettuata")')), 'la presenza non si segna');
   await fp.click('.today-list button:has-text("Il mio tabulato")');
-  await fp.waitForSelector('.mo-grid');
-  assert.match(await fp.textContent('h2'), /Tabulato di Agenda/);
-  ok('Il fisioterapista entra e vede subito i pazienti di oggi (orario, durata, sedute che restano); un tocco apre il tabulato del mese');
+  await fp.waitForSelector('.tg');
+  assert.ok(!(await fp.$('nav a[href="#/trova"]')), 'Trova posto solo per la segreteria');
+  ok('Il fisioterapista (dal cellulare) vede subito i pazienti di oggi con le sedute che restano; la presenza non si segna; un tocco apre il tabulato del mese');
 
   // ------------------------------------------------------------------ 2
   const sp = await open('seg-e2e@pilota.test');
-  await goCal(sp, A, F[2], 'settimana');
-  await tap(sp, F[2], '13:00');
+  await goCal(sp, A, F[2], 'mese');
+  await sp.waitForSelector('.tg tr.tg-new');
+  await sp.fill('.tg tr.tg-new >> nth=0 >> input', 'Nuovo ' + RUN);
+  await sp.click(`.tg tr.tg-new >> nth=0 >> td:nth-child(${Number(F[2].slice(8)) + 1}) button`);
   await sp.waitForSelector('.drawer');
-  assert.equal(await sp.$eval('.drawer select[data-bind="pd.th"]', e => e.value), A, 'fisioterapista già compilato');
-  assert.equal(await sp.$eval('.drawer input[data-bind="pd.day"]', e => e.value), F[2], 'giorno già compilato');
-  assert.equal(await sp.$eval('.drawer input[data-bind="pd.start"]', e => e.value), '13:00', 'ora già compilata');
-  await sp.fill('.drawer input[data-bind="pd.q"]', 'Nuovo ' + RUN);
-  // orario scritto a mano, con il cursore che resta al suo posto: 12:20 resta 12:20
+  assert.equal(await sp.$eval('.drawer input[data-bind="pd.q"]', e => e.value), 'Nuovo ' + RUN, 'il nome scritto nel tabulato');
+  assert.equal(await sp.$eval('.drawer input[data-bind="pd.day"]', e => e.value), F[2]);
   await sp.fill('.drawer input[data-bind="pd.start"]', '');
-  await sp.type('.drawer input[data-bind="pd.start"]', '12:20', { delay: 60 });
+  await sp.type('.drawer input[data-bind="pd.start"]', '12:20', { delay: 50 });
   await sp.press('.drawer input[data-bind="pd.start"]', 'Tab');
   assert.equal(await sp.$eval('.drawer input[data-bind="pd.start"]', e => e.value), '12:20');
-  // tre giorni la settimana, 6 sedute rimanenti, 45 minuti
   const wd = E.weekday(F[2]);
   for (const w of [1, 3, 5]) if (w !== wd) await sp.click(`.drawer button[data-act="pd-day"][data-wd="${w}"]`);
   if (![1, 3, 5].includes(wd)) await sp.click(`.drawer button[data-act="pd-day"][data-wd="${wd}"]`);
-  await sp.click('.drawer button[data-act="seg"][data-path="pd.dur"][data-val="45"]');
   await sp.fill('.drawer input[data-bind="pd.left"]', '6'); await sp.press('.drawer input[data-bind="pd.left"]', 'Tab');
   await sp.waitForFunction(() => document.querySelectorAll('.drawer .pd-list li').length === 6);
-  assert.match(await sp.textContent('.drawer .pd-list'), /6.*5.*4.*3.*2.*1/s, 'anteprima con il conto alla rovescia');
   await sp.click('.drawer button[data-act="pd-save"]');
   await sp.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
-  const nuovo = q(`select string_agg(to_char(a.start_time,'HH24:MI')||'/'||extract(isodow from a.day)||'/'||(extract(epoch from a.end_time-a.start_time)/60)::int, ',' order by a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}'`);
-  assert.equal(nuovo.split(',').length, 6);
-  assert.ok(nuovo.split(',').every(x => /^12:20\/[135]\/45$/.test(x)), nuovo);
-  assert.equal(q(`select planned_sessions||'/'||prior_sessions from cycles c join patients p on p.id=c.patient_id where p.name='Nuovo ${RUN}'`), '6/0');
-  ok('La segreteria tocca un posto vuoto: fisioterapista, giorno e ora già compilati; paziente nuovo su lunedì, mercoledì e venerdì alle 12:20 (scritto a mano), 45 minuti, 6 sedute');
+  const nuovo = q(`select string_agg(to_char(a.start_time,'HH24:MI')||'/'||extract(isodow from a.day), ',' order by a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}'`);
+  assert.equal(nuovo.split(',').length, 6); assert.ok(nuovo.split(',').every(x => /^12:20\/[135]$/.test(x)), nuovo);
+  await sp.waitForSelector(`.tg .tg-name:has-text("Nuovo ${RUN}")`);
+  const first = q(`select min(a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}'`);
+  assert.equal(await sp.textContent(cell('Nuovo', first)), '6', 'nella casella il numero a ritroso');
+  ok('Paziente nuovo scritto in una riga vuota del tabulato: lunedì, mercoledì e venerdì alle 12:20 (scritto a mano), 6 sedute, nelle caselle 6, 5, 4…');
 
   // ------------------------------------------------------------------ 3
   await goCal(sp, A, F[3], 'giorno');
   await tap(sp, F[3], '14:00');
   await sp.waitForSelector('.drawer');
   await sp.click('.drawer button[data-act="seg"][data-path="pd.kind"][data-val="attivita"]');
-  await sp.selectOption('.drawer select[data-bind="pd.act.kind"]', 'reparto');
+  await sp.selectOption('.drawer select[data-bind="pd.act.kind"]', 'gruppo');
+  await sp.fill('.drawer input[data-bind="pd.act.label"]', 'Gruppo schiena');
   await sp.fill('.drawer input[data-bind="pd.act.start"]', '14:00'); await sp.press('.drawer input[data-bind="pd.act.start"]', 'Tab');
   await sp.fill('.drawer input[data-bind="pd.act.end"]', '14:45'); await sp.press('.drawer input[data-bind="pd.act.end"]', 'Tab');
   await sp.click('.drawer button[data-act="pd-save"]');
   await sp.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
-  assert.match(q(`select blocks::text from day_overrides where therapist_id='${A}' and day='${F[3]}'`), /reparto.*14:00.*14:45|14:00.*14:45.*reparto/);
-  await sp.waitForSelector(`.wk-col[data-day="${F[3]}"] .k-reparto`);
-  ok('Attività scritta toccando il tabulato (reparto 14:00–14:45, solo quel giorno), senza passare da «Orario»');
+  assert.match(q(`select blocks::text from day_overrides where therapist_id='${A}' and day='${F[3]}'`), /Gruppo schiena/);
+  await sp.waitForSelector(`.wk-col[data-day="${F[3]}"] .k-gruppo:has-text("Gruppo schiena")`);
+  ok('Attività scritta a mano toccando la giornata: «Gruppo schiena» 14:00–14:45, senza nomi dei pazienti');
 
   // ------------------------------------------------------------------ 4
-  const s1 = ap('Scambio', F[0]);
-  await goCal(sp, A, F[0], 'giorno');
-  await sp.click(`.wk-appt[data-id="${s1.id}"]`);
-  await sp.click('.modal button:has-text("Cambia giorno, ora o durata")');
-  await sp.fill('.modal input[data-bind="am.pick.start"]', '11:10'); await sp.press('.modal input[data-bind="am.pick.start"]', 'Tab');
-  await sp.waitForSelector('.modal .form-note:has-text("Posto libero")');
-  await sp.click('.modal button:has-text("Salva la modifica")');
+  await goCal(sp, A, F[0], 'mese');
+  await sp.click(cell('Scambio', F[0]));
+  await sp.click('.modal button:has-text("Sposta (giorno o ora)")');
+  await sp.fill('.modal input[data-bind="ts.start"]', '11:10'); await sp.press('.modal input[data-bind="ts.start"]', 'Tab');
+  await sp.waitForSelector('.modal .form-note:has-text("Va bene")');
+  await sp.click('.modal button:has-text("Salva")');
   await sp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
   assert.equal(ap('Scambio', F[0]).start_time, '11:10:00');
   await sp.click('.toast.undo button');
-  await sp.waitForFunction(id => { const e = document.querySelector('.wk-appt[data-id="' + id + '"]'); return e && e.textContent.includes('10:00'); }, s1.id, { timeout: 15000 });
+  await sp.waitForFunction(() => !document.querySelector('.toast.undo') && !FA.state.saving);
   assert.equal(ap('Scambio', F[0]).start_time, '10:00:00', '«Annulla» riporta la seduta com’era');
-  // scambio con il paziente delle 8:30 (45′): un'unica operazione
   const o2 = ap('Oggi Due', F[0]);
-  await sp.click(`.wk-appt[data-id="${s1.id}"]`);
+  await sp.click(cell('Scambio', F[0]));
   await sp.click('.modal button:has-text("Scambia con un altro paziente")');
   await sp.click(`.modal button[data-act="sw-pick"][data-b="${o2.id}"]`);
   await sp.waitForSelector('.modal .form-note:has-text("compatibili")');
   await sp.click('.modal button:has-text("⇄ Scambia")');
   await sp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
-  assert.equal(ap('Scambio', F[0]).start_time, '08:30:00'); assert.equal(ap('Oggi Due', F[0]).start_time, '10:00:00');
-  assert.equal(ap('Oggi Due', F[0]).end_time, '10:45:00', 'ognuno con la propria durata');
-  ok('Seduta spostata alle 11:10 e riportata com’era con «Annulla»; due pazienti scambiati di posto in un’unica operazione, ognuno con la propria durata');
+  assert.equal(ap('Scambio', F[0]).start_time, '08:30:00'); assert.equal(ap('Oggi Due', F[0]).end_time, '10:45:00');
+  ok('Dalla casella: seduta spostata e riportata com’era con «Annulla»; due pazienti scambiati di posto, ognuno con la propria durata');
 
   // ------------------------------------------------------------------ 5
-  const leftBefore = await sp.$eval(`.wk-appt[data-id="${o2.id}"] .cnt`, e => e.textContent);
-  await sp.click(`.wk-appt[data-id="${o2.id}"]`);
-  await sp.click('.modal button:has-text("Passa a un altro fisioterapista")');
-  await sp.selectOption('.modal select[data-bind="am.pick.th"]', B);
-  await sp.waitForSelector('.modal .form-note:has-text("Posto libero")');
-  await sp.click('.modal button:has-text("Salva la modifica")');
+  const left0 = await sp.textContent(cell('Oggi Due', F[1]));
+  await sp.click(cell('Oggi Due', F[1]));
+  await sp.click('.modal button:has-text("Altro fisioterapista")');
+  await sp.selectOption('.modal select[data-bind="ts.th"]', B);
+  await sp.waitForSelector('.modal .form-note:has-text("Va bene")');
+  await sp.click('.modal button:has-text("Salva")');
   await sp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
-  await goCal(sp, B, F[0], 'giorno');
-  await sp.waitForSelector(`.wk-appt[data-id="${o2.id}"]`);
-  assert.equal(await sp.$eval(`.wk-appt[data-id="${o2.id}"] .cnt`, e => e.textContent), leftBefore, 'dal collega il conteggio resta lo stesso');
-  assert.match(await sp.textContent(`.wk-appt[data-id="${o2.id}"]`), /sostituisce Agenda/);
+  await sp.waitForSelector(cell('Oggi Due', F[1]) + ' sub');
+  assert.equal((await sp.textContent(cell('Oggi Due', F[1]))).replace(/[A-Z]+$/, ''), left0, 'conteggio invariato, sigla del collega nella casella');
   assert.equal(q(`select therapist_id from cycles where id='${cyc('Oggi Due')}'`), A, 'il ciclo resta del titolare');
-  ok('Paziente passato temporaneamente a un collega: stesso conto alla rovescia (' + leftBefore + '), il ciclo resta del titolare');
+  await goCal(sp, B, F[1], 'mese');
+  await sp.waitForSelector(`.tg tr.tg-guestrow:has-text("Oggi Due ${RUN}")`);
+  ok('Una seduta passata a un collega: nel tabulato del titolare resta con la sigla del collega, stesso numero (' + left0 + '); il collega la vede come paziente di un altro');
 
   // ------------------------------------------------------------------ 6
-  const today1 = ap('Oggi Uno', T0), today2 = ap('Oggi Due', T0);
-  await fp.click('nav a[href="#/oggi"]');
-  await fp.waitForSelector(`.today-list button[data-act="today-out"][data-id="${today2.id}"][data-s="assente_rec"]`);
-  await fp.click(`.today-list button[data-act="today-out"][data-id="${today2.id}"][data-s="assente_rec"]`);
-  await fp.waitForFunction(() => !document.querySelector('.toast:not(.undo)') || true);
-  await fp.waitForFunction(id => !document.querySelector('.today-list button[data-id="' + id + '"]'), today2.id, { timeout: 15000 });
-  const eff = c => Number(q(`select prior_sessions + (select count(*) from appointments where cycle_id=c.id and status='effettuata') from cycles c where id='${c}'`));
-  assert.equal(eff(cyc('Oggi Due')), 2, 'l’assenza non scala la seduta');
-  await fp.click(`.today-list button[data-act="today-out"][data-id="${today1.id}"][data-s="effettuata"]`);
-  await fp.waitForFunction(id => !document.querySelector('.today-list button[data-id="' + id + '"]'), today1.id, { timeout: 15000 });
-  assert.equal(eff(cyc('Oggi Uno')), 7);
-  assert.ok(!(await fp.$(`.today-list button[data-id="${today1.id}"]`)), 'una volta registrata, non si può scalare di nuovo');
-  assert.match(await fp.textContent('.today-list'), /1 già registrati come effettuati/);
-  ok('Dal fisioterapista: assenza (da recuperare) che non scala la seduta; «Effettuata» che la scala una sola volta');
+  const eff = c => { const k = q(`select prior_sessions || '/' || (select count(*) from appointments where cycle_id=c.id and (status='effettuata' or (status='programmata' and day < app.today()))) from cycles c where id='${c}'`).split('/'); return Number(k[0]) + Number(k[1]); };
+  assert.equal(eff(cyc('Oggi Uno')), 6, 'le sedute passate contano da sole');
+  await goCal(sp, A, F[0], 'mese');
+  const before = await sp.textContent(cell('Oggi Uno', T0));
+  await sp.click(cell('Oggi Uno', T0 > F[0] ? F[0] : T0));
+  await sp.click('.modal button[data-act="ts-absent"][data-rec="0"]');
+  await sp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.equal(ap('Oggi Uno', T0).status, 'assente');
+  assert.equal(await sp.textContent(cell('Oggi Uno', F[0])), before, 'l’assenza non scala: la seduta dopo prende il numero di quella saltata');
+  assert.equal(await sp.textContent(cell('Oggi Uno', T0)), 'A');
+  ok('Assenza dalla casella: segnata «A», non scala la seduta; le sedute passate contano da sole, senza segnare la presenza');
 
   // ------------------------------------------------------------------ 7
   const ferie = q(`select min(a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}' and a.day > '${F[2]}'`);
+  const red0 = await sp.$eval('.spia.red', e => e.textContent);
   await goCal(sp, A, ferie, 'giorno');
   await tap(sp, ferie, '09:30');
   await sp.waitForSelector('.drawer');
@@ -190,46 +185,63 @@ try {
   await sp.waitForSelector('.drawer .form-warn:has-text("da ricollocare")');
   await sp.click('.drawer button[data-act="pd-save"]');
   await sp.waitForURL(/#\/assenze\/piano\//, { timeout: 15000 });
-  await sp.waitForSelector(`text=Nuovo ${RUN}`);
-  ok('Ferie registrate dal tabulato: i pazienti di quel giorno compaiono subito da ricollocare, con i colleghi proposti');
+  await sp.waitForFunction(r => { const e = document.querySelector('.spia.red.on'); return e && e.textContent !== r; }, red0, { timeout: 15000 });
+  await sp.click('.spia.red');
+  await sp.waitForSelector(`.sb-table tr:has-text("Nuovo ${RUN}")`);
+  ok('Ferie registrate dal tabulato: la spia rossa si accende per chi gestisce le agende e porta subito ai pazienti da ricollocare');
 
   // ------------------------------------------------------------------ 8
-  const past = E.addDays(T0, -35);
-  const before = q(`select count(*) from appointments where therapist_id='${A}' and day < '${T0}'`);
+  const past = E.addDays(T0, -45);
   await goCal(fp, A, past, 'mese');
-  await fp.waitForSelector('.mo-grid');
-  await fp.click('button[aria-label="Avanti"]');
-  await fp.waitForSelector('.mo-grid');
-  await goCal(fp, A, E.addDays(T0, -1 - (E.weekday(T0) === 1 ? 2 : 0)), 'giorno');
-  const pastDay = E.addDays(T0, -1 - (E.weekday(T0) === 1 ? 2 : 0));
-  await tap(fp, pastDay, '09:00');
-  await fp.waitForTimeout(300);
-  assert.ok(!(await fp.$('.drawer')), 'un giorno passato non si scrive con un tocco');
-  assert.equal(q(`select count(*) from appointments where therapist_id='${A}' and day < '${T0}'`), before);
-  ok('Mesi precedenti consultabili (vista mese, avanti/indietro); un giorno passato non si modifica per sbaglio');
+  await fp.waitForSelector('.tg');
+  assert.ok(!(await fp.$('.tg button[data-act="tg-add"]')) && !(await fp.$('.tg tr.tg-new td button')), 'un mese passato non si scrive con un tocco');
+  await fp.click('button[aria-label="Avanti"]'); await fp.waitForSelector('.tg');
+  await fp.click('button[aria-label="Avanti"]'); await fp.waitForSelector('.tg');
+  ok('Mesi precedenti consultabili con le frecce; nei giorni passati non si aggiunge nulla per sbaglio');
 
   // ------------------------------------------------------------------ 9
-  // il fisioterapista vede l'agenda del collega in consultazione: il tocco non scrive, il server rifiuta comunque
-  await goCal(fp, B, F[1], 'giorno');
-  await fp.waitForSelector('.cal-bar');
-  assert.match(await fp.textContent('main'), /serve l’autorizzazione del coordinatore/);
-  await tap(fp, F[1], '09:00');
-  await fp.waitForTimeout(300);
-  assert.ok(!(await fp.$('.drawer')), 'consultazione: nessun inserimento sull’agenda del collega');
-  // la segreteria sposta un paziente del fisioterapista: compare da lui senza ricaricare la pagina
-  await goCal(fp, A, F[1], 'giorno');
-  const o2b = ap('Oggi Due', F[1]);
-  await fp.waitForSelector(`.wk-appt[data-id="${o2b.id}"]`);
-  await S.rpc(seg, 'edit_appointment', { p_id: o2b.id, p_version: o2b.version, p: { start: '13:15' } });
-  await fp.waitForFunction(id => { const e = document.querySelector('.wk-appt[data-id="' + id + '"]'); return e && e.textContent.includes('13:15'); }, o2b.id, { timeout: 20000 });
-  // autorizzazione del coordinatore: ora può scrivere anche nell'agenda del collega
-  await S.rpc(admin, 'admin_set_user', { p_user: fisioUid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Prova', p_therapist: A, p_edit_until: E.addDays(T0, 3) });
-  await fp.reload(); await fp.waitForSelector('nav a[href="#/calendario"]');
-  await goCal(fp, B, F[1], 'giorno');
-  await tap(fp, F[1], '09:00');
-  await fp.waitForSelector('.drawer');
-  assert.match(await fp.textContent('.pilot-banner'), /autorizzato a gestire tutte le agende/);
-  ok('Le modifiche della segreteria compaiono al fisioterapista in tempo reale; l’agenda del collega è in consultazione finché il coordinatore non autorizza');
+  await goCal(fp, B, F[1], 'mese');
+  await fp.waitForSelector('.tg');
+  assert.ok(!(await fp.$('.tg tr.tg-new')) && !(await fp.$('.tg button[data-act="tg-add"]')), 'agenda del collega in consultazione');
+  await goCal(fp, A, F[1], 'mese');
+  const nx = q(`select min(a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}' and a.day > '${ferie}'`);
+  const n1 = ap('Nuovo', nx);
+  await fp.waitForSelector(cell('Nuovo', nx));
+  await S.rpc(seg, 'edit_appointment', { p_id: n1.id, p_version: n1.version, p: { start: '13:15' } });
+  await fp.waitForSelector(cell('Nuovo', nx) + ' sup:has-text("13:15")', { timeout: 20000 });
+  // modifica del fisioterapista → spia gialla alla segreteria
+  const o1 = ap('Oggi Uno', F[0]);
+  await S.rpc(fisioSb, 'edit_appointment', { p_id: o1.id, p_version: o1.version, p: { start: '07:45' } });
+  await sp.waitForSelector('.spia.yellow.on', { timeout: 20000 });
+  await sp.click('.spia.yellow');
+  await sp.waitForSelector('.modal li:has-text("Oggi Uno")');
+  assert.match(await sp.textContent('.modal'), /Fisio Prova/);
+  await sp.click('.modal button:has-text("Segna tutti come visti")');
+  await sp.waitForFunction(() => !document.querySelector('.spia.yellow.on'), null, { timeout: 15000 });
+  assert.ok(!(await fp.$('.spia')), 'i fisioterapisti non hanno le spie');
+  ok('Tempo reale: la modifica della segreteria compare al fisioterapista; la sua modifica accende la spia gialla alla segreteria («Visto» la spegne); agenda del collega in consultazione');
+
+  // ------------------------------------------------------------------ 10
+  await goCal(fp, A, T0, 'mese');
+  await fp.click('button[data-act="or-open"]');
+  await fp.waitForSelector('.modal .or-day');
+  await fp.click('.modal button[data-act="or-add"][data-k="2"]');
+  const n2 = await fp.$$eval('.modal .or-day >> nth=1 >> .or-row', l => l.length).catch(() => 0);
+  const lastRow = `.modal .or-day:nth-of-type(2) .or-row:last-child`;
+  await fp.selectOption('.modal select[data-bind="or.week.2.' + (DAY.length) + '.kind"]', 'ortesi');
+  await fp.fill('.modal input[data-bind="or.week.2.' + DAY.length + '.start"]', '15:00');
+  await fp.fill('.modal input[data-bind="or.week.2.' + DAY.length + '.end"]', '16:00');
+  await fp.fill('.modal input[data-bind="or.week.2.' + DAY.length + '.label"]', 'Ortesi mano');
+  const from = work(E.addDays(T0, 14), 1, [1])[0];
+  await fp.fill('.modal input[data-bind="or.from"]', from);
+  await fp.click('.modal button:has-text("Controlla")');
+  await fp.waitForSelector('.modal .form-note:has-text("Nessun paziente"), .modal .form-warn');
+  await fp.click('.modal button[data-act="or-save"]');
+  await fp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  assert.match(q(`select week::text from shift_versions where therapist_id='${A}' and valid_from='${from}'`), /Ortesi mano/);
+  assert.equal(q(`select count(*) from shift_versions where therapist_id='${A}'`), '2', 'il passato resta: nuova versione dell’orario da quella data');
+  void n2; void lastRow;
+  ok('Il fisioterapista cambia il proprio orario (ambulatorio ortesi il martedì) da una data: il passato non cambia');
 
   assert.deepEqual(errors, [], 'nessun errore nella pagina');
 } finally {

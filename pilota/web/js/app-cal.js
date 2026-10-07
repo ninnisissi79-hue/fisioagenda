@@ -186,7 +186,7 @@
       A.ui.find = null;
       // il risultato si vede subito nel tabulato del collega scelto, dalla prima seduta
       A.ui.booked = { patient_id: c.patient_id, th: o.therapist_id, n: o.dates.length, from: o.dates[0] };
-      FA.go('calendario', o.therapist_id, o.dates[0], 'settimana');
+      FA.go('calendario', o.therapist_id, o.dates[0], 'mese');
     } catch (e) {
       A.ui.bookErr = e.message + (f.mode === 'attesa' && f.cycle_id ? ' La richiesta è comunque salvata in lista d’attesa: puoi riprovare.' : '');
       f.info = null;

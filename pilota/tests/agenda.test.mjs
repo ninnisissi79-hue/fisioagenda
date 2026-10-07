@@ -125,41 +125,83 @@ test('annullare una modifica: solo se nessuno l’ha cambiata dopo', async () =>
   assert.equal(x.start_time + '-' + x.end_time, '10:00:00-10:45:00');
 });
 
-test('conteggio 10 → 1: si scala solo con «effettuata», una volta sola; assenze e spostamenti no; il ciclo segue il paziente', async () => {
+test('conteggio 10 → 1: le sedute passate contano da sole, l’assenza no; una correzione riallinea; il ciclo segue il paziente', async () => {
   const A = await therapist('C1'), B = await therapist('C2');
   const past = days(E.addDays(T0, -20), [1, 2, 3, 4, 5], 3);
   const fut = days(E.addDays(T0, 1), [1, 2, 3, 4, 5], 5);
-  // paziente già a metà ciclo: 3 sedute fatte prima, poi 3 nel passato e 5 future → 10
+  // paziente già a metà ciclo: 2 sedute fatte prima, poi 3 nel passato e 5 future → 10
   const c = await patient(seg, A, 'Conta', past.map(d => ({ day: d })).concat(fut.map(d => ({ day: d }))), { prior: 2 });
   const counts = async () => { const ctx = await ctxFor(seg, T0); return E.cycleCounts(ctx, c); };
-  assert.equal((await counts()).effettuate, 2);
-  const out = async (d, st, rec) => { const x = appt(c, d); await S.rpc(seg, 'register_outcome', { p_id: x.id, p_version: x.version, p_status: st, p_cancel_by: null, p_to_recover: !!rec, p_note: '' }); };
+  assert.equal((await counts()).effettuate, 5, 'la presenza non si segna: le 3 sedute passate contano da sole');
+  const out = async (d, st) => { const x = appt(c, d); await S.rpc(seg, 'register_outcome', { p_id: x.id, p_version: x.version, p_status: st, p_cancel_by: null, p_to_recover: false, p_note: '' }); };
+  // registrare comunque «effettuata» non scala due volte
   await out(past[0], 'effettuata');
-  await out(past[1], 'effettuata');
-  // la stessa seduta registrata di nuovo non scala due volte
-  await out(past[1], 'effettuata');
-  assert.equal((await counts()).effettuate, 4);
+  assert.equal((await counts()).effettuate, 5);
   // un'assenza non consuma una seduta
-  await out(past[2], 'assente', true);
+  await out(past[2], 'assente');
   let k = await counts();
   assert.equal(k.effettuate, 4); assert.equal(k.previste - k.effettuate, 6, 'ne restano 6');
   // il numero a ritroso sulla prossima seduta: 6, poi 5…
   let ctx = await ctxFor(seg, T0);
   const left = d => { const x = (ctx.byCycle.get(c) || []).find(y => y.day === d); return ctx.cyc.get(c).planned_sessions + 1 - E.sessionNumber(ctx, x); };
   assert.deepEqual(fut.slice(0, 3).map(left), [6, 5, 4]);
-  // la seduta passa a un collega: il conteggio non cambia; effettuata con lui → 5; torna al titolare con 5
+  // la seduta passa a un collega: il conteggio non cambia
   const f0 = appt(c, fut[0]);
   await S.rpc(seg, 'edit_appointment', { p_id: f0.id, p_version: f0.version, p: { therapist_id: B } });
   ctx = await ctxFor(seg, T0);
   assert.equal(left(fut[0]), 6);
-  // correzione di un esito sbagliato: riallinea il conteggio
-  await out(past[2], 'effettuata');
+  // assenza segnata per errore e tolta: il conteggio torna come prima
+  await out(past[2], 'programmata');
   assert.equal((await counts()).effettuate, 5);
-  await out(past[2], 'assente', true);
-  assert.equal((await counts()).effettuate, 4);
   // correzione manuale delle sedute già fatte, con traccia
   const cy = row(`select row_to_json(c) from cycles c where id='${c}'`);
   await S.rpc(seg, 'quick_edit_cycle', { p_cycle: c, p_version: cy.version, p: { prior_sessions: 3 } });
-  assert.equal((await counts()).effettuate, 5);
+  assert.equal((await counts()).effettuate, 6);
   assert.ok(Number(q(`select count(*) from audit_log where entity_id='${c}'`)) >= 1, 'correzione registrata nello storico');
+});
+
+test('tabulato semplice: spia gialla per le modifiche degli altri, fisioterapisti gestiti dalla segreteria, presenza non da segnare, nuove attività', async () => {
+  const A = await therapist('Y');
+  const [d1] = days(E.addDays(T0, 1), [1, 2, 3, 4, 5], 1);
+  await ensureUser('fisio-y@pilota.test', 'lettura', 'Fisio Y');
+  const uid = q("select user_id from profiles where email='fisio-y@pilota.test'");
+  await S.rpc(admin, 'admin_set_user', { p_user: uid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Y', p_therapist: A });
+  const fisio = await login('fisio-y@pilota.test');
+  const c = await patient(seg, A, 'Giallo', [{ day: d1 }]);
+  await S.rpc(seg, 'mark_changes_seen', { p_ids: null });
+  // il fisioterapista sposta un suo paziente: alla segreteria si accende la spia gialla, a lui no
+  const x = appt(c, d1);
+  await S.rpc(fisio, 'edit_appointment', { p_id: x.id, p_version: x.version, p: { start: '10:30' } });
+  const mine = await S.rpc(seg, 'my_changes', {});
+  const it = mine.find(m => m.action === 'spostamento' && m.summary.includes('Giallo'));
+  assert.ok(it, 'modifica del collega visibile alla segreteria'); assert.equal(it.user_name, 'Fisio Y');
+  assert.deepEqual(await S.rpc(fisio, 'my_changes', {}), [], 'i fisioterapisti non hanno la spia');
+  // «Visto» personale
+  await S.rpc(seg, 'mark_changes_seen', { p_ids: [it.id] });
+  assert.ok(!(await S.rpc(seg, 'my_changes', {})).some(m => m.id === it.id));
+  assert.ok((await S.rpc(admin, 'my_changes', {})).some(m => m.id === it.id), 'al coordinatore resta finché non la vede lui');
+  // fisioterapisti: li aggiunge la segreteria, non il fisioterapista
+  const nid = await S.rpc(seg, 'admin_save_therapist', { p: { name: 'Nuovo dalla segreteria ' + RUN, activity: 'ambulatorio', skills: [{ category_id: 'mano', level: 'abilitato' }] } });
+  assert.ok(nid);
+  await expectError(S.rpc(fisio, 'admin_save_therapist', { p: { name: 'Non ammesso ' + RUN, activity: 'ambulatorio', skills: [] } }), 'FA_PERM');
+  // presenza: le sedute passate non chiedono più l'esito
+  const past = days(E.addDays(T0, -10), [1, 2, 3, 4, 5], 1)[0];
+  await patient(seg, A, 'Passato', [{ day: past }]);
+  const iss = await S.rpc(seg, 'appointment_issues', { p_from: E.addDays(T0, -30), p_to: E.addDays(T0, 30) });
+  assert.ok(!iss.some(i => i.kind === 'esito_mancante'));
+  // nuove attività scritte a mano, con un nome libero
+  await S.rpc(fisio, 'admin_set_day_override', { p_th: A, p_day: d1, p_blocks: [{ kind: 'amb', start: '07:00', end: '12:00' }, { kind: 'gruppo', start: '12:00', end: '13:00', label: 'Gruppo schiena' }, { kind: 'ortesi', start: '13:00', end: '14:00' }], p_note: '', p_dry_run: false });
+  assert.match(q(`select blocks::text from day_overrides where therapist_id='${A}' and day='${d1}'`), /Gruppo schiena/);
+});
+
+test('svuota pazienti e sedute: solo coordinatore, con conferma scritta; fisioterapisti e orari restano', async () => {
+  const nTh = q('select count(*) from therapists');
+  await expectError(S.rpc(seg, 'admin_clear_patients', { p_confirm: 'SVUOTA' }), 'FA_PERM');
+  await expectError(S.rpc(admin, 'admin_clear_patients', { p_confirm: 'si' }), 'FA_INPUT', /SVUOTA/);
+  const r = await S.rpc(admin, 'admin_clear_patients', { p_confirm: 'SVUOTA' });
+  assert.ok(r.patients > 0);
+  assert.equal(q('select count(*) from patients') + '/' + q('select count(*) from appointments') + '/' + q('select count(*) from cycles'), '0/0/0');
+  assert.equal(q('select count(*) from therapists'), nTh);
+  assert.ok(Number(q('select count(*) from shift_versions')) > 0);
+  assert.match(q("select summary from audit_log where action='svuotamento' order by at desc limit 1"), /svuotato/);
 });

@@ -21,20 +21,20 @@
   FA.timeField = timeField;
 
   /* ---------------- fasce: operazioni sui blocchi della giornata ---------------- */
-  const toM = b => ({ kind: b.kind, s: E.toMin(b.start), e: E.toMin(b.end), max: b.max == null || b.max === '' ? null : Number(b.max) });
-  const fromM = x => ({ kind: x.kind, start: E.fromMin(x.s), end: E.fromMin(x.e), max: x.max });
+  const toM = b => ({ kind: b.kind, s: E.toMin(b.start), e: E.toMin(b.end), max: b.max == null || b.max === '' ? null : Number(b.max), label: b.label || '' });
+  const fromM = x => ({ kind: x.kind, start: E.fromMin(x.s), end: E.fromMin(x.e), max: x.max, label: x.label || '' });
   /** dipinge [s,e) con un tipo (null = cancella): le fasce sovrapposte vengono accorciate o divise */
-  function paintRange(blocks, kind, s, e) {
+  function paintRange(blocks, kind, s, e) { // (5° argomento facoltativo: nome dell'attività)
     const out = [];
     blocks.map(toM).forEach(b => {
       if (b.e <= s || b.s >= e) { out.push(b); return; }
       if (b.s < s) out.push(Object.assign({}, b, { e: s }));
       if (b.e > e) out.push(Object.assign({}, b, { s: e }));
     });
-    if (kind) out.push({ kind, s, e, max: null });
+    if (kind) out.push({ kind, s, e, max: null, label: arguments[4] || '' });
     out.sort((a, b) => a.s - b.s);
     const m = [];
-    out.forEach(x => { const l = m[m.length - 1]; if (l && l.kind === x.kind && l.e === x.s && l.max == x.max) l.e = x.e; else m.push(Object.assign({}, x)); });
+    out.forEach(x => { const l = m[m.length - 1]; if (l && l.kind === x.kind && l.e === x.s && l.max == x.max && (l.label || '') === (x.label || '')) l.e = x.e; else m.push(Object.assign({}, x)); });
     return m.filter(x => x.e > x.s).map(fromM);
   }
   FA.paintRange = paintRange;
@@ -44,9 +44,10 @@
     const ctx = A.ctx;
     const th = params[0] && ctx.th.get(params[0]) ? params[0] : (FA.isFisio() && A.me.therapist_id) || (FA.activeTherapists()[0] || {}).id;
     const date = /^\d{4}-\d{2}-\d{2}$/.test(params[1] || '') ? params[1] : A.today;
-    const mode = ['giorno', 'settimana', 'mese'].includes(params[2]) ? params[2] : 'settimana';
+    const mode = ['giorno', 'mese', 'tutti'].includes(params[2]) && (params[2] !== 'tutti' || FA.isOffice()) ? params[2] : 'mese';
     return { th, date, mode };
   }
+  FA.calState = calState;
   function pt(th) {
     if (!A.ui.pt || A.ui.pt.th !== th) A.ui.pt = { th, drafts: {}, brush: 'amb', effects: null };
     return A.ui.pt;
@@ -67,17 +68,14 @@
     const P = pt(thId);
     const edit = painting();
     const can = FA.canEditTh(thId);
-    if (st.mode === 'mese' && !edit) return calBar(st, th, can, edit, P) + monthView(st, thId, can);
-    let days;
-    if (st.mode === 'giorno') days = [st.date];
-    else {
-      const mon = E.addDays(st.date, 1 - E.weekday(st.date));
-      days = [0, 1, 2, 3, 4, 5].map(i => E.addDays(mon, i));
-      if (!edit && !viewBlocks(thId, days[5]).length) days = days.slice(0, 5);
-    }
+    if (st.mode === 'mese' && !edit) return calBar(st, th, can, edit, P) + FA.tabGrid(st, thId, can);
+    // colonne: il giorno del fisioterapista, oppure (segreteria) tutti i fisioterapisti affiancati
+    const all = st.mode === 'tutti';
+    const pairs = all ? FA.activeTherapists().map(t => [t.id, st.date]) : [[thId, st.date]];
+    const days = pairs.map(x => x[1]);
     let minS = 24 * 60, maxE = 0;
-    days.forEach(d => viewBlocks(thId, d).forEach(b => { minS = Math.min(minS, E.toMin(b.start)); maxE = Math.max(maxE, E.toMin(b.end)); }));
-    (ctx.data.appointments || []).filter(a => a.therapist_id === thId && days.includes(a.day)).forEach(a => { minS = Math.min(minS, E.toMin(a.start_time)); maxE = Math.max(maxE, E.toMin(a.end_time)); });
+    pairs.forEach(([t, d]) => viewBlocks(t, d).forEach(b => { minS = Math.min(minS, E.toMin(b.start)); maxE = Math.max(maxE, E.toMin(b.end)); }));
+    (ctx.data.appointments || []).filter(a => pairs.some(([t, d]) => a.therapist_id === t && a.day === d)).forEach(a => { minS = Math.min(minS, E.toMin(a.start_time)); maxE = Math.max(maxE, E.toMin(a.end_time)); });
     if (edit || maxE <= minS) { minS = Math.min(minS, 7 * 60); maxE = Math.max(maxE, 16 * 60); }
     minS = Math.floor(minS / 60) * 60; maxE = Math.ceil(maxE / 60) * 60;
     const H = (maxE - minS) * PX;
@@ -86,8 +84,8 @@
     let ruler = '<div class="wk-ruler" style="height:' + H + 'px">';
     for (let m = minS; m <= maxE; m += 30) ruler += '<div class="wk-tick' + (m % 60 ? ' half' : '') + '" style="top:' + (m - minS) * PX + 'px">' + (m % 60 ? '' : E.fromMin(m)) + '</div>';
     ruler += '</div>';
-    const ghosts = (A.ui.pd && A.ui.pd.th === thId && A.ui.pd.slots) || [];
-    const cols = days.map(d => {
+    const cols = pairs.map(([thId, d]) => {
+      const can = FA.canEditTh(thId);
       const blocks = viewBlocks(thId, d);
       const draft = !!P.drafts[d];
       const abs = E.absenceOnDay(ctx, thId, d);
@@ -97,7 +95,7 @@
       const closed = ctx.closures.get(d);
       let inner = '';
       blocks.forEach((b, i) => {
-        const lab = esc(E.BLOCK[b.kind] || b.kind) + (edit ? ' ' + b.start + '–' + b.end : '');
+        const lab = esc(b.label || E.BLOCK[b.kind] || b.kind) + (edit ? ' ' + b.start + '–' + b.end : '');
         const cls = (b.kind === 'amb' ? 'wk-amb' : 'wk-blk k-' + b.kind) + (edit ? ' paintable' : '');
         inner += box(b.start, b.end, cls, (b.kind === 'amb' && !edit ? '' : '<span>' + lab + '</span>') + (edit ? '<i class="h-top"></i><i class="h-bot"></i>' : ''), edit ? ' data-blk="' + i + '"' : '');
       });
@@ -117,19 +115,19 @@
         const c = ctx.cyc.get(a.cycle_id);
         const iss = A.issues.find(i => i.appointment_id === a.id && i.kind !== 'esito_mancante');
         const ev = ctx.events.get(a.patient_id + '|' + a.day);
-        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (a.original_therapist_id ? ' sub' : '') + (iss ? ' issue' : '') + (can && a.status === 'programmata' ? ' movable' : '') + (A.ui.swap && A.ui.swap.id === a.id ? ' swapping' : '') + (A.ui.booked && A.ui.booked.patient_id === a.patient_id ? ' booked' : ''),
+        inner += box(a.start_time, a.end_time, 'wk-appt st-' + a.status + (a.original_therapist_id ? ' sub' : '') + (iss ? ' issue' : '') + '' + (A.ui.swap && A.ui.swap.id === a.id ? ' swapping' : '') + (A.ui.booked && A.ui.booked.patient_id === a.patient_id ? ' booked' : ''),
           FA.countBadge(a) + ' <strong>' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '</strong> ' +
           (ev ? '<span class="wk-v" title="Visita fisiatrica">V</span> ' : '') + FA.prio(c ? c.priority : 'NI') +
           '<br><span class="small">' + (c && c.treatment ? esc(c.treatment) + ' · ' : '') + esc(c ? FA.catName(c.category_id) : '') + (a.status !== 'programmata' ? ' · ' + esc(E.STATUS[a.status]) : '') +
           (a.original_therapist_id ? ' · sostituisce ' + esc(FA.thName(a.original_therapist_id)) : '') + (a.recovery_of ? ' · recupero' : '') + (iss ? ' · ⚠ ' + esc(iss.message) : '') + '</span>',
-          ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0"');
+          ' data-act="tg-cell" data-id="' + a.id + '" role="button" tabindex="0"');
       });
       // pazienti del titolare affidati a un collega: promemoria leggero (non occupa il posto)
       (ctx.data.appointments || []).filter(a => a.original_therapist_id === thId && a.therapist_id !== thId && a.day === d && E.OCCUPYING.has(a.status)).forEach(a => {
         inner += box(a.start_time, a.end_time, 'wk-given', '→ ' + a.start_time + ' ' + esc(FA.patName(a.patient_id)) + '<br><span class="small">con ' + esc(FA.thName(a.therapist_id)) + ' (sostituzione)</span>',
           ' data-act="open-appt" data-id="' + a.id + '" role="button" tabindex="0" title="Seduta affidata a ' + esc(FA.thName(a.therapist_id)) + '"');
       });
-      ghosts.filter(g => g.day === d).forEach(g => {
+      ((A.ui.pd && A.ui.pd.th === thId && A.ui.pd.slots) || []).filter(g => g.day === d).forEach(g => {
         inner += box(g.start, g.end, 'wk-ghost' + (g.chk ? ' bad' : ''), (g.chk ? '✗ ' : '◌ ') + g.start + ' seduta ' + g.n + (g.chk ? '<br><span class="small">' + esc(g.chk.msg) + '</span>' : ''));
       });
       abs.forEach(x => {
@@ -138,8 +136,8 @@
       });
       if (closed) inner += '<div class="wk-closed" style="top:0;height:' + H + 'px">Chiuso: ' + esc(closed) + '</div>';
       if (edit && !blocks.length) inner += '<div class="wk-empty">Trascina con un pennello per disegnare la giornata</div>';
-      const head = '<div class="wk-head' + (d === A.today ? ' today' : '') + (draft ? ' draft' : '') + '"' + (edit ? ' data-act="pt-day" data-day="' + d + '" role="button" title="Copia, svuota o ripristina questa giornata"' : ' data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/giorno" role="button" title="Vista del giorno"') + '>' +
-        esc(E.fmtItDay(d)) + (draft ? ' <span class="chip warn">bozza</span>' : '') + (ctx.overrides.get(thId + '|' + d) && !draft ? ' <span class="chip info">variato</span>' : '') + '</div>';
+      const head = '<div class="wk-head' + (d === A.today ? ' today' : '') + (draft ? ' draft' : '') + '"' + (edit ? ' data-act="pt-day" data-day="' + d + '" role="button" title="Copia, svuota o ripristina questa giornata"' : ' data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/' + (all ? 'mese' : 'giorno') + '" role="button" title="' + (all ? 'Tabulato del mese' : 'Vista del giorno') + '"') + '>' +
+        esc(all ? FA.thName(thId) : E.fmtItDay(d)) + (draft ? ' <span class="chip warn">bozza</span>' : '') + (ctx.overrides.get(thId + '|' + d) && !draft ? ' <span class="chip info">variato</span>' : '') + '</div>';
       return '<div class="wk-day">' + head +
         '<div class="wk-col' + (edit ? ' paint' : can && d >= A.today ? ' writable' : '') + '" style="height:' + H + 'px" data-day="' + d + '" data-min="' + minS + '"' + (!edit ? ' data-act="cal-click" data-th="' + thId + '"' : '') + '>' + inner + '</div>' +
         (other.length ? '<div class="wk-other">' + other.map(a => '<button class="chip ' + (a.status === 'da_riprogrammare' ? 'bad' : 'grey') + '" data-act="open-appt" data-id="' + a.id + '">' +
@@ -152,7 +150,7 @@
         P.effects.map(c => '<li class="todo-item"><div>' + esc(E.fmtItDay(c.day) + ' ' + E.hhmm(c.start_time) + ' · ' + c.patient) + ' — ' + esc(c.message) + '</div><div><button class="btn small" data-act="open-appt" data-id="' + c.appointment_id + '">Sposta</button></div></li>').join('') +
         '</ul><button class="btn small" data-act="pt-effects-ok">Chiudi</button></div>';
     }
-    html += '<div class="wk-grid" style="grid-template-columns:52px repeat(' + days.length + ', minmax(' + (days.length === 1 ? 300 : 130) + 'px, 1fr))"><div><div class="wk-head">&nbsp;</div>' + ruler + '</div>' + cols + '</div>';
+    html += '<div class="wk-scroll"><div class="wk-grid" style="grid-template-columns:52px repeat(' + pairs.length + ', minmax(' + (pairs.length === 1 ? 260 : 150) + 'px, 1fr))"><div><div class="wk-head">&nbsp;</div>' + ruler + '</div>' + cols + '</div></div>';
     return html;
   }
   /* ---------------- barra: fisioterapista, data, giorno / settimana / mese, Oggi ---------------- */
@@ -165,15 +163,18 @@
   const MONTHS = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   function calBar(st, th, can, edit, P) {
     const thId = th.id;
-    const prev = st.mode === 'mese' ? addMonths(st.date, -1) : E.addDays(st.date, st.mode === 'giorno' ? -1 : -7);
-    const next = st.mode === 'mese' ? addMonths(st.date, 1) : E.addDays(st.date, st.mode === 'giorno' ? 1 : 7);
-    const title = st.mode === 'mese' ? MONTHS[Number(st.date.slice(5, 7)) - 1] + ' ' + st.date.slice(0, 4) : st.mode === 'giorno' ? FA.dayLabel(st.date) : 'settimana del ' + E.fmtIt(E.addDays(st.date, 1 - E.weekday(st.date)));
+    const step = st.mode === 'mese' ? 0 : 1;
+    const prev = st.mode === 'mese' ? addMonths(st.date, -1) : E.addDays(st.date, -step);
+    const next = st.mode === 'mese' ? addMonths(st.date, 1) : E.addDays(st.date, step);
+    const title = st.mode === 'mese' ? MONTHS[Number(st.date.slice(5, 7)) - 1] + ' ' + st.date.slice(0, 4) : FA.dayLabel(st.date);
     const nDraft = Object.keys(P.drafts).length;
-    let html = '<div class="row between"><h2>Tabulato di ' + esc(th.name) + ' <span class="muted cal-when">· ' + esc(title) + '</span></h2><div class="row">' +
-      (can && !edit ? '<button class="btn small primary" data-act="pd-add" data-th="' + thId + '" data-day="' + st.date + '">+ Paziente</button>' : '') +
-      (!edit ? '<button class="btn small" data-act="pl-open" data-th="' + thId + '" data-day="' + st.date + '">Pazienti in trattamento (' + (A.ctx.activeCyclesByTh.get(thId) || []).length + ')</button>' : '') +
-      (can && !edit ? '<button class="btn small" data-act="abs-new" data-th="' + thId + '">Ferie / permesso / malattia</button>' : '') +
-      (can ? '<button class="btn small ' + (edit ? 'primary' : '') + '" data-act="pt-toggle">' + (edit ? '✓ Fine settimana tipo' : '✎ Settimana tipo e orari') + '</button>' : '') +
+    const office = FA.isOffice();
+    let html = '<div class="row between cal-top"><h2>' + (st.mode === 'tutti' ? 'Tutti i colleghi' : 'Tabulato di ' + esc(th.name)) + ' <span class="muted cal-when">· ' + esc(title) + '</span></h2><div class="row">' +
+      (can && !edit && st.mode !== 'tutti' ? '<button class="btn small primary" data-act="pd-add" data-th="' + thId + '" data-day="' + st.date + '">+ Paziente</button>' : '') +
+      (can && !edit && st.mode !== 'tutti' ? '<button class="btn small" data-act="or-open" data-th="' + thId + '">Orario</button>' : '') +
+      (can && !edit && st.mode !== 'tutti' ? '<button class="btn small" data-act="abs-new" data-th="' + thId + '">Ferie / permesso</button>' : '') +
+      (office && !edit ? '<button class="btn small" data-act="go" data-view="trova">Trova posto</button>' : '') +
+      (edit ? '<button class="btn small primary" data-act="pt-toggle">✓ Fine</button>' : '') +
       '</div></div>' +
       '<div class="panel cal-bar"><div class="row">' +
       '<select style="max-width:240px" data-bind="calTh" data-on="cal-th" aria-label="Fisioterapista">' + FA.activeTherapists().map(t => FA.option(t.id, t.name + (FA.canEditTh(t.id) ? '' : ' (consultazione)'), thId)).join('') + '</select>' +
@@ -181,7 +182,7 @@
       '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + A.today + '/' + st.mode + '">Oggi</button>' +
       '<button class="btn small" data-act="go" data-view="calendario" data-param="' + thId + '/' + next + '/' + st.mode + '" aria-label="Avanti">▶</button>' +
       '<input type="date" style="max-width:170px" data-bind="calDate" data-on="cal-date" value="' + st.date + '" aria-label="Vai alla data">' +
-      FA.seg('calMode', [['giorno', 'Giorno'], ['settimana', 'Settimana'], ['mese', 'Mese']], st.mode).replace(/data-act="seg"/g, 'data-act="cal-mode" data-th="' + thId + '" data-date="' + st.date + '"') +
+      FA.seg('calMode', [['mese', 'Mese'], ['giorno', 'Giorno']].concat(office ? [['tutti', 'Tutti i colleghi']] : []), st.mode).replace(/data-act="seg"/g, 'data-act="cal-mode" data-th="' + thId + '" data-date="' + st.date + '"') +
       '</div>';
     if (A.ui.booked && A.ui.booked.th === thId) {
       const b = A.ui.booked;
@@ -203,43 +204,10 @@
         (nDraft ? '<div class="draft-bar"><span><strong>Bozza:</strong> ' + nDraft + ' giornat' + (nDraft === 1 ? 'a modificata' : 'e modificate') + ' (non ancora salvat' + (nDraft === 1 ? 'a' : 'e') + ')</span><span class="grow"></span>' +
           '<button class="btn small" data-act="pt-discard">Annulla bozza</button><button class="btn small primary" data-act="pt-save"' + FA.saveDisabled() + '>Salva…</button></div>' : '');
     } else {
-      html += '<p class="small muted" style="margin:6px 0 0">' + (can ? '<strong>Tocca uno spazio</strong> per scrivere un paziente o un’attività (giorno, ora e fisioterapista sono già compilati). <strong>Tocca un paziente</strong> per effettuata, assenza, spostamento, scambio o correzioni; oppure <strong>trascinalo</strong>. Il numero tondo è il conto alla rovescia delle sedute (pieno = effettuata).' : 'Consultazione: puoi vedere questa agenda, ma per modificarla serve l’autorizzazione del coordinatore.') + '</p>';
+      html += st.mode === 'mese' ? '' : '<p class="small muted" style="margin:6px 0 0">' + (can || st.mode === 'tutti' ? '<strong>Tocca uno spazio</strong> per scrivere un paziente, un’attività (pausa, ortesi, gruppo, progetto…) o ferie e permessi: giorno, ora e fisioterapista sono già compilati. <strong>Tocca un paziente</strong> per spostarlo, cambiarne la durata o il collega, segnare l’assenza o cancellarlo.' : 'Consultazione: per modificare questa agenda serve l’autorizzazione del coordinatore.') + '</p>';
     }
     return html + '</div>';
   }
-  /* ---------------- vista mese: il tabulato mensile ---------------- */
-  function monthView(st, thId, can) {
-    const ctx = A.ctx, first = monthStart(st.date), next = addMonths(first, 1);
-    const appts = (ctx.data.appointments || []).filter(a => a.therapist_id === thId && a.day >= E.addDays(first, -7) && a.day < E.addDays(next, 7) && a.status !== 'spostata' && a.status !== 'liberata');
-    const byDay = new Map();
-    appts.forEach(a => { if (!byDay.has(a.day)) byDay.set(a.day, []); byDay.get(a.day).push(a); });
-    let d = E.addDays(first, 1 - E.weekday(first));
-    const cells = [];
-    while (d < next || E.weekday(d) !== 1) { cells.push(d); d = E.addDays(d, 1); }
-    const sun = cells.some(x => E.weekday(x) === 7 && (byDay.get(x) || []).length);
-    const shown = cells.filter(x => sun || E.weekday(x) !== 7);
-    const nCols = sun ? 7 : 6;
-    const head = [1, 2, 3, 4, 5, 6, 7].slice(0, nCols).map(w => '<div class="mo-hd">' + E.WD_SHORT[w] + '</div>').join('');
-    const body = shown.map(x => {
-      const list = (byDay.get(x) || []).sort((a, b) => a.start_time < b.start_time ? -1 : 1);
-      const abs = E.absenceOnDay(ctx, thId, x), closed = ctx.closures.get(x);
-      const out = x.slice(0, 7) !== first.slice(0, 7);
-      const given = (ctx.data.appointments || []).filter(a => a.original_therapist_id === thId && a.therapist_id !== thId && a.day === x && E.OCCUPYING.has(a.status)).length;
-      return '<div class="mo-cell' + (out ? ' out' : '') + (x === A.today ? ' today' : '') + (E.weekday(x) >= 6 ? ' we' : '') + '" data-act="mo-day" data-th="' + thId + '" data-day="' + x + '" role="button" tabindex="0" title="Apri il giorno">' +
-        '<div class="mo-num">' + Number(x.slice(8)) + (closed ? ' <span class="chip grey">chiuso</span>' : '') + abs.map(z => ' <span class="chip warn">' + esc(E.ABSENCE_KIND[z.kind]) + '</span>').join('') + '</div>' +
-        list.map(a => '<button class="mo-appt st-' + a.status + (a.original_therapist_id ? ' sub' : '') + '" data-act="open-appt" data-id="' + a.id + '">' + FA.countBadge(a) + ' <span class="t">' + a.start_time + '</span> ' + esc(FA.patName(a.patient_id)) + '</button>').join('') +
-        (given ? '<div class="small muted">→ ' + given + ' a colleghi</div>' : '') +
-        (can && x >= A.today && !closed ? '<button class="mo-add" data-act="mo-add" data-th="' + thId + '" data-day="' + x + '" title="Scrivi in questo giorno">+</button>' : '') + '</div>';
-    }).join('');
-    return '<div class="mo-grid" style="grid-template-columns:repeat(' + nCols + ', minmax(0, 1fr))">' + head + body + '</div>' +
-      '<p class="small muted">Tocca un giorno per aprirne l’agenda dettagliata, pronta da compilare. I mesi passati restano consultabili così come sono stati registrati.</p>';
-  }
-  FA.actions['mo-day'] = el => FA.go('calendario', el.getAttribute('data-th'), el.getAttribute('data-day'), 'giorno');
-  FA.actions['mo-add'] = el => {
-    const th = el.getAttribute('data-th'), day = el.getAttribute('data-day');
-    FA.go('calendario', th, day, 'giorno');
-    openPanel({ th, day, start: E.freeStarts(A.ctx, th, day, 30, {})[0] || '' });
-  };
   /** tocco su un punto qualsiasi della giornata: giorno, ora (a 5 minuti) e fisioterapista già compilati */
   FA.actions['cal-click'] = (el, ev) => {
     const th = el.getAttribute('data-th'), day = el.getAttribute('data-day');
@@ -584,7 +552,8 @@
   };
 
   /* ---------------- «Nuovo» dal tabulato: paziente, attività, ferie / permesso ---------------- */
-  const ACTS = BRUSHES.filter(([k]) => k !== 'permesso_ore').map(([k, l]) => [k, k === 'amb' ? 'Ambulatorio (posti per pazienti)' : l]);
+  const ACTS = [['amb', 'Ambulatorio (posti per pazienti)'], ['pausa', 'Pausa'], ['reparto', 'Reparto'], ['ortesi', 'Ambulatorio ortesi'], ['gruppo', 'Gruppo'], ['progetto', 'Progetto'],
+    ['segreteria', 'Segreteria'], ['documentazione', 'Cartelle / adempimenti'], ['corso', 'Corso'], ['briefing', 'Briefing'], ['recupero_ore', 'Recupero ore'], ['altro', 'Altro']];
   /** orario sotto il puntatore dentro uno spazio libero (a passi di 5 minuti), senza uscire dallo spazio */
   function clickedStart(el, ev) {
     const g0 = E.toMin(el.getAttribute('data-start')), g1 = E.toMin(el.getAttribute('data-end') || el.getAttribute('data-start'));
@@ -627,9 +596,11 @@
     A.ui.pd = { th, day, start, kind: o.kind || (start && !inAmb && E.dayBlocks(A.ctx, th, day).length ? 'attivita' : 'paziente'), mode: o.mode || 'nuovo', q: '', name: '', cycle_id: '', patient_id: '',
       category_id: (cats.find(c => c.id === 'mano') || cats[0] || {}).id || '', dur: '30', durOther: '', left: 10, planned: '', more: false, perDay: false,
       treatment: '', addN: '1', days: [E.weekday(day)], times: {}, priority: 'NI', slots: [], error: null, force: false,
-      act: { kind: 'reparto', start, end: start ? E.fromMin(E.toMin(start) + 60) : '', scope: 'giorno' },
+      act: { kind: 'pausa', start, end: start ? E.fromMin(E.toMin(start) + 30) : '', scope: 'giorno', label: '' },
       ab: { kind: 'permesso', allDay: false, start, end: start ? E.fromMin(E.toMin(start) + 60) : '', to: day, note: '' } };
     if (o.patient_id) pickPatient(A.ui.pd, o.patient_id);
+    if (o.name) A.ui.pd.q = o.name;
+    if (o.addAll) A.ui.pd.addN = 'tutte';
     pdCompute();
     FA.openModal({ title: 'Nuovo', drawer: true, live: true, body: pdBody, foot: pdFoot });
     FA.render();
@@ -749,7 +720,7 @@
         (found.length ? '<div class="pd-found">' + found.map(p => { const ac = activeCycleOf(p.id); const k = ac ? E.cycleCounts(ctx, ac.id) : null;
           return '<button class="btn small" data-act="pd-pick" data-id="' + p.id + '">' + esc(p.name) + (ac ? ' · in trattamento con ' + esc(FA.thName(ac.therapist_id)) + ' · restano ' + (ac.planned_sessions - k.effettuate) : ' · in archivio') + '</button>'; }).join('') + '</div>' : '') +
         (f.q.trim() ? '<div class="help">' + (found.length ? 'Se non è nessuno di questi: ' : '') + 'paziente <strong>nuovo</strong> «' + esc(f.q.trim()) + '».</div>' : '') +
-        '<button class="btn link small" data-act="pd-mode" data-m="attesa">oppure prendi dalla lista d’attesa</button></div>';
+        '</div>';
     }
     const active = c && c.status === 'attivo';
     const miss = active ? E.cycleCounts(ctx, c.id).mancanoDaProgrammare : 0;
@@ -789,7 +760,8 @@
   function actBody(f) {
     const a = f.act;
     const wd = E.WD_LONG[E.weekday(f.day)];
-    return '<div class="field"><label>Attività</label><select data-bind="pd.act.kind" data-on="pd-actkind">' + ACTS.map(([k, l]) => FA.option(k, l, a.kind)).join('') + '</select></div>' +
+    return '<div class="field"><label>Attività</label><select data-bind="pd.act.kind" data-on="pd-actkind">' + ACTS.map(([k, l]) => FA.option(k, l, a.kind)).join('') + '</select>' +
+      (a.kind !== 'amb' ? '<input type="text" data-bind="pd.act.label" value="' + esc(a.label || '') + '" placeholder="nome (facoltativo): es. Gruppo schiena" style="margin-top:4px">' : '') + '</div>' +
       '<div class="grid2"><div class="field"><label>Dalle</label>' + timeField('pd.act.start', a.start, ' data-on="pd-chg" style="max-width:100px"') + '</div>' +
       '<div class="field"><label>Alle</label>' + timeField('pd.act.end', a.end, ' data-on="pd-chg" style="max-width:100px"') + '</div></div>' +
       '<div class="field"><label>Vale</label>' + FA.seg('pd.act.scope', [['giorno', 'Solo ' + E.fmtItDay(f.day)], ['sempre', 'Ogni ' + wd + ' da questa data']], a.scope) +
@@ -877,17 +849,17 @@
       pdCompute(); FA.render(); FA.renderModal();
     }
   };
-  const cleanBlocks = l => l.map(b => ({ kind: b.kind, start: E.hhmm(b.start), end: E.hhmm(b.end), max: b.max == null || b.max === '' ? null : Number(b.max) }));
+  const cleanBlocks = l => l.map(b => ({ kind: b.kind, start: E.hhmm(b.start), end: E.hhmm(b.end), max: b.max == null || b.max === '' ? null : Number(b.max), label: b.label || '' }));
   async function saveActivity(f) {
     const a = f.act, s = FA.normTime(a.start), e = FA.normTime(a.end);
     let conf = [];
     if (a.scope === 'giorno') {
-      const blocks = cleanBlocks(paintRange(E.dayBlocks(A.ctx, f.th, f.day), a.kind, E.toMin(s), E.toMin(e)));
+      const blocks = cleanBlocks(paintRange(E.dayBlocks(A.ctx, f.th, f.day), a.kind, E.toMin(s), E.toMin(e), (a.label || '').trim()));
       await FA.save(E.BLOCK[a.kind] + ' inserito', async () => { conf = (await FA.rpc('admin_set_day_override', { p_th: f.th, p_day: f.day, p_blocks: blocks, p_note: 'Dal tabulato', p_dry_run: false })).conflicts; });
     } else {
       const base = E.shiftFor(A.ctx, f.th, f.day), wd = E.weekday(f.day), week = {};
       [1, 2, 3, 4, 5, 6, 7].forEach(k => { week[k] = cleanBlocks(base ? (base.week[String(k)] || []) : []); });
-      week[wd] = cleanBlocks(paintRange(week[wd], a.kind, E.toMin(s), E.toMin(e)));
+      week[wd] = cleanBlocks(paintRange(week[wd], a.kind, E.toMin(s), E.toMin(e), (a.label || '').trim()));
       await FA.save(E.BLOCK[a.kind] + ' nella settimana tipo', async () => { conf = (await FA.rpc('admin_save_shift', { p_th: f.th, p_valid_from: f.day, p_week: week, p_note: 'Dal tabulato', p_dry_run: false })).conflicts; });
     }
     pt(f.th).effects = conf;

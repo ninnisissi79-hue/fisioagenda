@@ -145,7 +145,7 @@ try {
   await loser.click('.modal button:has-text("Annulla")');
   // dopo la conferma si apre il tabulato del collega scelto, con le sedute evidenziate
   await winner.waitForSelector('.booked-bar', { timeout: 15000 });
-  assert.ok((await winner.$$('.wk-appt.booked')).length > 0, 'risultato visibile nel tabulato');
+  assert.ok(await winner.$('.tg tr.tg-booked'), 'risultato visibile nel tabulato');
   await winner.click('.booked-bar button:has-text("Scheda paziente")');
   await winner.waitForSelector('h2:has-text("E2E")', { timeout: 15000 });
   const sheet = await text(winner, 'main');
@@ -251,7 +251,7 @@ try {
   const r = await pr.evaluate(async () => (await window.FA.state.sb.rpc('save_absence', { p: { therapist_id: '00000000-0000-0000-0000-000000000000', start_date: '2030-01-01', end_date: '2030-01-01' } })).error);
   assert.match(r.message, /sola consultazione/);
   await go(p1, '#/config');
-  assert.match(await text(p1, 'main'), /solo il coordinatore/);
+  assert.match(await text(p1, 'main'), /Percorsi, festivit/);
   const r2 = await p1.evaluate(async () => (await window.FA.state.sb.rpc('admin_save_category', { p_id: 'x', p_name: 'x', p_active: true, p_sort: 1 })).error);
   assert.match(r2.message, /riservata al coordinatore/);
   ok('Sola consultazione e operatore: pulsanti disattivati e modifiche riservate rifiutate dal server');

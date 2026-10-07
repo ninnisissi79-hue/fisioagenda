@@ -59,7 +59,7 @@ test('importazione di un tabulato: numeri a ritroso, R, V, date passate solo pro
   assert.equal(q(`select string_agg(distinct status, ',') from appointments where patient_id='${pat}'`), 'programmata');
   const issues = await S.rpc(op1, 'appointment_issues', { p_from: T0, p_to: E.addDays(T0, 60) });
   const pastIds = q(`select string_agg(id::text, ',') from appointments where patient_id='${pat}' and day < '${T0}'`).split(',');
-  assert.ok(pastIds.every(id => issues.some(i => i.appointment_id === id && i.kind === 'esito_mancante')), 'le sedute passate chiedono l’esito');
+  assert.ok(pastIds.length && !issues.some(i => pastIds.includes(i.appointment_id) && i.kind === 'esito_mancante'), 'la presenza non si segna: nessun esito richiesto');
   // la V è un evento del paziente, non una seduta
   assert.equal(q(`select count(*) from patient_events where patient_id='${pat}' and day='${fut[2]}' and kind='visita_fisiatrica'`), '1');
   assert.equal(q(`select count(*) from appointments where patient_id='${pat}' and day='${fut[2]}'`), '1');

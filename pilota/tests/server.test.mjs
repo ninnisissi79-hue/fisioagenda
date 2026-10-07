@@ -64,7 +64,8 @@ test('permessi: sola consultazione e operatore non possono fare modifiche riserv
   const [d] = workdays(E.addDays(T0, 1), 1);
   const ids = await team('perm', { A: [['mano', 'specifica']] });
   await expectError(S.rpc(reader, 'create_request', { p: { patient_name: 'X', category_id: 'mano', duration: 30, planned_sessions: 5 } }), 'FA_PERM');
-  await expectError(S.rpc(op1, 'admin_save_shift', { p_th: ids.A, p_valid_from: d, p_week: WEEK, p_note: '', p_dry_run: false }), 'FA_PERM', /coordinatore/);
+  // gli orari li cambia chi gestisce il calendario (segreteria compresa), non chi è in sola consultazione
+  await expectError(S.rpc(reader, 'admin_save_shift', { p_th: ids.A, p_valid_from: d, p_week: WEEK, p_note: '', p_dry_run: false }), 'FA_PERM', /consultazione/);
   await expectError(S.rpc(op1, 'admin_set_user', { p_user: '00000000-0000-0000-0000-000000000000', p_role: 'admin', p_active: true, p_full_name: '' }), 'FA_PERM');
   await expectError(S.rpc(op1, 'admin_export', {}), 'FA_PERM');
   // scrittura diretta sulle tabelle, aggirando l'interfaccia: rifiutata dal database
@@ -468,7 +469,8 @@ test('ruolo fisioterapista: modifica solo il proprio calendario; segreteria e co
   const rb = await book(op1, { name: 'Di B', cat: 'mano', th: ids.B, start: '11:00', dates: weekly(d, 5) });
   const ab = apptOf(rb.cycle_id, d);
   await expectError(S.rpc(fis, 'register_outcome', { p_id: ab.id, p_version: ab.version, p_status: 'assente', p_to_recover: true }), 'FA_PERM');
-  await expectError(S.rpc(fis, 'admin_save_shift', { p_th: ids.A, p_valid_from: E.addDays(T0, 30), p_week: WEEK, p_note: '', p_dry_run: false }), 'FA_PERM', /coordinatore/);
+  // il proprio orario sì, quello del collega no
+  await expectError(S.rpc(fis, 'admin_save_shift', { p_th: ids.B, p_valid_from: E.addDays(T0, 30), p_week: WEEK, p_note: '', p_dry_run: false }), 'FA_PERM', /solo il tuo calendario/);
   // la segreteria (operatore) modifica qualunque calendario
   await S.rpc(op2, 'move_appointment', { p_id: moved.id, p_version: moved.version, p_therapist: ids.B, p_day: d, p_start: '08:30', p_note: 'segreteria' });
 });
@@ -526,7 +528,7 @@ test('calendario flessibile: orari diversi per giorno, variazione dal … al …
   // orario di A per un periodo, con ritorno automatico
   const wk = { 1: [{ kind: 'segreteria', start: '08:00', end: '14:00' }], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
   const from = E.addDays(mon, 21), to = E.addDays(mon, 25);
-  await expectError(S.rpc(op1, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: '', p_dry_run: false }), 'FA_PERM');
+  await expectError(S.rpc(reader, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: '', p_dry_run: false }), 'FA_PERM');
   const dry = await S.rpc(admin, 'admin_save_shift_range', { p_th: ids.A, p_from: from, p_to: to, p_week: wk, p_note: '', p_dry_run: true });
   assert.equal(dry.dry_run, true);
   assert.equal(psql(`select count(*) from shift_versions where therapist_id='${ids.A}'`), '1', 'anteprima: nulla salvato');
@@ -539,7 +541,7 @@ test('calendario flessibile: orari diversi per giorno, variazione dal … al …
   await S.rpc(admin, 'admin_set_day_override', { p_th: ids.A, p_day: from, p_blocks: [{ kind: 'briefing', start: '08:00', end: '08:15' }, { kind: 'amb', start: '08:15', end: '10:00' }, { kind: 'recupero_ore', start: '10:00', end: '11:00' }], p_note: '', p_dry_run: false });
   // schemi
   const tid = await S.rpc(admin, 'admin_save_template', { p_id: null, p_name: 'Schema ' + RUN, p_week: wk, p_delete: false });
-  await expectError(S.rpc(op1, 'admin_save_template', { p_id: null, p_name: 'X', p_week: wk, p_delete: false }), 'FA_PERM');
+  await expectError(S.rpc(reader, 'admin_save_template', { p_id: null, p_name: 'X', p_week: wk, p_delete: false }), 'FA_PERM');
   assert.equal((await op1.from('shift_templates').select('name').eq('id', tid)).data[0].name, 'Schema ' + RUN, 'leggibile da tutti');
   await S.rpc(admin, 'admin_save_template', { p_id: tid, p_name: '', p_week: {}, p_delete: true });
 });

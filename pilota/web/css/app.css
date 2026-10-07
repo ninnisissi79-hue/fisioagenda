@@ -416,3 +416,64 @@ select.need, input.need { border-color: var(--warn) !important; box-shadow: 0 0 
 }
 .booked-bar { background: var(--ok-bg); }
 .wk-appt.booked { box-shadow: 0 0 0 3px var(--ok); }
+/* spie in alto: rossa = pazienti da ricollocare (serve intervenire), gialla = cambiamenti (solo da vedere) */
+.spia { border: 0; border-radius: 999px; padding: 6px 12px; font-weight: 700; cursor: pointer; background: rgba(255,255,255,.12); color: #d9e4f2; }
+.spia.red.on { background: #d93025; color: #fff; box-shadow: 0 0 0 3px rgba(217,48,37,.35); animation: spia 1.6s ease-in-out infinite; }
+.spia.yellow.on { background: #f6c343; color: #3d2c00; }
+@keyframes spia { 50% { box-shadow: 0 0 0 7px rgba(217,48,37,.12); } }
+/* tabulato mensile a griglia, come il foglio di carta */
+.tg-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); max-height: 75vh; overflow-y: auto; }
+.tg { border-collapse: separate; border-spacing: 0; font-size: .82rem; }
+.tg th, .tg td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; text-align: center; }
+.tg thead th { position: sticky; top: 0; background: #eef2f7; z-index: 2; font-weight: 700; min-width: 34px; height: 38px; line-height: 1.05; font-size: .75rem; cursor: pointer; }
+.tg thead th span { font-weight: 400; color: var(--ink-3); }
+.tg .tg-name { position: sticky; left: 0; background: #fff; z-index: 1; text-align: left; min-width: 150px; max-width: 190px; }
+.tg thead .tg-name { z-index: 3; background: #eef2f7; padding: 0 8px; font-weight: 600; color: var(--ink-3); }
+.tg .tg-name button { display: block; width: 100%; border: 0; background: transparent; text-align: left; padding: 4px 8px; cursor: pointer; line-height: 1.2; }
+.tg .tg-name button strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg .tg-name .small { color: var(--ink-3); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg td { height: 40px; min-width: 34px; }
+.tg td button { width: 100%; height: 100%; min-height: 40px; border: 0; background: transparent; font-weight: 800; font-size: .95rem; color: var(--primary); cursor: pointer; position: relative; padding: 0; }
+.tg td.tg-done button { color: #fff; background: var(--ok); }
+.tg td.tg-ass button { color: var(--ink-3); background: #eceff3; text-decoration: line-through; }
+.tg td.tg-bad button { color: #fff; background: var(--bad); }
+.tg td.tg-given button { color: var(--info); background: var(--info-bg); }
+.tg td.tg-dur button { box-shadow: inset 0 -3px 0 var(--warn); }
+.tg td button sub { font-size: .55rem; font-weight: 700; display: block; line-height: 1; }
+.tg td button sup { position: absolute; top: 1px; right: 1px; font-size: .5rem; font-weight: 600; line-height: 1; }
+.tg td button.tg-empty:hover, .tg td button.tg-empty:focus { background: var(--primary-soft); }
+.tg td button.tg-empty:hover::after { content: '+'; color: var(--primary); }
+.tg td.we, .tg th.we { background: #f3f4f6; }
+.tg td.today, .tg th.today { box-shadow: inset 2px 0 0 var(--primary), inset -2px 0 0 var(--primary); }
+.tg th.off { background: #fde8e7; }
+.tg .tg-abs { display: block; font-size: .65rem; color: var(--bad); font-weight: 800; }
+.tg tr.tg-guestrow .tg-name { background: #f4f8fd; }
+.tg tr.tg-new .tg-name input { border: 0; border-bottom: 1px dashed var(--line-2); border-radius: 0; padding: 8px; width: 100%; background: #fffdf5; min-height: 0; font-size: .85rem; }
+.tg-legend { margin-top: 6px; }
+.tg-chip { display: inline-block; min-width: 1.5em; padding: 0 3px; text-align: center; border-radius: 4px; font-weight: 800; color: var(--primary); border: 1px solid var(--line-2); }
+.tg-chip.done { background: var(--ok); color: #fff; border-color: var(--ok); }
+.tg-chip.ass { color: var(--ink-3); text-decoration: line-through; }
+.tg-chip.given { color: var(--info); background: var(--info-bg); }
+.ts-head { margin: 0 0 8px; }
+.btn.danger-soft { color: var(--bad); border-color: var(--bad-line); }
+.wk-scroll { overflow-x: auto; }
+.or-day { border-bottom: 1px solid var(--line); padding: 6px 0; }
+.or-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.or-row select { width: auto; max-width: 190px; }
+@media (max-width: 700px) {
+  .tg .tg-name { min-width: 112px; max-width: 128px; }
+  .tg td, .tg thead th { min-width: 30px; }
+  .cal-top .row .btn { padding: 6px 8px; }
+  .spia { padding: 5px 9px; font-size: .8rem; }
+}
+@media (max-width: 700px) {
+  #conn, .user .who, .user .role, .brand-sub { display: none !important; }
+  .top-inner { gap: 6px; }
+  .pilot-banner { font-size: .72rem; padding: 3px 10px; }
+  .cal-bar { padding: 8px; }
+  .cal-bar input[type=date], .cal-top .row .btn[data-view="trova"] { display: none; }
+  .cal-top h2 { font-size: 1.05rem; margin: 6px 0; }
+  .cal-top .row { gap: 4px; }
+  .tg-wrap { max-height: 68vh; }
+}
+.tg tr.tg-booked .tg-name { box-shadow: inset 4px 0 0 var(--ok); background: var(--ok-bg); }

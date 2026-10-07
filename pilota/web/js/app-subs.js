@@ -29,6 +29,12 @@
         if (abs) out.push({ a, cyc, orig: a.therapist_id, sub: null, state: 'da_assegnare', why: FA.thName(a.therapist_id) + ' assente (' + (E.ABSENCE_KIND[abs.kind] || abs.kind).toLowerCase() + ')', abs });
       }
     });
+    const seen = new Set(out.map(x => x.a.id));
+    (A.issues || []).filter(i => i.kind === 'conflitto').forEach(i => {
+      const a = A.ctx.appt.get(i.appointment_id), cyc = a && A.ctx.cyc.get(a.cycle_id);
+      if (!a || !cyc || seen.has(a.id) || a.day < f.from || a.day > f.to || a.status !== 'programmata') return;
+      out.push({ a, cyc, orig: a.original_therapist_id || a.therapist_id, sub: a.original_therapist_id ? a.therapist_id : null, state: 'da_assegnare', why: i.message });
+    });
     return out.filter(x => !f.th || x.orig === f.th || x.sub === f.th)
       .filter(x => f.show === 'tutte' || x.state === f.show)
       .sort((x, y) => (x.a.day + x.a.start_time) < (y.a.day + y.a.start_time) ? -1 : 1);
@@ -39,7 +45,7 @@
     const list = all.filter(x => f.show === 'tutte' || x.state === f.show);
     const nTodo = all.filter(x => x.state === 'da_assegnare').length, nOk = all.length - nTodo;
     const ths = FA.allTherapists();
-    let h = '<div class="row between"><h2>Sostituzioni</h2>' + (FA.canEdit() ? '<button class="btn" data-act="abs-new">+ Registra un’assenza</button>' : '') + '</div>' +
+    let h = '<div class="row between"><h2>Assenze e sostituzioni</h2>' + (FA.canEdit() ? '<button class="btn" data-act="abs-new">+ Registra un’assenza</button>' : '') + '</div>' +
       '<div class="panel"><div class="grid3">' +
       '<div class="field"><label>Dal</label><input type="date" data-bind="sb.from" data-rerender value="' + esc(f.from) + '"></div>' +
       '<div class="field"><label>Al</label><input type="date" data-bind="sb.to" data-rerender value="' + esc(f.to) + '" min="' + esc(f.from) + '"></div>' +

@@ -169,8 +169,8 @@ try {
   await page.waitForTimeout(2000);
   assert.equal(psql(`select kind||' '||start_date||' '||end_date from absences where therapist_id='${verdi}' and start_date='${fFrom}'`), `ferie ${fFrom} ${E.addDays(fFrom, 4)}`);
   await page.evaluate(([a, d]) => { location.hash = '#/calendario/' + a + '/' + d; }, [anna, fFrom]);
-  await page.waitForSelector('button:has-text("Ferie / permesso / malattia")');
-  await page.click('button:has-text("Ferie / permesso / malattia")');
+  await page.waitForSelector('button:has-text("Ferie / permesso")');
+  await page.click('button:has-text("Ferie / permesso")');
   await page.click('.modal button[data-act="seg"][data-val="permesso"]');
   await page.fill('.modal input[data-bind="an.from"]', fFrom);
   await page.click('.modal button[data-act="seg"][data-val="fascia"]');
@@ -216,87 +216,64 @@ try {
   while (E.weekday(ed) !== 1) ed = E.addDays(ed, 1);          // il prossimo lunedì
   const closed = d => psql(`select count(*) from closures where day='${d}'`) !== '0';
   assert.ok(![0, 1, 2, 3, 4].some(i => closed(E.addDays(ed, i))), 'settimana di prova senza festività');
-  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, ed]);
-  await page.waitForSelector('button:has-text("✎ Settimana tipo e orari")');
-  await page.setViewportSize({ width: 1280, height: 1500 });
-  await page.click('button:has-text("✎ Settimana tipo e orari")');
-  await page.waitForSelector('.wk-col.paint');
-  await page.waitForTimeout(1500);                                     // lascia arrivare gli aggiornamenti in tempo reale dei salvataggi precedenti
-  async function colInfo(d) { const col = await page.$(`.wk-col.paint[data-day="${d}"]`); const bb = await col.boundingBox(); const min = Number(await col.getAttribute('data-min')); return { bb, y: t => bb.y + (E.toMin(t) - min) * 1.25 + 1 }; }
-  async function dragOn(d, from, to) { const c = await colInfo(d); await page.mouse.move(c.bb.x + c.bb.width / 2, c.y(from)); await page.mouse.down(); await page.mouse.move(c.bb.x + c.bb.width / 2, c.y(to), { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(120); }
-  async function clickAt(d, t) { const c = await colInfo(d); await page.mouse.click(c.bb.x + c.bb.width / 2, c.y(t)); await page.waitForTimeout(120); }
-  const brush = async k => { await page.click(`button.brush[data-k="${k}"]`); await page.waitForTimeout(80); };
-  await dragOn(ed, '07:15', '09:00');                                  // ambulatorio (pennello predefinito)
-  await brush('reparto'); await dragOn(ed, '09:00', '12:00');
-  await brush('pausa'); await clickAt(ed, '12:00');                    // clic: durata rapida 20′ -> 12:00-12:20
-  await brush('amb'); await dragOn(ed, '12:22', '13:45');             // l'inizio si aggancia alla fine della pausa (12:20)
-  await brush('documentazione'); await clickAt(ed, '13:50');           // 13:45-14:15 (durata rapida 30′)
-  // orari precisi scritti a mano (13:40 e 14:12), digitati cifra per cifra
-  await page.click(`.wk-col.paint[data-day="${ed}"] [data-blk]:has-text("Cartelle")`);
-  await page.waitForSelector('.modal input[data-bind="bk1.end"]');
-  await page.fill('.modal input[data-bind="bk1.start"]', '');
-  await page.type('.modal input[data-bind="bk1.start"]', '13:40', { delay: 60 });
-  assert.equal(await page.inputValue('.modal input[data-bind="bk1.start"]'), '13:40');
-  await page.fill('.modal input[data-bind="bk1.end"]', '');
-  await page.type('.modal input[data-bind="bk1.end"]', '1412', { delay: 60 });
-  assert.equal(await page.inputValue('.modal input[data-bind="bk1.end"]'), '1412', 'mentre si scrive il campo non viene modificato');
-  await page.click('.modal button:has-text("Applica")');
-  await page.waitForSelector('.modal', { state: 'detached' });
-  const monday = await page.evaluate(d => window.FA.state.ui.pt.drafts[d].map(b => b.kind + ' ' + b.start + '-' + b.end).join(', '), ed);
-  assert.equal(monday, 'amb 07:15-09:00, reparto 09:00-12:00, pausa 12:00-12:20, amb 12:20-13:40, documentazione 13:40-14:12');
-  // copia della giornata sugli altri giorni
-  await page.click(`.wk-head[data-day="${ed}"]`);
-  for (let i = 1; i <= 4; i++) await page.check(`.modal input[data-bind="dy.to"][value="${E.addDays(ed, i)}"]`);
-  await page.click('.modal button:has-text("Copia")');
-  await page.waitForSelector('.modal', { state: 'detached' });
-  // mercoledì il reparto finisce alle 11:30: si trascina il bordo inferiore
-  const wed = E.addDays(ed, 2);
-  await brush('reparto');
-  const rep = await page.$(`.wk-col.paint[data-day="${wed}"] [data-blk]:has-text("Reparto")`);
-  const rb = await rep.boundingBox(); const wc = await colInfo(wed);
-  await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height - 3); await page.mouse.down(); await page.mouse.move(rb.x + rb.width / 2, wc.y('11:30'), { steps: 6 }); await page.mouse.up();
-  await page.waitForTimeout(150);
-  assert.match(await page.evaluate(d => window.FA.state.ui.pt.drafts[d].map(b => b.kind + ' ' + b.start + '-' + b.end).join(', '), wed), /reparto 09:00-11:30/);
-  // salva come orario abituale da lunedì in poi
-  await page.click('button:has-text("Salva…")');
-  await page.click('.modal button[data-act="seg"][data-val="from"]');
-  await page.click('.modal button:has-text("Verifica")');
-  await page.waitForSelector('.modal .form-note:has-text("Nessun appuntamento")', { timeout: 15000 });
-  await page.click('.modal button:has-text("Salva")');
+  // orario della settimana compilato una volta dal riquadro «Orario»: fasce scritte a mano, giornata copiata, un giorno ritoccato
+  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/mese'; }, [gialli, ed]);
+  await page.waitForSelector('button[data-act="or-open"]');
+  await page.click('button[data-act="or-open"]');
+  await page.waitForSelector('.modal .or-day');
+  const fasce = [['amb', '07:15', '09:00'], ['reparto', '09:00', '12:00'], ['pausa', '12:00', '12:20'], ['amb', '12:20', '13:40'], ['documentazione', '13:40', '1412']];
+  for (let i = 0; i < fasce.length; i++) {
+    await page.click('.modal button[data-act="or-add"][data-k="1"]');
+    await page.selectOption(`.modal select[data-bind="or.week.1.${i}.kind"]`, fasce[i][0]);
+    for (const [k, v] of [['start', fasce[i][1]], ['end', fasce[i][2]]]) {
+      await page.fill(`.modal input[data-bind="or.week.1.${i}.${k}"]`, '');
+      await page.type(`.modal input[data-bind="or.week.1.${i}.${k}"]`, v, { delay: 40 });
+      await page.press(`.modal input[data-bind="or.week.1.${i}.${k}"]`, 'Tab');
+    }
+  }
+  assert.equal(await page.inputValue('.modal input[data-bind="or.week.1.4.end"]'), '14:12', '1412 scritto a mano diventa 14:12');
+  await page.click('.modal button[data-act="or-copy"][data-k="1"]');
+  await page.fill('.modal input[data-bind="or.week.3.1.end"]', '11:30'); await page.press('.modal input[data-bind="or.week.3.1.end"]', 'Tab');
+  await page.fill('.modal input[data-bind="or.from"]', ed); await page.dispatchEvent('.modal input[data-bind="or.from"]', 'change');
+  await page.click('.modal button:has-text("Controlla")');
+  await page.waitForSelector('.modal .form-note:has-text("Nessun paziente")', { timeout: 15000 });
+  await page.click('.modal button[data-act="or-save"]');
   await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
   const w1 = JSON.parse(psql(`select week->'1' from shift_versions where therapist_id='${gialli}' and valid_from='${ed}'`));
   assert.deepEqual(w1.map(b => b.kind + ' ' + b.start + '-' + b.end), ['amb 07:15-09:00', 'reparto 09:00-12:00', 'pausa 12:00-12:20', 'amb 12:20-13:40', 'documentazione 13:40-14:12']);
   assert.match(psql(`select (week->'3')::text from shift_versions where therapist_id='${gialli}' and valid_from='${ed}'`), /"end": "11:30"/);
-  ok('Orario disegnato nel calendario con pennelli (trascina e clic), un orario scritto a mano (14:12) senza correzioni durante la digitazione, giornata copiata, bordo trascinato, salvato da lunedì in poi');
-  // un solo giorno diverso (corso) e un periodo (segreteria) con ritorno automatico
+  const wed = E.addDays(ed, 2);
+  ok('Orario della settimana dal riquadro «Orario»: fasce scritte a mano (14:12 digitato 1412), lunedì copiato sugli altri giorni, mercoledì ritoccato, valido da lunedì');
+  // un solo giorno diverso (corso) e da una data in poi (segreteria ogni lunedì), toccando la giornata
   const thu2 = E.addDays(ed, 10);
-  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, thu2]);
-  await page.waitForSelector(`.wk-col.paint[data-day="${thu2}"]`);
-  await brush('corso'); await dragOn(thu2, '09:00', '12:00');
-  await page.click('button:has-text("Salva…")');
-  await page.click('.modal button:has-text("Verifica")');
-  await page.waitForSelector('.modal .form-note, .modal .form-warn', { timeout: 15000 });
-  await page.click('.modal button:has-text("Salva")');
-  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  async function tapDay(d, hhmm) {
+    await page.evaluate(([g, x]) => { location.hash = '#/calendario/' + g + '/' + x + '/giorno'; }, [gialli, d]);
+    const col = page.locator(`.wk-col[data-day="${d}"]`).first(); await col.waitFor();
+    const min0 = Number(await col.getAttribute('data-min'));
+    await col.click({ position: { x: 12, y: (E.toMin(hhmm) - min0) * 1.25 + 2 } });
+    await page.waitForSelector('.drawer');
+    await page.click('.drawer button[data-act="seg"][data-path="pd.kind"][data-val="attivita"]');
+  }
+  await tapDay(thu2, '09:30');
+  await page.selectOption('.drawer select[data-bind="pd.act.kind"]', 'corso');
+  await page.fill('.drawer input[data-bind="pd.act.start"]', '09:00'); await page.press('.drawer input[data-bind="pd.act.start"]', 'Tab');
+  await page.fill('.drawer input[data-bind="pd.act.end"]', '12:00'); await page.press('.drawer input[data-bind="pd.act.end"]', 'Tab');
+  await page.click('.drawer button[data-act="pd-save"]');
+  await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   assert.match(psql(`select blocks::text from day_overrides where therapist_id='${gialli}' and day='${thu2}'`), /corso/);
   const mon3 = E.addDays(ed, 14);
-  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, mon3]);
-  await page.waitForSelector(`.wk-col.paint[data-day="${mon3}"]`);
-  await brush('segreteria'); await dragOn(mon3, '12:20', '13:00');
-  await page.click('button:has-text("Salva…")');
-  await page.click('.modal button[data-act="seg"][data-val="range"]');
-  await page.fill('.modal input[data-bind="sv.to"]', E.addDays(mon3, 4));
-  await page.dispatchEvent('.modal input[data-bind="sv.to"]', 'change');
-  await page.click('.modal button:has-text("Verifica")');
-  await page.waitForSelector('.modal .form-note, .modal .form-warn', { timeout: 15000 });
-  await page.click('.modal button:has-text("Salva")');
-  await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+  await tapDay(mon3, '12:30');
+  await page.selectOption('.drawer select[data-bind="pd.act.kind"]', 'segreteria');
+  await page.fill('.drawer input[data-bind="pd.act.start"]', '12:20'); await page.press('.drawer input[data-bind="pd.act.start"]', 'Tab');
+  await page.fill('.drawer input[data-bind="pd.act.end"]', '13:00'); await page.press('.drawer input[data-bind="pd.act.end"]', 'Tab');
+  await page.click('.drawer button[data-act="seg"][data-path="pd.act.scope"][data-val="sempre"]');
+  await page.click('.drawer button[data-act="pd-save"]');
+  await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   assert.match(psql(`select (week->'1')::text from shift_versions where therapist_id='${gialli}' and valid_from='${mon3}'`), /segreteria/);
-  assert.equal(psql(`select (week->'1')::text like '%segreteria%' from shift_versions where therapist_id='${gialli}' and valid_from='${E.addDays(mon3, 5)}'`), 'f', 'dopo il periodo torna l’orario precedente');
-  ok('Variazione di un solo giorno (corso) e di un periodo (segreteria, dal … al …) con ritorno automatico all’orario abituale');
-  await page.click('button:has-text("Fine settimana tipo")');
+  assert.doesNotMatch(psql(`select (week->'1')::text from shift_versions where therapist_id='${gialli}' and valid_from='${ed}'`), /segreteria/, 'prima di quella data l’orario non cambia');
+  ok('Toccando la giornata: corso solo per un giovedì; segreteria ogni lunedì da una data in poi (il passato non cambia)');
   // paziente alla quarta seduta di dieci, Lun-Mer-Ven, dal pannello laterale
-  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, ed]);
+  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/giorno'; }, [gialli, ed]);
   await page.waitForSelector(`.wk-free.act[data-day="${ed}"]`);
   await page.click(`.wk-free.act[data-day="${ed}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: inizio dello spazio libero
   await page.waitForSelector('.drawer');
@@ -311,46 +288,32 @@ try {
   await page.click('.drawer button[data-act="pd-day"][data-wd="5"]');
   await page.waitForSelector('.drawer .form-note:has-text("Tutti i posti liberi")', { timeout: 10000 });
   assert.equal(await page.$eval('.drawer .pd-list li .cnt', e => e.textContent), '7', 'la prima seduta porta il 7 (conto alla rovescia)');
-  assert.equal((await page.$$('.wk-ghost')).length >= 3, true, 'anteprima delle sedute sul calendario');
+  assert.equal((await page.$$('.wk-ghost')).length >= 1, true, 'anteprima delle sedute sul calendario');
   await page.click('.drawer button[data-act="pd-save"]');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   const qs = psql(`select c.prior_sessions||'/'||c.planned_sessions||'/'||count(a.*) from cycles c join patients p on p.id=c.patient_id join appointments a on a.cycle_id=c.id where p.name='Quarta Seduta' group by c.id`);
   assert.equal(qs, '3/10/7');
   assert.equal(psql(`select string_agg(distinct extract(isodow from a.day)::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta'`), '1,3,5');
   ok('Paziente alla 4ª seduta di 10 inserito dal calendario (pannello laterale, anteprima): 3 già svolte, 7 programmate Lun-Mer-Ven');
-  // orari diversi per giorno: il mercoledì alle 12:20 da quella seduta in poi
-  await page.waitForSelector('.wk-appt:has-text("Quarta Seduta")');
-  const wedAppt = psql(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and a.day='${wed}'`);
-  await page.click(`.wk-appt[data-id="${wedAppt}"]`);
-  await page.click('.modal button:has-text("Cambia giorno, ora o durata")');
-  await page.click('.modal button[data-act="seg"][data-val="successive"]');
-  await page.fill('.modal input[data-bind="am.rg.time"]', '12.20');
-  await page.dispatchEvent('.modal input[data-bind="am.rg.time"]', 'change');
-  await page.waitForSelector('.modal button:has-text("Applica alle"):not([disabled])', { timeout: 10000 });
-  await page.click('.modal button:has-text("Applica alle")');
+  // orari diversi per giorno: dal mercoledì, solo i mercoledì alle 12:20 (dal nome del paziente nel tabulato)
+  await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/mese'; }, [gialli, ed]);
+  await page.click('.tg .tg-name button:has-text("Quarta Seduta")');
+  await page.click('.modal button:has-text("Cambia ora dal")');
+  await page.fill('.modal input[data-bind="tp.time"]', '12.20'); await page.press('.modal input[data-bind="tp.time"]', 'Tab');
+  await page.fill('.modal input[data-bind="tp.from"]', wed); await page.dispatchEvent('.modal input[data-bind="tp.from"]', 'change');
+  await page.uncheck('.modal input[data-bind="tp.wds"][value="1"]');
+  await page.uncheck('.modal input[data-bind="tp.wds"][value="5"]');
+  await page.click('.modal button[data-act="tp-save"]');
   await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
   assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and extract(isodow from a.day)=3`), '12:20');
   assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and extract(isodow from a.day)=1`), '07:15');
-  ok('Variazione “questa e le successive”: il mercoledì passa alle 12:20 (scritto 12.20), lunedì e venerdì restano alle 7:15');
-  // assenza con recupero dal calendario
-  await page.click(`.wk-appt:has-text("Quarta Seduta") >> nth=0`);
-  await page.click('.modal button:has-text("Assente · da recuperare")');
-  await page.waitForSelector('.modal h4:has-text("recupero")', { timeout: 15000 });
-  let rd = E.addDays(ed, 1), times = [];
-  for (let i = 0; i < 10 && !times.length; i++) {
-    while (E.weekday(rd) >= 6) rd = E.addDays(rd, 1);
-    await page.fill('.modal input[data-bind="am.pick.day"]', rd);
-    await page.dispatchEvent('.modal input[data-bind="am.pick.day"]', 'change');
-    await page.waitForTimeout(250);
-    times = await page.$$eval('.modal select[data-bind="am.pick.start"] option', os => os.map(o => o.value).filter(Boolean));
-    if (!times.length) rd = E.addDays(rd, 1);
-  }
-  await page.selectOption('.modal select[data-bind="am.pick.start"]', times[0]);
-  await page.click('.modal button:has-text("Prenota il recupero")');
+  ok('Dal nome del paziente: dal mercoledì in poi, solo i mercoledì alle 12:20 (scritto 12.20); lunedì e venerdì restano alle 7:15');
+  // assenza dalla casella del tabulato, con una seduta aggiunta in fondo al ciclo
+  await page.click(`.tg tr:has(.tg-name:has-text("Quarta Seduta")) td:nth-child(${Number(ed.slice(8)) + 1}) button`);
+  await page.click('.modal button[data-act="ts-absent"][data-rec="1"]');
   await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
-  assert.equal(psql(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and a.status='assente' and a.recovered_by is not null`), '1');
-  await page.screenshot({ path: '/tmp/claude-0/cal-new.png', fullPage: true });
-  ok('Dal calendario: assenza del paziente con recupero');
+  assert.equal(psql(`select count(*) filter (where a.status='assente')||'/'||count(*) filter (where a.status='programmata') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta'`), '1/7', 'l’assenza non scala: le 7 sedute restano tutte in programma');
+  ok('Dal tabulato: assenza del paziente con una seduta aggiunta in fondo, il conteggio resta giusto');
 
   // account di un fisioterapista: modifica solo il proprio calendario
   await ensureUser('fisio@pilota.test', 'lettura', 'Fisio Prova');

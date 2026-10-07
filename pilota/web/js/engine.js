@@ -40,7 +40,7 @@
   };
   // tipi di fascia del calendario: solo "amb" riceve pazienti
   const BLOCK = { amb: 'Ambulatorio', reparto: 'Reparto', pausa: 'Pausa', documentazione: 'Cartelle / adempimenti', segreteria: 'Segreteria',
-    corso: 'Corso obbligatorio', permesso_ore: 'Permesso a ore', recupero_ore: 'Recupero ore', briefing: 'Briefing', preparazione: 'Preparazione', altro: 'Altra attività' };
+    corso: 'Corso obbligatorio', permesso_ore: 'Permesso a ore', recupero_ore: 'Recupero ore', briefing: 'Briefing', preparazione: 'Preparazione', ortesi: 'Ambulatorio ortesi', gruppo: 'Gruppo', progetto: 'Progetto', altro: 'Altra attività' };
   const PRIORITY = { U: 'U – Urgente', B: 'B – Breve', D: 'D – Differibile', P: 'P – Programmabile', NI: 'Non indicata' };
   const PRIORITY_ORDER = ['U', 'B', 'D', 'P', 'NI'];
   const REQUEST = { prima: 'Prima seduta', continuazione: 'Continuazione ciclo' };
@@ -120,7 +120,7 @@
     let blocks;
     if (ov) blocks = ov.blocks;
     else { const v = shiftFor(ctx, thId, day); blocks = v ? (v.week[String(weekday(day))] || []) : []; }
-    return (blocks || []).map(b => ({ kind: b.kind, start: hhmm(b.start), end: hhmm(b.end), max: b.max == null || b.max === '' ? null : Number(b.max) }))
+    return (blocks || []).map(b => ({ kind: b.kind, start: hhmm(b.start), end: hhmm(b.end), max: b.max == null || b.max === '' ? null : Number(b.max), label: b.label || '' }))
       .sort((a, b) => toMin(a.start) - toMin(b.start));
   }
   function absenceAt(ctx, thId, day, s, e) {
@@ -410,7 +410,8 @@
     const list = ctx.byCycle.get(cycleId) || [];
     const c = { effettuate: 0, programmate: 0, trattenute: 0, assenze: 0, annullate: 0, daRecuperare: 0, recuperi: 0, daRiprogrammare: 0, liberate: 0, spostate: 0 };
     list.forEach(a => {
-      if (a.status === 'effettuata') c.effettuate++;
+      // la presenza non si segna: una seduta programmata già passata conta come fatta (si segna solo l'assenza)
+      if (a.status === 'effettuata' || (a.status === 'programmata' && a.day < ctx.today)) c.effettuate++;
       else if (a.status === 'programmata') c.programmate++;
       else if (a.status === 'trattenuta') c.trattenute++;
       else if (a.status === 'assente') c.assenze++;
