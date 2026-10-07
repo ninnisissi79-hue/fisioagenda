@@ -184,7 +184,9 @@
       await FA.save('Prenotazione', () => FA.rpc('book_cycle', { p_cycle: cycleId, p_version: version, p_therapist: o.therapist_id, p_start: o.start, p_weekdays: f.weekdays, p_dates: o.dates }));
       FA.closeModal();
       A.ui.find = null;
-      FA.go('paziente', c.patient_id);
+      // il risultato si vede subito nel tabulato del collega scelto, dalla prima seduta
+      A.ui.booked = { patient_id: c.patient_id, th: o.therapist_id, n: o.dates.length, from: o.dates[0] };
+      FA.go('calendario', o.therapist_id, o.dates[0], 'settimana');
     } catch (e) {
       A.ui.bookErr = e.message + (f.mode === 'attesa' && f.cycle_id ? ' La richiesta è comunque salvata in lista d’attesa: puoi riprovare.' : '');
       f.info = null;
@@ -439,7 +441,7 @@
     const orig = a.original_therapist_id || cyc.therapist_id;
     const free = p.day && p.th && okM ? E.freeStarts(A.ctx, p.th, p.day, m, { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id }) : [];
     const changed = p.day !== a.day || t !== a.start_time || m !== curDur || p.th !== a.therapist_id;
-    return '<div class="grid2">' +
+    return (A.ui.am.focusTh ? '<div class="form-note small">Scegli il collega nel campo «Fisioterapista»: la seduta diventa una sostituzione e il conteggio del paziente non cambia.</div>' : '') + '<div class="grid2">' +
       '<div class="field"><label>Giorno</label><input type="date"' + (a.day < A.today ? '' : ' min="' + A.today + '"') + ' data-bind="am.pick.day" data-rerender value="' + esc(p.day || '') + '"></div>' +
       '<div class="field"><label>Ora di inizio</label>' + FA.timeField('am.pick.start', p.start, ' data-rerender style="max-width:100px"') +
         (free.length ? '<div class="help">Posti liberi quel giorno: ' + free.slice(0, 10).map(x => '<button class="btn link small" data-act="am-start" data-t="' + x + '">' + x + '</button>').join(' ') + '</div>' : '') + '</div>' +
@@ -460,6 +462,7 @@
   FA.actions['open-appt'] = el => {
     const id = el.getAttribute('data-id');
     if (!A.ctx.appt.get(id)) return;
+    if (A.ui.swap && A.ui.swap.id !== id) { const first = A.ui.swap.id; A.ui.swap = null; FA.render(); openSwap(first, id); return; }
     const a = A.ctx.appt.get(id);
     A.ui.am = { id, mode: a.status === 'da_riprogrammare' ? 'sposta' : (el.getAttribute('data-mode') || null), out: {}, pick: { day: a.day < A.today && a.status !== 'programmata' ? A.today : a.day, th: a.therapist_id, start: a.start_time } };
     FA.openModal({ title: 'Appuntamento', live: true, body: apptBody, foot: apptFoot, wide: true });
@@ -469,10 +472,11 @@
     if (!a) return '<p>L’appuntamento non esiste più (modificato da un collega).</p>';
     const cyc = A.ctx.cyc.get(a.cycle_id), cnt = E.cycleCounts(A.ctx, a.cycle_id);
     const iss = A.issues.filter(i => i.appointment_id === a.id);
-    const n = E.sessionNumber(A.ctx, a), ev = A.ctx.events.get(a.patient_id + '|' + a.day);
-    let h = '<div class="row between"><div><h3 style="margin:0">' + esc(FA.patName(a.patient_id)) + ' ' + FA.prio(cyc.priority) + '</h3>' +
-      '<div class="muted">' + (n ? '<strong>' + (n === 'R' ? 'Recupero' : 'Seduta ' + n + ' di ' + cyc.planned_sessions) + '</strong> · ' : '') + (cyc.treatment ? esc(cyc.treatment) + ' · ' : '') +
-      esc(FA.catName(cyc.category_id)) + ' · ciclo di ' + cyc.planned_sessions + ' sedute (' + cnt.effettuate + ' effettuate)' +
+    const n = E.sessionNumber(A.ctx, a), ev = A.ctx.events.get(a.patient_id + '|' + a.day), left = FA.leftOf(a);
+    let h = '<div class="row between"><div><h3 style="margin:0">' + FA.countBadge(a) + ' ' + esc(FA.patName(a.patient_id)) + ' ' + FA.prio(cyc.priority) + '</h3>' +
+      '<div class="count-line">' + (left === 'R' ? '<strong>Recupero</strong> (non consuma una seduta)' : typeof left === 'number' ? '<strong>' + (left === 1 ? 'Ultima seduta del ciclo' : 'Restano ' + left + ' sedute, compresa questa') + '</strong>' + (a.status === 'effettuata' ? ' (effettuata)' : ' (prevista)') : '') +
+        ' · effettuate <strong>' + cnt.effettuate + '</strong> su ' + cyc.planned_sessions + '</div>' +
+      '<div class="muted">' + (cyc.treatment ? esc(cyc.treatment) + ' · ' : '') + esc(FA.catName(cyc.category_id)) +
       (a.sheet_number ? ' · sul tabulato: ' + a.sheet_number : '') + (ev ? ' · <span class="chip info">V visita fisiatrica</span>' : '') + '</div></div>' +
       '<button class="btn small" data-act="open-patient" data-id="' + a.patient_id + '">Scheda paziente</button></div>' +
       '<p style="margin-top:10px"><strong>' + esc(FA.dayLabel(a.day)) + ', ' + a.start_time + '–' + a.end_time + '</strong> con <strong>' + esc(FA.thName(a.therapist_id)) + '</strong> ' + FA.statusChip(a) +
@@ -484,16 +488,23 @@
     const canOutcome = ['programmata', 'effettuata', 'assente', 'annullata'].includes(a.status) && !a.recovered_by;
     const canMove = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const canRecover = (a.status === 'assente' || a.status === 'annullata') && a.to_recover && !a.recovered_by && cyc.status === 'attivo';
-    if (a.status === 'programmata') h += '<div class="row" style="margin:10px 0"><strong>Azioni rapide:</strong>' +
-      (a.day <= A.today ? '<button class="btn small ok" data-act="am-quick" data-s="effettuata"' + FA.saveDisabled() + '>✓ Effettuata</button>' : '') +
-      '<button class="btn small" data-act="am-quick" data-s="assente_rec"' + FA.saveDisabled() + '>Assente · da recuperare</button>' +
-      '<button class="btn small" data-act="am-quick" data-s="assente"' + FA.saveDisabled() + '>Assente</button>' +
-      '<button class="btn small" data-act="am-quick" data-s="annullata"' + FA.saveDisabled() + '>Annullata dal paziente</button></div>';
-    h += '<div class="row" style="margin:10px 0">' +
-      '<button class="btn ' + (am.mode === 'correggi' ? 'primary' : '') + '" data-act="am-mode" data-m="correggi">✎ Correggi</button>' +
-      (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito / assenza' : 'Correggi esito') + '</button>' : '') +
-      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Modifica: giorno, ora, durata, fisioterapista</button>' : '') +
-      (canRecover ? '<button class="btn ' + (am.mode === 'recupero' ? 'primary' : '') + '" data-act="am-mode" data-m="recupero">Programma il recupero</button>' : '') + '</div>';
+    // azioni del giorno per giorno: pulsanti grandi, comodi anche da telefono
+    if (a.status === 'programmata') h += '<div class="act-grid">' +
+      (a.day <= A.today ? '<button class="btn ok" data-act="am-quick" data-s="effettuata"' + FA.saveDisabled() + '>✓ Effettuata</button>' : '<button class="btn" disabled title="Una seduta futura non si registra come effettuata">✓ Effettuata (dal giorno della seduta)</button>') +
+      '<button class="btn" data-act="am-quick" data-s="assente_rec"' + FA.saveDisabled() + '>Assente · da recuperare</button>' +
+      '<button class="btn" data-act="am-quick" data-s="assente"' + FA.saveDisabled() + '>Assente · non si recupera</button>' +
+      '<button class="btn" data-act="am-quick" data-s="annullata"' + FA.saveDisabled() + '>Annullata dal paziente</button></div>';
+    h += '<div class="act-grid">' +
+      (canMove ? '<button class="btn ' + (am.mode === 'sposta' ? 'primary' : '') + '" data-act="am-mode" data-m="sposta">Cambia giorno, ora o durata</button>' +
+        '<button class="btn ' + (am.mode === 'sposta' && am.focusTh ? 'primary' : '') + '" data-act="am-mode" data-m="sposta" data-th="1">Passa a un altro fisioterapista</button>' : '') +
+      (a.status === 'programmata' ? '<button class="btn ' + (am.mode === 'scambia' ? 'primary' : '') + '" data-act="am-mode" data-m="scambia">⇄ Scambia con un altro paziente</button>' : '') +
+      '<button class="btn ' + (am.mode === 'correggi' ? 'primary' : '') + '" data-act="am-mode" data-m="correggi">✎ Correggi conteggio e dati</button>' +
+      (canOutcome ? '<button class="btn ' + (am.mode === 'esito' ? 'primary' : '') + '" data-act="am-mode" data-m="esito">' + (a.status === 'programmata' ? 'Registra esito con nota…' : 'Correggi l’esito') + '</button>' : '') +
+      (canRecover ? '<button class="btn ' + (am.mode === 'recupero' ? 'primary' : '') + '" data-act="am-mode" data-m="recupero">Programma il recupero</button>' : '') + '</div>' +
+      '<div class="row small cyc-acts"><span class="muted">Ciclo:</span>' +
+      (cyc.status === 'attivo' ? '<button class="btn link small" data-act="cy-suspend" data-id="' + cyc.id + '">Sospendi (anche per ticket)</button><button class="btn link small" data-act="cy-close" data-id="' + cyc.id + '">Concludi in anticipo</button>' : '') +
+      (cyc.status === 'sospeso' ? '<button class="btn link small" data-act="cy-resume" data-id="' + cyc.id + '">Riprendi il trattamento</button>' : '') +
+      '<button class="btn link small" data-act="am-undo" data-id="' + a.id + '">Annulla l’ultima modifica di questa seduta</button></div>';
     if (am.mode === 'esito') {
       const o = am.out;
       if (!o.status) { o.status = a.status === 'programmata' ? (a.day <= A.today ? 'effettuata' : 'assente') : a.status; o.cancel_by = a.cancel_by || 'paziente'; o.to_recover = a.to_recover; }
@@ -514,22 +525,23 @@
       h += '</div>';
     }
     if (am.mode === 'recupero') h += '<div class="panel">' + pickBlock(am, a, cyc, 'Data e ora del recupero') + '</div>';
+    if (am.mode === 'scambia') h += swapPick(a);
     if (am.mode === 'correggi') h += fixBlock(am, a, cyc);
     return h + FA.errBox(am.error);
   }
   /* -------- correzione rapida: nome, numerazione, sedute previste, durata, tipo, visita, elimina -------- */
   function fixBlock(am, a, cyc) {
     const n = E.sessionNumber(A.ctx, a);
-    if (!am.fx) am.fx = { name: FA.patName(a.patient_id), n: typeof n === 'number' ? n : '', planned: cyc.planned_sessions, treatment: cyc.treatment || '',
+    if (!am.fx) am.fx = { name: FA.patName(a.patient_id), n: typeof n === 'number' ? n : '', left: typeof n === 'number' ? cyc.planned_sessions + 1 - n : '', planned: cyc.planned_sessions, treatment: cyc.treatment || '',
       dur: [30, 45, 60].includes(cyc.duration) ? String(cyc.duration) : 'altro', durOther: String(cyc.duration) };
     const f = am.fx, ev = A.ctx.events.get(a.patient_id + '|' + a.day);
     const canDel = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const prior = fixPrior(am, a, cyc);
     return '<div class="panel"><div class="grid3">' +
       '<div class="field"><label>Nome del paziente</label><input type="text" data-bind="am.fx.name" value="' + esc(f.name) + '"></div>' +
-      (typeof n === 'number' ? '<div class="field"><label>Questa è la seduta n.</label><div class="row"><input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="am.fx.n" data-num data-rerender value="' + esc(f.n) + '"> di ' +
+      (typeof n === 'number' ? '<div class="field"><label>Sedute che restano, compresa questa</label><div class="row"><input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="am.fx.left" data-num data-rerender value="' + esc(f.left) + '"> su ' +
         '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + [...new Set(E.SESSION_PRESETS.concat([Number(f.planned)]))].sort((x, y) => x - y).map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
-        '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Sedute precedenti all’inserimento: ' + prior + '. Le altre sedute si rinumerano di conseguenza.') + '</div></div>' : '<div></div>') +
+        '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Totale del ciclo e sedute che restano si correggono qui; le altre sedute in agenda si rinumerano di conseguenza (la correzione resta nello storico).') + '</div></div>' : '<div></div>') +
       '<div class="field"><label>Tipo di trattamento</label><input type="text" data-bind="am.fx.treatment" value="' + esc(f.treatment) + '" placeholder="es. GC, RM"></div>' +
       '<div class="field"><label>Durata delle sedute del ciclo (questa e le prossime)</label>' + FA.seg('am.fx.dur', [['30', '30′'], ['45', '45′'], ['60', '1 ora'], ['altro', 'Altro']], f.dur) +
         (f.dur === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:90px;display:inline-block" data-bind="am.fx.durOther" value="' + esc(f.durOther) + '">' : '') +
@@ -545,6 +557,7 @@
   function fixPrior(am, a, cyc) {
     const f = am.fx;
     const cur = E.sessionNumber(A.ctx, a);
+    if (f.left !== '' && f.left != null) f.n = Number(f.planned) + 1 - Number(f.left);
     if (typeof cur !== 'number' || !f.n) return cyc.prior_sessions || 0;
     const p = (cyc.prior_sessions || 0) + (Number(f.n) - cur);
     return p >= 0 && p < Number(f.planned) ? p : null;
@@ -553,7 +566,7 @@
     const am = A.ui.am, a = A.ctx.appt.get(am.id), cyc = A.ctx.cyc.get(a.cycle_id), f = am.fx, pat = A.ctx.pat.get(a.patient_id);
     const prior = fixPrior(am, a, cyc);
     const dur = f.dur === 'altro' ? Number(f.durOther) : Number(f.dur);
-    if (prior == null) { am.error = 'Numero di seduta non possibile: deve stare tra 1 e ' + f.planned + '.'; FA.renderModal(); return; }
+    if (prior == null) { am.error = 'Sedute rimanenti non possibili: devono stare tra 1 e ' + f.planned + ' (e non meno di quelle già in agenda dopo questa).'; FA.renderModal(); return; }
     if (!(dur >= 10 && dur <= 240 && dur % 5 === 0)) { am.error = 'Durata non valida (da 10 a 240 minuti, multipli di 5).'; FA.renderModal(); return; }
     const p = {};
     if (prior !== (cyc.prior_sessions || 0)) p.prior_sessions = prior;
@@ -614,6 +627,7 @@
         () => FA.rpc('register_outcome', { p_id: a.id, p_version: a.version, p_status: status, p_cancel_by: status === 'annullata' ? 'paziente' : null, p_to_recover: k === 'assente_rec', p_note: '' }));
       if (k === 'assente_rec') { am.mode = 'recupero'; am.pick = { day: a.day >= A.today ? E.addDays(a.day, 1) : A.today, th: a.therapist_id, start: '' }; am.error = null; FA.renderModal(); }
       else FA.closeModal();
+      FA.undoToast(FA.patName(a.patient_id) + ': ' + ({ effettuata: 'effettuata', assente_rec: 'assente, da recuperare', assente: 'assente', annullata: 'annullata' }[k]), [a.id]);
     } catch (e) { am.error = e.message; FA.renderModal(); }
   };
   FA.actions['am-range'] = async () => {
@@ -626,7 +640,63 @@
       FA.closeModal();
     } catch (e) { am.error = e.message; FA.renderModal(); }
   };
-  FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.error = null; A.ui.am.fx = null; FA.renderModal(); };
+  FA.actions['am-mode'] = el => { A.ui.am.mode = el.getAttribute('data-m'); A.ui.am.focusTh = !!el.getAttribute('data-th'); A.ui.am.scope = 'solo'; A.ui.am.error = null; A.ui.am.fx = null; FA.renderModal(); };
+  FA.actions['am-undo'] = async el => {
+    const a = A.ctx.appt.get(el.getAttribute('data-id'));
+    if (!a || !confirm('Riportare la seduta di ' + FA.patName(a.patient_id) + ' com’era prima dell’ultima modifica?\nSe nel frattempo qualcuno l’ha cambiata, non viene toccata.')) return;
+    try { await FA.save('Modifica annullata', () => FA.rpc('undo_appointment_change', { p_ids: [a.id], p_versions: [a.version] })); }
+    catch (e) { A.ui.am.error = e.message; FA.renderModal(); }
+  };
+  /* -------- scambio di due pazienti -------- */
+  function swapPick(a) {
+    const same = (A.data.appointments || []).filter(x => x.id !== a.id && x.status === 'programmata' && x.day === a.day && x.patient_id !== a.patient_id &&
+      (x.therapist_id === a.therapist_id || FA.canEditTh(x.therapist_id))).sort((x, y) => (x.therapist_id === a.therapist_id ? 0 : 1) - (y.therapist_id === a.therapist_id ? 0 : 1) || (x.start_time < y.start_time ? -1 : 1));
+    return '<div class="panel"><h4 style="margin-top:0">Con chi scambiare il posto?</h4><p class="small muted">Ognuno prende giorno, ora e fisioterapista dell’altro, con la propria durata. Un’unica operazione: o si scambiano entrambi o nessuno.</p>' +
+      (same.length ? '<div class="pd-found">' + same.slice(0, 14).map(x => '<button class="btn small" data-act="sw-pick" data-a="' + a.id + '" data-b="' + x.id + '">' + esc(x.start_time + ' ' + FA.patName(x.patient_id)) +
+        (x.therapist_id !== a.therapist_id ? ' · ' + esc(FA.thName(x.therapist_id)) : '') + '</button>').join('') + '</div>' : '<p class="small">Nessun altro paziente in questo giorno.</p>') +
+      '<button class="btn" data-act="sw-other" data-id="' + a.id + '">Scegli nel tabulato (altro giorno o collega)</button></div>';
+  }
+  FA.actions['sw-pick'] = el => openSwap(el.getAttribute('data-a'), el.getAttribute('data-b'));
+  FA.actions['sw-other'] = el => {
+    const a = A.ctx.appt.get(el.getAttribute('data-id'));
+    A.ui.swap = { id: a.id };
+    FA.closeModal();
+    FA.go('calendario', a.therapist_id, a.day, 'settimana');
+  };
+  function openSwap(aId, bId) {
+    A.ui.sw = { a: aId, b: bId, force: false, error: null };
+    FA.openModal({ title: 'Scambio di posto', live: true, wide: true, body: swapBody,
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="sw-ok"' + (A.ui.sw.ok ? FA.saveDisabled() : ' disabled') + '>⇄ Scambia</button>' });
+  }
+  function swapBody() {
+    const f = A.ui.sw, a = A.ctx.appt.get(f.a), b = A.ctx.appt.get(f.b);
+    if (!a || !b) return '<p>Uno dei due appuntamenti non esiste più.</p>';
+    const dur = x => E.toMin(x.end_time) - E.toMin(x.start_time);
+    const ign = new Set([a.id, b.id]);
+    const endA = E.fromMin(E.toMin(b.start_time) + dur(a)), endB = E.fromMin(E.toMin(a.start_time) + dur(b));
+    const ca = A.ctx.cyc.get(a.cycle_id), cb = A.ctx.cyc.get(b.cycle_id);
+    const chkA = !E.skillLevel(A.ctx, b.therapist_id, ca.category_id) ? { code: 'orario', msg: FA.thName(b.therapist_id) + ' non è abilitato al percorso di ' + FA.patName(a.patient_id) + '.' }
+      : E.checkSlot(A.ctx, b.therapist_id, b.day, b.start_time, endA, { patientId: a.patient_id, ignoreId: a.id, ignoreIds: ign, cycleId: a.cycle_id });
+    const chkB = !E.skillLevel(A.ctx, a.therapist_id, cb.category_id) ? { code: 'orario', msg: FA.thName(a.therapist_id) + ' non è abilitato al percorso di ' + FA.patName(b.patient_id) + '.' }
+      : E.checkSlot(A.ctx, a.therapist_id, a.day, a.start_time, endB, { patientId: b.patient_id, ignoreId: b.id, ignoreIds: ign, cycleId: b.cycle_id });
+    const hard = [chkA, chkB].filter(c => c && FA.isHardConflict(c)), warn = [chkA, chkB].filter(c => c && !FA.isHardConflict(c));
+    f.ok = !hard.length && (!warn.length || f.force) && FA.canEditTh(a.therapist_id) && FA.canEditTh(b.therapist_id);
+    const line = (x, to, end) => '<li><strong>' + esc(FA.patName(x.patient_id)) + '</strong> (' + dur(x) + '′): ' + esc(E.fmtItDay(x.day) + ' ' + x.start_time + ' · ' + FA.thName(x.therapist_id)) +
+      ' → <strong>' + esc(E.fmtItDay(to.day) + ' ' + to.start_time + '–' + end + ' · ' + FA.thName(to.therapist_id)) + '</strong></li>';
+    return '<ul>' + line(a, b, endA) + line(b, a, endB) + '</ul>' +
+      (!FA.canEditTh(a.therapist_id) || !FA.canEditTh(b.therapist_id) ? '<div class="form-error">Per scambiare con l’agenda di un collega serve l’autorizzazione del coordinatore.</div>' : '') +
+      (hard.length ? '<div class="form-error">✗ ' + esc(hard.map(c => c.msg).join(' ')) + ' Lo scambio non è possibile così: le durate o i posti non sono compatibili.</div>' : '') +
+      (!hard.length && warn.length ? '<div class="form-warn">⚠ ' + esc(warn.map(c => c.msg).join(' ')) + '<label class="inline-check"><input type="checkbox" data-bind="sw.force" data-rerender' + (f.force ? ' checked' : '') + '> Confermo lo scambio</label></div>' : '') +
+      (!hard.length && !warn.length ? '<div class="form-note">✓ Durate e posti compatibili. Il conteggio delle sedute di ciascuno non cambia.</div>' : '') + FA.errBox(f.error);
+  }
+  FA.actions['sw-ok'] = async () => {
+    const f = A.ui.sw, a = A.ctx.appt.get(f.a), b = A.ctx.appt.get(f.b);
+    try {
+      await FA.save('Scambio di posto', () => FA.rpc('swap_appointments', { p_a: a.id, p_va: a.version, p_b: b.id, p_vb: b.version, p_force: !!f.force }));
+      FA.closeModal();
+      FA.undoToast('Scambiati ' + FA.patName(a.patient_id) + ' e ' + FA.patName(b.patient_id), [a.id, b.id]);
+    } catch (e) { f.error = e.message; FA.renderModal(); }
+  };
   FA.actions['open-patient'] = el => { FA.closeModal(); FA.go('paziente', el.getAttribute('data-id')); };
   FA.actions['am-outcome'] = async () => {
     const am = A.ui.am, a = A.ctx.appt.get(am.id), o = am.out;
@@ -644,6 +714,7 @@
     try {
       await FA.save('Seduta aggiornata', () => FA.rpc('edit_appointment', { p_id: a.id, p_version: a.version, p: { therapist_id: p.th, day: p.day, start: ed.t, minutes: ed.m, force: !!p.force, note: p.note || '' } }));
       FA.closeModal();
+      FA.undoToast(FA.patName(a.patient_id) + ': ' + E.fmtItDay(p.day) + ' ' + ed.t + ' · ' + FA.thName(p.th), [a.id]);
     } catch (e) {
       // gli avvisi rilevati solo dal server si confermano qui, senza perdere quanto scritto
       am.error = e.message + (e.kind === 'FA_WARN' ? ' Se va bene, spunta «Salva comunque» e salva di nuovo.' : '');

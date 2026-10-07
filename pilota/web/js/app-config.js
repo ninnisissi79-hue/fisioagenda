@@ -554,21 +554,26 @@
     const list = (A.data.profiles || []).slice().sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email));
     return '<div class="form-note"><strong>Come aggiungere un collega:</strong> nel pannello di Supabase apri <em>Authentication → Users → Add user → Create new user</em> con password temporanea e “Auto Confirm User”. ' +
       'Il nuovo account compare qui in <em>sola consultazione</em>: assegna il ruolo. La registrazione libera è disattivata.</div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Attivo</th><th></th></tr></thead><tbody>' +
+      '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Email</th><th>Ruolo</th><th>Agende dei colleghi</th><th>Attivo</th><th></th></tr></thead><tbody>' +
       list.map(p => {
         const k = 'us.' + p.user_id;
-        if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name, therapist_id: p.therapist_id || '' });
+        if (!FA.get(k)) FA.set(k, { role: p.role, active: p.active, full_name: p.full_name, therapist_id: p.therapist_id || '', edit_until: p.edit_all_until || '' });
         const f = FA.get(k);
         return '<tr><td><input type="text" data-bind="' + k + '.full_name" value="' + esc(f.full_name) + '"' + adminOnly() + '></td><td>' + esc(p.email) + '</td>' +
           '<td><select data-bind="' + k + '.role" data-rerender' + adminOnly() + '>' + ['programmatore', 'admin', 'operatore', 'fisioterapista', 'lettura'].map(r => FA.option(r, FA.roleLabel(r), f.role)).join('') + '</select>' +
           (f.role === 'fisioterapista' ? '<select style="margin-top:4px" data-bind="' + k + '.therapist_id"' + adminOnly() + '><option value="">— quale collega? —</option>' + FA.allTherapists().map(t => FA.option(t.id, t.name, f.therapist_id)).join('') + '</select>' : '') + '</td>' +
+          '<td>' + (f.role === 'fisioterapista' || f.role === 'lettura'
+            ? '<label class="small">Può modificarle (o fare da sostituto della segreteria) fino al</label><input type="date" data-bind="' + k + '.edit_until" value="' + esc(f.edit_until) + '"' + adminOnly() + '>' +
+              (f.edit_until && f.edit_until >= A.today ? '<div class="small ok-txt">autorizzato</div>' : '<div class="small muted">solo consultazione' + (f.role === 'fisioterapista' ? ' (modifica il proprio)' : '') + '</div>')
+            : '<span class="small muted">' + (f.role === 'lettura' ? 'consultazione' : 'tutte') + '</span>') + '</td>' +
           '<td><input type="checkbox" data-bind="' + k + '.active"' + (f.active ? ' checked' : '') + adminOnly() + ' aria-label="Attivo"></td>' +
           '<td><button class="btn small" data-act="us-save" data-id="' + p.user_id + '"' + adminSave() + '>Salva</button></td></tr>';
-      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Programmatore</strong> e <strong>Coordinatore</strong> (entrambi accesso a tutto: configurazione, utenti, backup e tutti i calendari), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (solo il proprio calendario: va collegato al suo nome), <strong>Sola consultazione</strong>. I permessi sono verificati sul server.</p>';
+      }).join('') + '</tbody></table></div><p class="muted small">Ruoli: <strong>Programmatore</strong> e <strong>Coordinatore</strong> (entrambi accesso a tutto: configurazione, utenti, backup e tutti i calendari), <strong>Segreteria / operatore</strong> (tutti i calendari, assenze, sostituzioni, pazienti), <strong>Fisioterapista</strong> (modifica il proprio tabulato e consulta quelli dei colleghi: va collegato al suo nome), <strong>Sola consultazione</strong>. Con una data in «Agende dei colleghi» un fisioterapista o un account di consultazione può modificare tutte le agende e usare gli strumenti della segreteria fino a quel giorno (per esempio come sostituto della segreteria). I permessi sono verificati sul server.</p>';
   }
   FA.actions['us-save'] = async el => {
     const id = el.getAttribute('data-id'), f = FA.get('us.' + id);
-    try { await FA.save('Utente', () => FA.rpc('admin_set_user', { p_user: id, p_role: f.role, p_active: !!f.active, p_full_name: f.full_name || '', p_therapist: f.role === 'fisioterapista' && f.therapist_id ? f.therapist_id : null })); A.ui.us = null; FA.render(); }
+    try { await FA.save('Utente', () => FA.rpc('admin_set_user', { p_user: id, p_role: f.role, p_active: !!f.active, p_full_name: f.full_name || '', p_therapist: f.role === 'fisioterapista' && f.therapist_id ? f.therapist_id : null,
+      p_edit_until: (f.role === 'fisioterapista' || f.role === 'lettura') && f.edit_until ? f.edit_until : null })); A.ui.us = null; FA.render(); }
     catch (e) { A.ui.us = null; FA.render(); }
   };
 

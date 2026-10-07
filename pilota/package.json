@@ -9,11 +9,12 @@
     "db:stop": "supabase stop",
     "start": "node tools/serve.js",
     "test": "node --test tests/engine.test.mjs tests/sheet.test.mjs",
-    "test:server": "node --test --test-concurrency=1 tests/server.test.mjs tests/import.test.mjs",
+    "test:server": "node --test --test-concurrency=1 tests/server.test.mjs tests/import.test.mjs tests/agenda.test.mjs",
     "test:e2e": "node tests/e2e.mjs",
     "build": "node tools/build.mjs",
     "test:e2e-vuoto": "node tests/e2e-vuoto.mjs",
-    "test:e2e-import": "node tests/e2e-import.mjs"
+    "test:e2e-import": "node tests/e2e-import.mjs",
+    "test:e2e-agenda": "node tests/e2e-agenda.mjs"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.117.2",

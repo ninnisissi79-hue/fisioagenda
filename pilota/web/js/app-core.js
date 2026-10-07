@@ -20,7 +20,22 @@
   FA.isFisio = () => !!A.me && A.me.role === 'fisioterapista';
   /** Può modificare il calendario di questo fisioterapista? (il fisioterapista solo il proprio; segreteria e coordinatore tutti) */
   FA.canEditTh = thId => FA.canEdit() && (!FA.isFisio() || !thId || thId === A.me.therapist_id);
-  FA.ownOnly = () => FA.isFisio() ? '<p class="muted small">Puoi modificare solo il tuo calendario. Per i colleghi rivolgiti alla segreteria o al coordinatore.</p>' : '';
+  FA.ownOnly = () => FA.isFisio() ? '<p class="muted small">Puoi modificare solo il tuo calendario: per le agende dei colleghi serve l’autorizzazione del coordinatore (oppure rivolgiti alla segreteria).</p>' : '';
+  /** sedute che restano nel ciclo, compresa questa (conto alla rovescia 10 → 1); 'R' per un recupero */
+  FA.leftOf = a => {
+    const n = E.sessionNumber(A.ctx, a), c = A.ctx.cyc.get(a.cycle_id);
+    if (n === 'R') return 'R';
+    if (!n || !c) return null;
+    return c.planned_sessions + 1 - n;
+  };
+  /** numero sul tabulato: pieno se la seduta è effettuata, a contorno se è solo prevista */
+  FA.countBadge = a => {
+    const left = FA.leftOf(a), c = A.ctx.cyc.get(a.cycle_id);
+    if (left == null) return '';
+    if (left === 'R') return '<span class="cnt rec" title="Recupero">R</span>';
+    const done = a.status === 'effettuata';
+    return '<span class="cnt' + (done ? ' done' : '') + (left <= 0 ? ' over' : '') + '" title="' + (done ? 'Seduta effettuata' : 'Seduta prevista') + ': ' + (left === 1 ? 'ultima' : 'ne restano ' + left + ' compresa questa') + ' (' + (c.planned_sessions + 1 - left) + 'ª di ' + c.planned_sessions + ')">' + left + '</span>';
+  };
   FA.isAdmin = () => !!A.me && (A.me.role === 'admin' || A.me.role === 'programmatore');
   FA.prio = p => '<span class="prio ' + esc(p) + '" title="' + esc(E.PRIORITY[p]) + '">' + esc(p === 'NI' ? '–' : p) + '</span>';
   FA.statusChip = a => {
@@ -59,6 +74,26 @@
     setTimeout(() => el.remove(), kind === 'bad' ? 7000 : 3500);
   };
 
+  /** avviso con «Annulla»: riporta le sedute com'erano, solo se nessuno le ha cambiate dopo */
+  FA.undoToast = function (msg, ids) {
+    const versions = ids.map(id => (A.ctx.appt.get(id) || {}).version);
+    if (versions.some(v => v == null)) return;
+    const el = document.createElement('div');
+    el.className = 'toast ok undo';
+    el.innerHTML = '<span>' + esc(msg) + '</span> <button class="btn small">Annulla</button>';
+    el.querySelector('button').onclick = async () => {
+      el.remove();
+      try {
+        await FA.save('Modifica annullata', () => FA.rpc('undo_appointment_change', { p_ids: ids, p_versions: versions }));
+        if (A.modal) FA.closeModal();
+      } catch (e) { /* già segnalato */ }
+    };
+    const root = document.getElementById('toast-root');
+    root.appendChild(el);
+    while (root.children.length > 3) root.removeChild(root.firstChild);
+    setTimeout(() => el.remove(), 12000);
+  };
+
   /* ---------------- finestre ---------------- */
   FA.openModal = function (def) { A.modal = def; renderModal(); };
   FA.closeModal = function () {
@@ -75,19 +110,44 @@
       try { fn.apply(null, args); } finally { painting = false; }
     };
   }
+  /** campo attivo e posizione del cursore: dopo un nuovo disegno si scrive esattamente dove si era */
+  function grabFocus(root) {
+    const el = document.activeElement;
+    if (!el || !root.contains(el) || !el.getAttribute('data-bind')) return null;
+    let s = null, e = null; try { s = el.selectionStart; e = el.selectionEnd; } catch (x) { /* non è un campo di testo */ }
+    return { bind: el.getAttribute('data-bind'), s, e, value: el.value };
+  }
+  function restoreFocus(root, f) {
+    if (!f) return;
+    const el = root.querySelector('[data-bind="' + f.bind + '"]');
+    if (!el) return;
+    // quanto si sta scrivendo vale più di quanto c'era nel disegno
+    if (el.tagName === 'INPUT' && el.type !== 'checkbox' && el.type !== 'radio' && f.value != null && el.value !== f.value) el.value = f.value;
+    el.focus();
+    try { if (f.s != null) el.setSelectionRange(f.s, f.e); } catch (x) { /* non è un campo di testo */ }
+  }
+  // Un orario si scrive un carattere alla volta (1, 12, 12:, 12:2, 12:20): se la finestra venisse ridisegnata a metà
+  // (per esempio per un aggiornamento arrivato da un collega) il campo verrebbe chiuso e «12» diventerebbe 12:00.
+  // Finché si sta scrivendo un orario il nuovo disegno della finestra aspetta l'uscita dal campo.
+  let modalPending = false;
+  const typingTime = () => { const el = document.activeElement; return !!(el && el.hasAttribute && el.hasAttribute('data-time') && el.dataset.dirty === '1'); };
+  document.addEventListener('input', ev => { if (ev.target.hasAttribute && ev.target.hasAttribute('data-time')) ev.target.dataset.dirty = '1'; }, true);
+  document.addEventListener('focusout', () => { if (modalPending) setTimeout(() => { if (!typingTime() && modalPending) { modalPending = false; renderModal(); } }, 50); });
   const renderModal = guarded(function () {
     const root = document.getElementById('modal-root');
+    if (typingTime() && root.contains(document.activeElement)) { modalPending = true; return; }
+    modalPending = false;
     document.body.classList.toggle('has-drawer', !!(A.modal && A.modal.drawer));
     if (!A.modal) { root.innerHTML = ''; return; }
     const m = A.modal;
-    const focused = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute('data-bind') : null;
+    const focused = grabFocus(root);
     const inner = '<div class="modal ' + (m.wide ? 'wide' : '') + (m.drawer ? ' drawer' : '') + '" role="dialog" aria-modal="' + (m.drawer ? 'false' : 'true') + '" aria-label="' + esc(m.title) + '">' +
       '<div class="modal-head"><h3>' + esc(m.title) + '</h3><button class="x" data-act="close-modal" aria-label="Chiudi">×</button></div>' +
       '<div class="modal-body">' + m.body() + '</div>' +
       (m.foot ? '<div class="modal-foot">' + m.foot() + '</div>' : '') + '</div>';
     // il pannello laterale lascia visibile e cliccabile il calendario
     root.innerHTML = m.drawer ? '<div class="drawer-wrap">' + inner + '</div>' : '<div class="modal-back" data-act="modal-back">' + inner + '</div>';
-    if (focused) { const el = root.querySelector('[data-bind="' + focused + '"]'); if (el) el.focus(); }
+    restoreFocus(root, focused);
   });
   FA.renderModal = renderModal;
 
@@ -307,9 +367,10 @@
   };
 
   /* ---------------- struttura della pagina ---------------- */
+  // il tabulato (calendario del fisioterapista) è il centro: subito dopo «Oggi»
   const NAV = [
-    ['oggi', 'Oggi'], ['assenze', 'Assenze'], ['sostituzioni', 'Sostituzioni'], ['trova', 'Trova posto'], ['agenda', 'Agenda (giorno)'], ['calendario', 'Calendario settimanale'], ['importa', 'Importa tabulato'], ['pazienti', 'Pazienti'],
-    ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['config', 'Configurazione'], ['storico', 'Storico']
+    ['oggi', 'Oggi'], ['calendario', 'Tabulato'], ['trova', 'Trova posto'], ['assenze', 'Fisioterapista assente'], ['sostituzioni', 'Sostituzioni'], ['agenda', 'Agende del giorno'],
+    ['pazienti', 'Pazienti'], ['attesa', 'Lista d’attesa'], ['dasistemare', 'Da sistemare'], ['importa', 'Importa (facoltativo)'], ['config', 'Configurazione'], ['storico', 'Storico']
   ];
   function connLabel() {
     if (!A.online) return '<span class="conn bad">Non connesso</span>';
@@ -328,7 +389,8 @@
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
       '</div><nav class="nav">' + NAV.map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
       '<div class="pilot-banner">Versione pilota: <strong>solo pazienti fittizi</strong>, non inserire dati reali.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
-        (FA.isFisio() ? ' Puoi modificare <strong>solo il tuo calendario</strong>' + (A.me.therapist_id ? (A.ctx ? ' (' + esc(FA.thName(A.me.therapist_id)) + ')' : '') : ' — account non ancora collegato al tuo nome: chiedi al coordinatore') + '.' : '') + '</div>' +
+        (A.me.edit_all_until && A.me.role === 'operatore' && A.me.base_role !== 'operatore' ? ' Sei <strong>autorizzato a gestire tutte le agende</strong> fino al ' + esc(E.fmtIt(A.me.edit_all_until)) + '.' : '') +
+        (FA.isFisio() ? ' Puoi modificare <strong>il tuo tabulato</strong> e consultare quelli dei colleghi' + (A.me.therapist_id ? (A.ctx ? ' (' + esc(FA.thName(A.me.therapist_id)) + ')' : '') : ' — account non ancora collegato al tuo nome: chiedi al coordinatore') + '.' : '') + '</div>' +
       (A.online ? '' : '<div class="net-banner" role="alert">Connessione assente: puoi consultare i dati già caricati, ma nessuna modifica può essere salvata finché la connessione non torna.</div>') +
       (A.loadError && A.online ? '<div class="net-banner" role="alert">Aggiornamento dei dati non riuscito: ' + esc(A.loadError.message) + ' <button class="btn small" data-act="refresh">Riprova</button></div>' : '');
   }
@@ -356,10 +418,10 @@
     if (!A.ctx) body = '<div class="panel">Caricamento dei dati dal sistema condiviso…</div>';
     else { try { body = view.render(A.params); } catch (e) { console.error(e); body = '<div class="panel form-error">Errore di visualizzazione: ' + esc(e.message) + '</div>'; } }
     const y = window.scrollY;
-    const focusBind = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-bind');
+    const focused = grabFocus(root);
     root.innerHTML = header() + '<main>' + body + '</main>';
     if (soft) window.scrollTo(0, y);
-    if (focusBind) { const el = root.querySelector('[data-bind="' + focusBind + '"]'); if (el) el.focus(); }
+    restoreFocus(root, focused);
   });
   FA.render = render;
   FA.flushPending = () => { if (pending) render(true); };
@@ -428,6 +490,7 @@
     if (el.hasAttribute('data-time')) {
       // mentre si scrive il campo non viene toccato; all'uscita l'orario viene normalizzato
       if (!final) { FA.set(path, el.value); return path; }
+      el.dataset.dirty = '';
       const n = FA.normTime(el.value);
       el.classList.toggle('bad', n === null);
       if (n) el.value = n;
@@ -485,9 +548,59 @@
     '<button type="button" data-act="seg" data-path="' + path + '" data-val="' + esc(v) + '" class="' + (String(cur) === String(v) ? 'on' : '') + '" aria-pressed="' + (String(cur) === String(v)) + '">' + esc(l) + '</button>').join('') + '</div>';
 
   /* ---------------- schermata iniziale ---------------- */
+  /** pazienti di oggi di un fisioterapista: orario, durata, conteggio a ritroso, azioni rapide */
+  function myDay(thId) {
+    const ctx = A.ctx, d = A.today;
+    const list = (ctx.data.appointments || []).filter(a => a.therapist_id === thId && a.day === d && a.status !== 'spostata' && a.status !== 'liberata')
+      .sort((a, b) => a.start_time < b.start_time ? -1 : 1);
+    const can = FA.canEditTh(thId);
+    const abs = E.absenceOnDay(ctx, thId, d);
+    const done = list.filter(a => a.status === 'effettuata').length;
+    return '<div class="panel today-list"><div class="row between"><h3 style="margin:0">I miei pazienti di oggi · ' + esc(FA.thName(thId)) + '</h3>' +
+      '<div class="row"><button class="btn primary" data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/mese">Il mio tabulato</button>' +
+      '<button class="btn" data-act="go" data-view="calendario" data-param="' + thId + '/' + d + '/giorno">Agenda di oggi</button></div></div>' +
+      abs.map(x => '<div class="form-warn small">Assente oggi (' + esc(E.ABSENCE_KIND[x.kind]) + ')' + (x.start_time ? ' ' + x.start_time + '–' + x.end_time : '') + '</div>').join('') +
+      (list.length ? '<p class="small muted" style="margin:6px 0">' + list.length + ' pazienti · ' + done + ' già registrati come effettuati. Il numero è il conto alla rovescia: le sedute che restano, compresa questa.</p><ul class="list">' + list.map(a => {
+        const c = ctx.cyc.get(a.cycle_id), left = FA.leftOf(a);
+        return '<li class="todo-item td-' + a.status + '"><div><strong>' + a.start_time + '–' + a.end_time + '</strong> <span class="muted small">(' + (E.toMin(a.end_time) - E.toMin(a.start_time)) + '′)</span> ' +
+          '<a href="#" data-act="open-appt" data-id="' + a.id + '"><strong>' + esc(FA.patName(a.patient_id)) + '</strong></a> ' + FA.countBadge(a) +
+          (c && c.treatment ? ' <span class="chip grey">' + esc(c.treatment) + '</span>' : '') + (a.original_therapist_id ? ' <span class="chip info">sostituisce ' + esc(FA.thName(a.original_therapist_id)) + '</span>' : '') +
+          ' ' + FA.statusChip(a) + (left != null && typeof left === 'number' ? '<div class="small muted">' + (left === 1 ? 'ultima seduta del ciclo' : 'restano ' + left + ' sedute, compresa questa') + '</div>' : '') + '</div>' +
+          (can && a.status === 'programmata' ? '<div class="row"><button class="btn small ok" data-act="today-out" data-id="' + a.id + '" data-s="effettuata"' + FA.saveDisabled() + '>✓ Effettuata</button>' +
+            '<button class="btn small" data-act="today-out" data-id="' + a.id + '" data-s="assente_rec"' + FA.saveDisabled() + '>Assente</button></div>' : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="muted">Nessun paziente in agenda oggi.</p>') + '</div>';
+  }
+  FA.myDay = myDay;
+  FA.actions['today-out'] = async el => {
+    const a = A.ctx.appt.get(el.getAttribute('data-id')), k = el.getAttribute('data-s');
+    if (!a) return;
+    try {
+      await FA.save(k === 'effettuata' ? 'Seduta effettuata' : 'Assenza registrata (da recuperare)', () => FA.rpc('register_outcome', { p_id: a.id, p_version: a.version,
+        p_status: k === 'effettuata' ? 'effettuata' : 'assente', p_cancel_by: null, p_to_recover: k === 'assente_rec', p_note: '' }));
+      FA.undoToast(FA.patName(a.patient_id) + ': ' + (k === 'effettuata' ? 'effettuata' : 'assente'), [a.id]);
+    } catch (e) { /* già segnalato */ }
+  };
+  /** agende di oggi di tutti: per la segreteria e il coordinatore */
+  function allToday() {
+    const ctx = A.ctx, d = A.today;
+    const rows = FA.activeTherapists().map(t => {
+      const list = (ctx.data.appointments || []).filter(a => a.therapist_id === t.id && a.day === d && E.OCCUPYING.has(a.status));
+      const abs = E.absenceOnDay(ctx, t.id, d);
+      const next = list.filter(a => a.status === 'programmata' && a.end_time >= (new Date().toTimeString().slice(0, 5))).sort((a, b) => a.start_time < b.start_time ? -1 : 1)[0];
+      return '<tr><td><a href="#/calendario/' + t.id + '/' + d + '/giorno"><strong>' + esc(t.name) + '</strong></a></td><td>' + list.length + '</td>' +
+        '<td>' + (abs.length ? '<span class="chip warn">' + esc(E.ABSENCE_KIND[abs[0].kind]) + '</span>' : next ? esc(next.start_time + ' ' + FA.patName(next.patient_id)) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="row"><button class="btn small" data-act="go" data-view="calendario" data-param="' + t.id + '/' + d + '/giorno">Giorno</button><button class="btn small" data-act="go" data-view="calendario" data-param="' + t.id + '/' + d + '/mese">Tabulato</button></td></tr>';
+    }).join('');
+    return '<div class="panel"><h3 style="margin:0 0 6px">Agende di oggi</h3><table class="table"><thead><tr><th>Fisioterapista</th><th>Pazienti</th><th>Prossimo</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
   FA.views.oggi = {
     render() {
       const ctx = A.ctx, d = A.today;
+      // il fisioterapista vede per prima cosa i propri pazienti di oggi
+      const own = A.me.therapist_id && ctx.th.get(A.me.therapist_id) ? A.me.therapist_id : null;
+      if (own && FA.isFisio()) return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + myDay(own) +
+        '<div class="big-actions"><button class="big-action" data-act="go" data-view="calendario" data-param="' + own + '/' + d + '/mese"><span class="t">Il mio tabulato del mese</span><span class="d">Scrivi, sposta, registra le sedute; mesi precedenti e successivi.</span></button>' +
+        '<button class="big-action" data-act="abs-new" data-th="' + own + '"><span class="t">Ferie, permesso o malattia</span><span class="d">I pazienti coinvolti compaiono da ricollocare in «Sostituzioni».</span></button></div>';
       const absent = [];
       FA.activeTherapists().forEach(t => E.absenceOnDay(ctx, t.id, d).forEach(a => absent.push({ t, a })));
       const todos = FA.todos();
@@ -506,7 +619,7 @@
             step(3, false, 'Registra ferie e malattie già note da “Gestisci assenza fisioterapista”; poi inserisci i pazienti fittizi da “Trova posto” o cliccando un posto libero in agenda.', '') + '</ul>'
           : '<p>Il coordinatore deve ancora completare fisioterapisti e turni.</p>') + '</div>';
       }
-      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + guide +
+      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + guide + (own ? myDay(own) : '') +
         '<div class="big-actions">' +
         '<button class="big-action urgent" data-act="go" data-view="assenze"><span class="t">Gestisci assenza fisioterapista</span><span class="d">Registra l’assenza e trova subito i sostituti per i pazienti coinvolti.</span></button>' +
         '<button class="big-action" data-act="go" data-view="trova"><span class="t">Trova posto per un paziente</span><span class="d">Chi può prenderlo, in quali giorni, a che ora e da quando.</span></button></div>' +
@@ -519,6 +632,7 @@
         (workday ? (seats.per.length ? '<ul>' + seats.per.sort((a, b) => b.n - a.n).slice(0, 4).map(p => '<li>' + esc(FA.thName(p.therapist_id)) + ': ' + p.n + '</li>').join('') + '</ul>' : '<span class="muted small">Nessun posto libero.</span>') : '<span class="muted small">Giorno non lavorativo.</span>') +
         '<button class="btn small" data-act="go" data-view="agenda" style="margin-top:6px">Apri l’agenda</button></div>' +
         '</div>' +
+        allToday() +
         '<div class="panel"><div class="row between"><h3>Attività ancora da sistemare</h3><button class="btn small" data-act="go" data-view="dasistemare">Elenco completo</button></div>' +
         (todos.length ? '<ul class="list">' + todos.slice(0, 8).map(FA.todoItem).join('') + '</ul>' + (todos.length > 8 ? '<p class="muted small">…e altre ' + (todos.length - 8) + '.</p>' : '') : '<p class="muted">Nulla da sistemare.</p>') + '</div>';
     }

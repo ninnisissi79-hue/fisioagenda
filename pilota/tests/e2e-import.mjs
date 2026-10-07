@@ -176,12 +176,11 @@ try {
   await page.waitForSelector(`.wk-free.act[data-day="${ne[1]}"]`);
   await page.click(`.wk-free.act[data-day="${ne[1]}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: le 7:00
   await page.waitForSelector('.drawer');
-  await page.click('.drawer button[data-act="seg"][data-val="esistente"]');
-  await page.fill('.drawer input[data-bind="pd.q"]', 'Neri ' + RUN); await page.dispatchEvent('.drawer input[data-bind="pd.q"]', 'change');
+  await page.fill('.drawer input[data-bind="pd.q"]', 'Neri ' + RUN);
   await page.click('.drawer button[data-act="pd-pick"]:has-text("Neri")');
-  await page.waitForSelector('.drawer .form-note:has-text("Manca 1 seduta da programmare")');
-  await page.waitForSelector('.drawer .form-note:has-text("Disponibile")', { timeout: 10000 });
-  await page.click('.drawer button:has-text("Conferma")');
+  await page.waitForSelector('.drawer .form-note:has-text("In trattamento")');
+  await page.waitForSelector('.drawer .form-note:has-text("Posto libero")', { timeout: 10000 });
+  await page.click('.drawer button[data-act="pd-save"]');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   assert.equal(count(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Neri')}'`), 6);
   ok('Dallo spazio libero: paziente già in trattamento scelto dall’archivio, aggiunta la seduta mancante');
@@ -207,10 +206,10 @@ try {
   await page.waitForSelector('.drawer .pl-list li:has-text("1 da programmare")');
   await page.click('.drawer .pl-list li:has-text("Gialli") button[data-act="pl-add"]');
   await page.waitForSelector('.drawer select[data-bind="pd.th"]');
-  assert.match(await page.textContent('.drawer'), /Manca 1 seduta da programmare/);
+  assert.match(await page.textContent('.drawer'), /In trattamento/);
   await page.fill('.drawer input[data-bind="pd.start"]', '10:00'); await page.dispatchEvent('.drawer input[data-bind="pd.start"]', 'change');
-  await page.waitForSelector('.drawer .form-note:has-text("Disponibile")', { timeout: 10000 });
-  await page.click('.drawer button:has-text("Conferma")');
+  await page.waitForSelector('.drawer .form-note:has-text("Posto libero")', { timeout: 10000 });
+  await page.click('.drawer button[data-act="pd-save"]');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   assert.equal(count(`select count(*) from appointments a join patients p on p.id=a.patient_id where p.name='${name('Gialli')}'`), before + 1);
   assert.equal(count(`select count(*) from cycles c join patients p on p.id=c.patient_id where p.name='${name('Gialli')}'`), 1, 'nessun ciclo nuovo');
@@ -273,7 +272,7 @@ try {
   assert.equal(psql(`select (therapist_id='${thId}')::text||' '||coalesce(original_therapist_id::text,'-') from appointments where id='${sub.id}'`), 'true -');
   await page.evaluate(([t, d]) => { location.hash = '#/calendario/' + t + '/' + d + '/settimana'; }, [thId, sd]);
   await page.click(`.wk-appt[data-id="${sub.id}"]`);
-  await page.click('.modal button:has-text("Modifica: giorno, ora, durata")');
+  await page.click('.modal button:has-text("Cambia giorno, ora o durata")');
   await page.click('.modal button[data-act="seg"][data-path="am.pick.dur"][data-val="45"]');
   await page.waitForSelector('.modal .form-note:has-text("Posto libero")');
   await page.click('.modal button:has-text("Salva la modifica")');

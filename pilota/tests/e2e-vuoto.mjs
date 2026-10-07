@@ -217,9 +217,9 @@ try {
   const closed = d => psql(`select count(*) from closures where day='${d}'`) !== '0';
   assert.ok(![0, 1, 2, 3, 4].some(i => closed(E.addDays(ed, i))), 'settimana di prova senza festività');
   await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, ed]);
-  await page.waitForSelector('button:has-text("✎ Orario")');
+  await page.waitForSelector('button:has-text("✎ Settimana tipo e orari")');
   await page.setViewportSize({ width: 1280, height: 1500 });
-  await page.click('button:has-text("✎ Orario")');
+  await page.click('button:has-text("✎ Settimana tipo e orari")');
   await page.waitForSelector('.wk-col.paint');
   await page.waitForTimeout(1500);                                     // lascia arrivare gli aggiornamenti in tempo reale dei salvataggi precedenti
   async function colInfo(d) { const col = await page.$(`.wk-col.paint[data-day="${d}"]`); const bb = await col.boundingBox(); const min = Number(await col.getAttribute('data-min')); return { bb, y: t => bb.y + (E.toMin(t) - min) * 1.25 + 1 }; }
@@ -294,22 +294,25 @@ try {
   assert.match(psql(`select (week->'1')::text from shift_versions where therapist_id='${gialli}' and valid_from='${mon3}'`), /segreteria/);
   assert.equal(psql(`select (week->'1')::text like '%segreteria%' from shift_versions where therapist_id='${gialli}' and valid_from='${E.addDays(mon3, 5)}'`), 'f', 'dopo il periodo torna l’orario precedente');
   ok('Variazione di un solo giorno (corso) e di un periodo (segreteria, dal … al …) con ritorno automatico all’orario abituale');
-  await page.click('button:has-text("Fine orario")');
+  await page.click('button:has-text("Fine settimana tipo")');
   // paziente alla quarta seduta di dieci, Lun-Mer-Ven, dal pannello laterale
   await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/settimana'; }, [gialli, ed]);
   await page.waitForSelector(`.wk-free.act[data-day="${ed}"]`);
   await page.click(`.wk-free.act[data-day="${ed}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: inizio dello spazio libero
   await page.waitForSelector('.drawer');
-  await page.fill('.drawer input[data-bind="pd.name"]', 'Quarta Seduta');
-  await page.dispatchEvent('.drawer input[data-bind="pd.name"]', 'change');
-  await page.fill('.drawer input[data-bind="pd.done"]', '3');
-  await page.dispatchEvent('.drawer input[data-bind="pd.done"]', 'change');
+  await page.fill('.drawer input[data-bind="pd.q"]', 'Quarta Seduta');
+  // alla quarta seduta di dieci: ne restano 7 (totale del ciclo nei dettagli)
+  await page.fill('.drawer input[data-bind="pd.left"]', '7');
+  await page.dispatchEvent('.drawer input[data-bind="pd.left"]', 'change');
+  await page.click('.drawer button[data-act="pd-more"]');
+  await page.fill('.drawer input[data-bind="pd.planned"]', '10');
+  await page.dispatchEvent('.drawer input[data-bind="pd.planned"]', 'change');
   await page.click('.drawer button[data-act="pd-day"][data-wd="3"]');
   await page.click('.drawer button[data-act="pd-day"][data-wd="5"]');
-  await page.waitForSelector('.drawer .form-note:has-text("Tutte disponibili")', { timeout: 10000 });
-  assert.match(await page.textContent('.drawer'), /La prossima è la 4ª \(le 3 già fatte contano come effettuate\)/);
+  await page.waitForSelector('.drawer .form-note:has-text("Tutti i posti liberi")', { timeout: 10000 });
+  assert.equal(await page.$eval('.drawer .pd-list li .cnt', e => e.textContent), '7', 'la prima seduta porta il 7 (conto alla rovescia)');
   assert.equal((await page.$$('.wk-ghost')).length >= 3, true, 'anteprima delle sedute sul calendario');
-  await page.click('.drawer button:has-text("Conferma")');
+  await page.click('.drawer button[data-act="pd-save"]');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
   const qs = psql(`select c.prior_sessions||'/'||c.planned_sessions||'/'||count(a.*) from cycles c join patients p on p.id=c.patient_id join appointments a on a.cycle_id=c.id where p.name='Quarta Seduta' group by c.id`);
   assert.equal(qs, '3/10/7');
@@ -319,7 +322,7 @@ try {
   await page.waitForSelector('.wk-appt:has-text("Quarta Seduta")');
   const wedAppt = psql(`select a.id from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and a.day='${wed}'`);
   await page.click(`.wk-appt[data-id="${wedAppt}"]`);
-  await page.click('.modal button:has-text("Modifica: giorno, ora, durata")');
+  await page.click('.modal button:has-text("Cambia giorno, ora o durata")');
   await page.click('.modal button[data-act="seg"][data-val="successive"]');
   await page.fill('.modal input[data-bind="am.rg.time"]', '12.20');
   await page.dispatchEvent('.modal input[data-bind="am.rg.time"]', 'change');
@@ -364,7 +367,7 @@ try {
   await pf.goto(`http://localhost:${PORT}/#/agenda/${day}`);
   await pf.fill('#em', 'fisio@pilota.test'); await pf.fill('#pw', PASSWORD); await pf.click('button[type=submit]');
   await pf.waitForSelector('.agenda-grid', { timeout: 20000 });
-  assert.match(await pf.textContent('.pilot-banner'), /solo il tuo calendario/);
+  assert.match(await pf.textContent('.pilot-banner'), /il tuo tabulato/);
   const cards = await pf.$$eval('.th-card', cs => cs.map(c => ({ name: c.querySelector('h4 span').textContent, book: !!c.querySelector('[data-act="ag-book"]') })));
   assert.ok(cards.find(c => c.name === 'Rossi Anna').book, 'prenota sul proprio calendario');
   assert.ok(!cards.filter(c => c.name !== 'Rossi Anna').some(c => c.book), 'nessun "+ prenota" sui colleghi');

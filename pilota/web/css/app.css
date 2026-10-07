@@ -368,3 +368,51 @@ select.need, input.need { border-color: var(--warn) !important; box-shadow: 0 0 
 .bad-txt { color: var(--bad); }
 .wk-appt.sub { border-left-color: var(--info); box-shadow: inset 0 0 0 1px var(--info-line); }
 .wk-given { border: 1px dashed var(--info-line); background: repeating-linear-gradient(135deg, rgba(230,240,251,.6), rgba(230,240,251,.6) 4px, transparent 4px, transparent 8px); color: var(--info); font-size: .75rem; cursor: pointer; z-index: 1; overflow: hidden; padding: 1px 3px; }
+.toast.undo { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.toast.undo .btn { background: #fff; color: var(--ok); border: 0; }
+/* conto alla rovescia sul tabulato: pieno = effettuata, contorno = prevista */
+.cnt { display: inline-flex; align-items: center; justify-content: center; min-width: 1.45em; height: 1.45em; padding: 0 3px; border-radius: 999px; border: 2px solid var(--primary); color: var(--primary); font-weight: 800; font-size: .8rem; line-height: 1; background: #fff; vertical-align: middle; }
+.cnt.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.cnt.rec { border-color: var(--info); color: var(--info); }
+.cnt.over { border-color: var(--bad); color: var(--bad); }
+.today-list .todo-item.td-effettuata { opacity: .7; }
+/* tabulato: vista mese */
+.cal-when { font-weight: 500; font-size: 1rem; }
+.mo-grid { display: grid; gap: 4px; margin-top: 8px; }
+.mo-hd { font-size: .75rem; font-weight: 700; color: var(--ink-3); text-transform: uppercase; padding: 2px 4px; }
+.mo-cell { position: relative; min-height: 112px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.mo-cell:hover { border-color: var(--primary); }
+.mo-cell.out { opacity: .5; }
+.mo-cell.we { background: #f1f3f6; }
+.mo-cell.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.mo-num { font-weight: 800; font-size: .9rem; }
+.mo-appt { display: flex; align-items: center; gap: 3px; width: 100%; text-align: left; border: 0; border-left: 3px solid var(--primary); background: var(--primary-soft); border-radius: 4px; padding: 1px 3px; font-size: .74rem; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mo-appt .t { font-weight: 700; }
+.mo-appt .cnt { font-size: .66rem; min-width: 1.35em; height: 1.35em; border-width: 1.5px; }
+.mo-appt.st-effettuata { background: var(--ok-bg); border-left-color: var(--ok); }
+.mo-appt.st-assente, .mo-appt.st-annullata { background: #f1f3f6; border-left-color: var(--ink-3); text-decoration: line-through; }
+.mo-appt.sub { border-left-color: var(--info); }
+.mo-add { position: absolute; right: 4px; top: 3px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-2); background: #fff; font-weight: 800; cursor: pointer; padding: 0; line-height: 1; }
+.mo-add:hover { background: var(--primary); color: #fff; }
+@media (max-width: 700px) { .mo-cell { min-height: 80px; } .mo-appt { font-size: .68rem; } .mo-appt .t { display: none; } }
+/* tabulato: scrittura diretta */
+.wk-col.writable { cursor: copy; }
+.wk-appt .cnt { margin-right: 2px; }
+.wk-appt.swapping { outline: 3px dashed var(--warn); }
+.swap-bar { background: var(--warn-bg); }
+.pd-more { border-left: 3px solid var(--line-2); padding-left: 10px; margin: 6px 0; }
+.pd-list .cnt { font-size: .7rem; }
+/* finestra della seduta: pulsanti grandi per tablet e telefono */
+.act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; margin: 10px 0; }
+.act-grid .btn { min-height: 44px; }
+.count-line { margin: 4px 0; font-size: 1rem; }
+.cyc-acts { gap: 4px; flex-wrap: wrap; }
+.drawer .modal-body > .seg:first-child { margin-bottom: 10px; }
+@media (max-width: 700px) {
+  .cal-bar > p.small { display: none; }
+  .cal-bar .row { gap: 4px; }
+  .cal-bar select[data-bind="calTh"] { max-width: 100% !important; flex: 1 1 100%; }
+  .cal-when { display: block; font-size: .9rem; }
+}
+.booked-bar { background: var(--ok-bg); }
+.wk-appt.booked { box-shadow: 0 0 0 3px var(--ok); }

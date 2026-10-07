@@ -143,11 +143,15 @@ try {
   assert.match(await text(loser, '.modal .form-error'), /lista d’attesa/);
   ok('Due colleghi prenotano lo stesso posto insieme: una conferma, l’altra riceve un messaggio chiaro e la richiesta resta in lista d’attesa');
   await loser.click('.modal button:has-text("Annulla")');
+  // dopo la conferma si apre il tabulato del collega scelto, con le sedute evidenziate
+  await winner.waitForSelector('.booked-bar', { timeout: 15000 });
+  assert.ok((await winner.$$('.wk-appt.booked')).length > 0, 'risultato visibile nel tabulato');
+  await winner.click('.booked-bar button:has-text("Scheda paziente")');
   await winner.waitForSelector('h2:has-text("E2E")', { timeout: 15000 });
   const sheet = await text(winner, 'main');
   assert.match(sheet, /Programmate: 10/);
   assert.match(sheet, /Effettuate: 0/);
-  ok('Prenotazione salvata e visibile nella scheda paziente (10 sedute programmate)');
+  ok('Prenotazione salvata: si apre il tabulato con le sedute evidenziate, poi la scheda paziente (10 sedute programmate)');
 
   // ---------------------------------------------------------------- assenza del paziente con recupero
   const wp = winner;
@@ -208,7 +212,7 @@ try {
   const others = () => psql(`select string_agg(id::text||day||start_time||therapist_id::text, ',' order by day) from appointments where patient_id='${patId}' and id<>'${target}'`);
   const othersBefore = others();
   await wp.click(`tr[data-id="${target}"]`);
-  await wp.click('.modal button:has-text("Modifica: giorno, ora, durata")');
+  await wp.click('.modal button:has-text("Cambia giorno, ora o durata")');
   await wp.waitForTimeout(300);
   const tOpts = await wp.$$eval('.modal button[data-act="am-start"]', os => os.map(o => o.getAttribute('data-t')));
   const cur = psql(`select to_char(start_time,'HH24:MI') from appointments where id='${target}'`);
