@@ -68,7 +68,7 @@
     const P = pt(thId);
     const edit = painting();
     const can = FA.canEditTh(thId);
-    if (st.mode === 'mese' && !edit) return calBar(st, th, can, edit, P) + FA.tabGrid(st, thId, can);
+    if (st.mode === 'mese' && !edit) return FA.alertsPanel(thId) + calBar(st, th, can, edit, P) + FA.tabGrid(st, thId, can);
     // colonne: il giorno del fisioterapista, oppure (segreteria) tutti i fisioterapisti affiancati
     const all = st.mode === 'tutti';
     const pairs = all ? FA.activeTherapists().map(t => [t.id, st.date]) : [[thId, st.date]];
@@ -184,6 +184,7 @@
       '<input type="date" style="max-width:170px" data-bind="calDate" data-on="cal-date" value="' + st.date + '" aria-label="Vai alla data">' +
       FA.seg('calMode', [['mese', 'Mese'], ['giorno', 'Giorno']].concat(office ? [['tutti', 'Tutti i colleghi']] : []), st.mode).replace(/data-act="seg"/g, 'data-act="cal-mode" data-th="' + thId + '" data-date="' + st.date + '"') +
       '</div>';
+    if (st.mode !== 'tutti') html += FA.sentAlertsStrip(thId);
     if (A.ui.booked && A.ui.booked.th === thId) {
       const b = A.ui.booked;
       html += '<div class="draft-bar booked-bar"><span>✓ <strong>' + esc(FA.patName(b.patient_id)) + '</strong>: ' + b.n + ' sedute prenotate dal ' + esc(E.fmtItDay(b.from)) + ' (evidenziate nel tabulato).</span><span class="grow"></span>' +

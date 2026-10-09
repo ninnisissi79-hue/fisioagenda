@@ -194,6 +194,60 @@ test('tabulato semplice: spia gialla per le modifiche degli altri, fisioterapist
   assert.match(q(`select blocks::text from day_overrides where therapist_id='${A}' and day='${d1}'`), /Gruppo schiena/);
 });
 
+test('avvisi: al fisioterapista paziente nuovo o sostituzione (uno per operazione, con le sedute); spia gialla solo per le modifiche dei fisioterapisti', async () => {
+  const A = await therapist('Av'), B = await therapist('Bv');
+  await ensureUser('fisio-av@pilota.test', 'lettura', 'Fisio Avvisi');
+  const uid = q("select user_id from profiles where email='fisio-av@pilota.test'");
+  await S.rpc(admin, 'admin_set_user', { p_user: uid, p_role: 'fisioterapista', p_active: true, p_full_name: 'Fisio Avvisi', p_therapist: A });
+  const fisio = await login('fisio-av@pilota.test');
+  await S.rpc(fisio, 'mark_alerts_seen', { p_ids: null });
+  const [d1, d2, d3] = days(E.addDays(T0, 2), [1, 3, 5], 3);
+  // la segreteria scrive un paziente nuovo nel tabulato del fisioterapista: un avviso con le 3 sedute
+  const c = await patient(seg, A, 'Nuovo', [{ day: d1 }, { day: d2 }, { day: d3 }]);
+  let al = await S.rpc(fisio, 'my_alerts', {});
+  assert.equal(al.length, 1, JSON.stringify(al));
+  assert.equal(al[0].kind, 'nuovo_paziente'); assert.match(al[0].patient_name, /Nuovo/); assert.equal(al[0].sessions.length, 3);
+  assert.equal(al[0].by_name, 'Segreteria Agenda');
+  // sedute aggiunte o spostate a un paziente che ha già: nessun nuovo avviso
+  const x = appt(c, d1);
+  await S.rpc(seg, 'edit_appointment', { p_id: x.id, p_version: x.version, p: { start: '10:30' } });
+  assert.equal((await S.rpc(fisio, 'my_alerts', {})).length, 1);
+  // il fisioterapista sul proprio tabulato: nessun avviso a se stesso
+  const y = appt(c, d2);
+  await S.rpc(fisio, 'edit_appointment', { p_id: y.id, p_version: y.version, p: { start: '11:00' } });
+  assert.equal((await S.rpc(fisio, 'my_alerts', {})).length, 1);
+  // collega malato: due pazienti affidati in due momenti = due avvisi, con titolare e motivo
+  const cb1 = await patient(seg, B, 'DiCollega1', [{ day: d1, start: '08:00' }], { start: '08:00' });
+  const cb2 = await patient(seg, B, 'DiCollega2', [{ day: d1, start: '08:30' }], { start: '08:30' });
+  await S.rpc(seg, 'save_absence', { p: { therapist_id: B, kind: 'malattia', start_date: d1, end_date: d1 } });
+  for (const cy of [cb1, cb2]) { const a = appt(cy, d1); await S.rpc(seg, 'edit_appointment', { p_id: a.id, p_version: a.version, p: { therapist_id: A, force: true } }); }
+  al = await S.rpc(fisio, 'my_alerts', {});
+  const subs = al.filter(a => a.kind === 'sostituzione');
+  assert.equal(subs.length, 2, JSON.stringify(al));
+  assert.equal(subs[0].owner_id, B); assert.match(subs[0].owner_name, /Ag Bv/); assert.equal(subs[0].owner_absence, 'malattia');
+  // la seduta torna al titolare: nessun avviso per lui
+  const back = appt(cb1, d1);
+  await S.rpc(seg, 'edit_appointment', { p_id: back.id, p_version: back.version, p: { therapist_id: B, force: true } });
+  assert.equal(q(`select count(*) from therapist_alerts where therapist_id='${B}' and cycle_id='${cb1}'`), '1', 'solo l’avviso dell’inserimento');
+  // «Visto»: uno alla volta o tutti
+  const sent = id => S.rpc(seg, 'office_alerts', {}).then(l => l.find(x => x.id === id));
+  assert.equal((await sent(subs[0].id)).seen_at, null, 'la segreteria vede l’avviso inviato, non ancora letto');
+  assert.equal((await sent(subs[0].id)).therapist_id, A);
+  await S.rpc(fisio, 'mark_alerts_seen', { p_ids: [subs[0].id] });
+  assert.equal((await S.rpc(fisio, 'my_alerts', {})).length, 2);
+  assert.ok((await sent(subs[0].id)).seen_at, 'segreteria: ✓✓ letto');
+  assert.ok((await S.rpc(admin, 'office_alerts', {})).some(x => x.id === subs[0].id && x.seen_at), 'anche il coordinatore');
+  assert.deepEqual(await S.rpc(fisio, 'office_alerts', {}), [], 'i fisioterapisti non vedono gli avvisi dei colleghi');
+  assert.deepEqual(await S.rpc(seg, 'my_alerts', {}), [], 'la segreteria non ha un tabulato suo');
+  await S.rpc(fisio, 'mark_alerts_seen', { p_ids: null });
+  assert.deepEqual(await S.rpc(fisio, 'my_alerts', {}), []);
+  // spia gialla: la modifica del fisioterapista sì (con il suo tabulato), quella della segreteria no
+  const ch = await S.rpc(admin, 'my_changes', {});
+  const byFisio = ch.find(m => m.user_name === 'Fisio Avvisi' && m.summary.includes('Nuovo'));
+  assert.ok(byFisio); assert.equal(byFisio.by_therapist, A);
+  assert.ok(!ch.some(m => m.user_name === 'Segreteria Agenda'), 'le modifiche della segreteria non accendono la spia gialla');
+});
+
 test('svuota pazienti e sedute: solo coordinatore, con conferma scritta; fisioterapisti e orari restano', async () => {
   const nTh = q('select count(*) from therapists');
   await expectError(S.rpc(seg, 'admin_clear_patients', { p_confirm: 'SVUOTA' }), 'FA_PERM');

@@ -84,7 +84,7 @@
         }
         return '<td class="' + cls + '">' + (can && !r.guest && d >= A.today ? '<button class="tg-empty" data-act="tg-add" data-cyc="' + c.id + '" data-day="' + d + '" aria-label="Aggiungi una seduta il ' + esc(E.fmtIt(d)) + '"></button>' : '') + '</td>';
       }).join('');
-      return '<tr class="' + (r.guest ? 'tg-guestrow' : '') + (A.ui.booked && A.ui.booked.patient_id === c.patient_id ? ' tg-booked' : '') + '">' + name + cells + '</tr>';
+      return '<tr class="' + (r.guest ? 'tg-guestrow' : '') + ((A.ui.booked && A.ui.booked.patient_id === c.patient_id) || A.ui.hl === c.patient_id ? ' tg-booked' : '') + '">' + name + cells + '</tr>';
     }).join('');
     // righe vuote: si scrive il nome direttamente nel tabulato
     const tgn = A.ui.tgn || (A.ui.tgn = {});

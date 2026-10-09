@@ -197,6 +197,10 @@
       const issues = await S.rpc(A.sb, 'appointment_issues', { p_from: A.today, p_to: E.addDays(A.today, 120) });
       // spia gialla: modifiche ai tabulati fatte da altri (solo per chi gestisce le agende)
       A.changes = ['programmatore', 'admin', 'operatore'].includes(who.role) ? (await S.rpc(A.sb, 'my_changes', {}).catch(() => [])) || [] : [];
+      // avvisi di primo livello: pazienti nuovi o affidati nel proprio tabulato
+      A.alerts = who.therapist_id ? (await S.rpc(A.sb, 'my_alerts', {}).catch(() => [])) || [] : [];
+      // segreteria/accettazione, coordinatore, programmatore: avvisi inviati e letture (✓ / ✓✓)
+      A.sentAlerts = ['programmatore', 'admin', 'operatore'].includes(who.role) ? (await S.rpc(A.sb, 'office_alerts', {}).catch(() => [])) || [] : [];
       A.data = data; A.ctx = E.makeCtx(data, { today: A.today }); A.issues = (issues || []).filter(i => i.kind !== 'esito_mancante');
       A.lastSync = new Date(); A.loadError = null;
     } catch (e) {
@@ -393,10 +397,23 @@
     });
     return out;
   };
+  /** icone semplici (linee), coerenti su telefono e computer */
+  const ICONS = {
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="M12 2v1"/>',
+    edit: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m14.5 12.5 2 2-4.5 4.5H10v-2z"/>',
+    userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+    swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>'
+  };
+  FA.icon = k => '<svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[k] || '') + '</svg>';
   function spie() {
     const red = FA.toRelocate().length, yellow = (A.changes || []).length;
     return '<button class="spia red' + (red ? ' on' : '') + '" data-act="spia-red" title="Pazienti da ricollocare">' + (red ? '● ' + red + (red === 1 ? ' paziente da ricollocare' : ' pazienti da ricollocare') : '✓ Nessun paziente da ricollocare') + '</button>' +
-      (yellow ? '<button class="spia yellow on" data-act="spia-yellow" title="Cambiamenti ai tabulati fatti da altri">● ' + yellow + (yellow === 1 ? ' cambiamento' : ' cambiamenti') + '</button>' : '');
+      (yellow ? '<button class="spia yellow on" data-act="spia-yellow" title="Avviso di 2° livello: tabulati cambiati dai fisioterapisti (non serve intervenire)">' + FA.icon('edit') + ' ' + yellow + (yellow === 1 ? ' modifica' : ' modifiche') + ' ai tabulati</button>' : '');
+  }
+  /** avvisi di primo livello del fisioterapista: pillola rossa in alto (per chiunque abbia un tabulato suo) */
+  function alertPill() {
+    const n = (A.alerts || []).length;
+    return n ? '<button class="spia avviso1 on" data-act="al-list" title="Avvisi di 1° livello sul tuo tabulato">' + FA.icon('bell') + ' ' + n + (n === 1 ? ' avviso' : ' avvisi') + '</button>' : '';
   }
   FA.actions['spia-red'] = () => { A.ui.sb = Object.assign(A.ui.sb || {}, { show: 'da_assegnare', from: A.today, to: E.addDays(A.today, 60), th: '', sel: (A.ui.sb || {}).sel || {}, force: (A.ui.sb || {}).force || {} }); FA.go('sostituzioni'); };
   FA.actions['spia-yellow'] = () => FA.openModal({ title: 'Cambiamenti ai tabulati', live: true, wide: true, body: changesBody,
@@ -410,16 +427,104 @@
     if (c.entity === 'therapist' && ctx.th.get(c.entity_id)) return [c.entity_id, A.today];
     return null;
   }
+  const when = at => new Date(at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+  const ACTION_LABEL = { prenotazione: 'Paziente o sedute aggiunte', spostamento: 'Seduta spostata', sostituzione: 'Seduta a un collega', scambio: 'Pazienti scambiati',
+    eliminazione: 'Seduta cancellata', annullamento: 'Modifica annullata', variazione: 'Orario di un giorno', turno: 'Orario settimanale', assenza: 'Ferie / permesso',
+    assenza_modificata: 'Assenza modificata', assenza_annullata: 'Assenza tolta', sospensione: 'Paziente sospeso', ripresa: 'Paziente ripreso', chiusura: 'Ciclo concluso',
+    modifica_ciclo: 'Orario o durata del paziente', cambio_stabile: 'Paziente passato a un collega', da_riprogrammare: 'Da ricollocare', recupero: 'Recupero' };
   function changesBody() {
     const list = A.changes || [];
-    if (!list.length) return '<p>✓ Hai visto tutti i cambiamenti.</p>';
-    return '<p class="small muted">Modifiche ai tabulati fatte da altri negli ultimi 30 giorni: non serve intervenire. Spunta «Visto» quando vuoi (vale solo per te).</p><ul class="list">' + list.map(c => {
-      const t = changeTarget(c);
-      return '<li class="todo-item"><div><span class="small muted">' + esc(new Date(c.at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + c.user_name) + '</span><br>' + esc(c.summary) + '</div><div class="row">' +
-        (t ? '<button class="btn small" data-act="chg-open" data-th="' + t[0] + '" data-day="' + t[1] + '" data-id="' + c.id + '">Apri</button>' : '') +
-        '<button class="btn small" data-act="chg-seen" data-id="' + c.id + '">✓ Visto</button></div></li>';
-    }).join('') + '</ul>';
+    if (!list.length) return '<p>✓ Hai visto tutte le modifiche.</p>';
+    // raggruppate per tabulato del fisioterapista che le ha fatte
+    const groups = new Map();
+    list.forEach(c => { const k = c.by_therapist || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); });
+    return '<p class="small muted">' + FA.icon('edit') + ' <strong>Avviso di 2° livello.</strong> Modifiche fatte dai fisioterapisti ai loro tabulati negli ultimi 30 giorni: i pazienti sono già sistemati, non serve intervenire. «Visto» vale solo per te.</p>' +
+      [...groups].map(([th, items]) => '<h4 class="chg-th">' + esc(th && A.ctx.th.get(th) ? 'Tabulato di ' + FA.thName(th) : items[0].user_name) + ' <span class="muted small">· ' + items.length + '</span></h4><ul class="list">' + items.map(c => {
+        const t = changeTarget(c);
+        return '<li class="todo-item chg-item"><div><span class="chg-icon">' + FA.icon('edit') + '</span> <strong>' + esc(ACTION_LABEL[c.action] || c.action) + '</strong> <span class="small muted">' + esc(when(c.at) + ' · ' + c.user_name) + '</span><div class="chg-detail">' + esc(c.summary) + '</div></div><div class="row">' +
+          (t ? '<button class="btn small" data-act="chg-open" data-th="' + t[0] + '" data-day="' + t[1] + '" data-id="' + c.id + '">Apri</button>' : '') +
+          '<button class="btn small" data-act="chg-seen" data-id="' + c.id + '">✓ Visto</button></div></li>';
+      }).join('') + '</ul>').join('');
   }
+
+  /* ---------------- avvisi di primo livello (tabulato del fisioterapista) ---------------- */
+  const ABS_WHY = { malattia: 'in malattia', ferie: 'in ferie', permesso: 'in permesso', formazione: 'in formazione', altro: 'assente' };
+  function alertCard(x) {
+    const ss = x.sessions || [], first = ss[0] || {};
+    const list = ss.slice(0, 6).map(s => E.fmtItDay(s.day) + ' ' + s.start + '–' + s.end).join(' · ') + (ss.length > 6 ? ' · …e altre ' + (ss.length - 6) : '');
+    const sub = x.kind === 'sostituzione';
+    return '<li class="alert1-item"><span class="alert1-icon">' + FA.icon(sub ? 'swap' : 'userplus') + '</span><div class="grow">' +
+      '<div><strong>' + (sub ? 'Sostituzione' : 'Paziente nuovo') + ':</strong> ' + esc(x.patient_name || 'paziente') +
+      (sub ? ' <span class="small">— paziente di <strong>' + esc(x.owner_name || 'un collega') + '</strong>' + (x.owner_absence ? ' (' + esc(ABS_WHY[x.owner_absence] || 'assente') + ')' : '') + '</span>' : '') + '</div>' +
+      '<div class="small">' + ss.length + (ss.length === 1 ? ' seduta: ' : ' sedute: ') + esc(list) + '</div>' +
+      '<div class="small muted">' + (sub ? 'Affidato a te da ' : 'Inserito da ') + esc(x.by_name) + ' · ' + esc(when(x.at)) + '</div></div>' +
+      '<div class="row">' + (first.day ? '<button class="btn small" data-act="al-open" data-id="' + x.id + '">Vedi</button>' : '') +
+      '<button class="btn small" data-act="al-seen" data-id="' + x.id + '">✓ Visto</button></div></li>';
+  }
+  /** riquadro rosso in cima al proprio tabulato e alla pagina Oggi: un avviso per paziente e operazione */
+  FA.alertsPanel = thId => {
+    const list = A.alerts || [];
+    if (!list.length || !thId || thId !== A.me.therapist_id) return '';
+    return '<div class="panel alert1-panel" role="alert"><div class="row between"><h3>' + FA.icon('bell') + ' ' + list.length + (list.length === 1 ? ' avviso' : ' avvisi') + ' sul tuo tabulato</h3>' +
+      (list.length > 1 ? '<button class="btn small" data-act="al-all"' + FA.saveDisabled() + '>✓ Visti tutti</button>' : '') + '</div><ul class="alert1-list">' + list.map(alertCard).join('') + '</ul></div>';
+  };
+  FA.actions['al-list'] = () => FA.openModal({ title: 'Avvisi sul tuo tabulato', live: true, wide: true,
+    body: () => (A.alerts || []).length ? '<ul class="alert1-list">' + A.alerts.map(alertCard).join('') + '</ul>' : '<p>✓ Hai visto tutti gli avvisi.</p>',
+    foot: () => '<button class="btn" data-act="close-modal">Chiudi</button>' + ((A.alerts || []).length > 1 ? '<button class="btn primary" data-act="al-all"' + FA.saveDisabled() + '>Visti tutti</button>' : '') });
+  async function alertsSeen(ids) {
+    try { await S.rpc(A.sb, 'mark_alerts_seen', { p_ids: ids }); A.ui.hl = null; A.alerts = ids ? (A.alerts || []).filter(x => !ids.includes(x.id)) : []; render(true); renderModal(); }
+    catch (e) { FA.toast(e.message || 'Non salvato', 'bad'); }
+  }
+  FA.actions['al-seen'] = el => alertsSeen([Number(el.getAttribute('data-id'))]);
+  FA.actions['al-all'] = () => alertsSeen(null);
+  /* ---------------- avvisi inviati: chi li ha letti (segreteria, coordinatore, programmatore) ---------------- */
+  function readMark(x) {
+    if (x.seen_at) return '<span class="read-mark read" title="Letto">✓✓ Letto ' + esc(when(x.seen_at)) + '</span>';
+    if (!x.has_account) return '<span class="read-mark none" title="Nessun account collegato a questo fisioterapista">✓ Inviato · nessun account collegato</span>';
+    return '<span class="read-mark sent" title="Inviato, non ancora letto">✓ Inviato, non ancora letto</span>';
+  }
+  function sentItem(x, showTh) {
+    const sub = x.kind === 'sostituzione';
+    return '<li class="todo-item sent-item"><div><span class="alert1-icon">' + FA.icon(sub ? 'swap' : 'userplus') + '</span> <strong>' + (sub ? 'Sostituzione' : 'Paziente nuovo') + ':</strong> ' + esc(x.patient_name || 'paziente') +
+      (showTh ? ' → <strong>' + esc(x.therapist_name) + '</strong>' : '') + (sub && x.owner_name ? ' <span class="small muted">(paziente di ' + esc(x.owner_name) + ')</span>' : '') +
+      '<div class="small muted">' + x.n_sessions + (x.n_sessions === 1 ? ' seduta' : ' sedute') + (x.first_day ? ' dal ' + esc(E.fmtItDay(x.first_day)) : '') + ' · inviato ' + esc(when(x.at)) + ' da ' + esc(x.by_name) + '</div></div>' +
+      '<div>' + readMark(x) + '</div></li>';
+  }
+  /** pagina Oggi della segreteria: gli avvisi più recenti con la spunta di lettura */
+  FA.sentAlertsPanel = () => {
+    const list = A.sentAlerts || [];
+    if (!list.length) return '';
+    const unread = list.filter(x => !x.seen_at).length;
+    return '<div class="panel"><div class="row between"><h3>' + FA.icon('bell') + ' Avvisi ai fisioterapisti <span class="muted small">· ' + (unread ? unread + ' non ancora lett' + (unread === 1 ? 'o' : 'i') : 'tutti letti ✓✓') + '</span></h3>' +
+      '<button class="btn small" data-act="sa-list">Tutti (' + list.length + ')</button></div><ul class="list">' + list.slice(0, 6).map(x => sentItem(x, true)).join('') + '</ul></div>';
+  };
+  /** nel tabulato di un collega: quanti avvisi ha ricevuto e se li ha letti */
+  FA.sentAlertsStrip = thId => {
+    if (!FA.isOffice() || thId === A.me.therapist_id) return '';
+    const list = (A.sentAlerts || []).filter(x => x.therapist_id === thId);
+    if (!list.length) return '';
+    const unread = list.filter(x => !x.seen_at).length;
+    return '<div class="draft-bar sent-bar"><span>' + FA.icon('bell') + ' Avvisi inviati a ' + esc(FA.thName(thId)) + ': ' +
+      (unread ? '<span class="read-mark sent">✓ ' + unread + ' non ancora lett' + (unread === 1 ? 'o' : 'i') + '</span> ' : '') +
+      (list.length - unread ? '<span class="read-mark read">✓✓ ' + (list.length - unread) + ' lett' + (list.length - unread === 1 ? 'o' : 'i') + '</span>' : '') + '</span><span class="grow"></span>' +
+      '<button class="btn small" data-act="sa-list" data-th="' + thId + '">Dettagli</button></div>';
+  };
+  FA.actions['sa-list'] = el => {
+    const th = el.getAttribute('data-th') || '';
+    FA.openModal({ title: th ? 'Avvisi inviati a ' + FA.thName(th) : 'Avvisi ai fisioterapisti', live: true, wide: true,
+      body: () => {
+        const list = (A.sentAlerts || []).filter(x => !th || x.therapist_id === th);
+        return '<p class="small muted">Ultimi 30 giorni. <span class="read-mark sent">✓ inviato</span> <span class="read-mark read">✓✓ letto</span>: la spunta doppia compare quando il fisioterapista preme «Visto».</p>' +
+          (list.length ? '<ul class="list">' + list.map(x => sentItem(x, !th)).join('') + '</ul>' : '<p>Nessun avviso.</p>');
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Chiudi</button>' });
+  };
+  FA.actions['al-open'] = el => {
+    const x = (A.alerts || []).find(y => y.id === Number(el.getAttribute('data-id')));
+    if (!x) return;
+    A.ui.hl = x.patient_id; if (A.modal) FA.closeModal();
+    FA.go('calendario', A.me.therapist_id, x.sessions[0].day, 'mese');
+  };
   async function markSeen(ids) {
     try { await S.rpc(A.sb, 'mark_changes_seen', { p_ids: ids }); A.changes = ids ? (A.changes || []).filter(c => !ids.includes(c.id)) : []; render(true); renderModal(); }
     catch (e) { FA.toast(e.message || 'Non salvato', 'bad'); }
@@ -432,7 +537,7 @@
     return '<header class="top"><div class="top-inner">' +
       '<div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Pilota condiviso</div></div></div>' +
       '<span id="conn">' + connLabel() + '</span>' +
-      (FA.isOffice() ? spie() : (n ? '<button class="todo-pill" data-act="go" data-view="dasistemare">⚠ Da sistemare: ' + n + '</button>' : '')) +
+      alertPill() + (FA.isOffice() ? spie() : (n ? '<button class="todo-pill" data-act="go" data-view="dasistemare">⚠ Da sistemare: ' + n + '</button>' : '')) +
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
       '</div><nav class="nav">' + nav().map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
@@ -646,7 +751,7 @@
       const ctx = A.ctx, d = A.today;
       // il fisioterapista vede per prima cosa i propri pazienti di oggi
       const own = A.me.therapist_id && ctx.th.get(A.me.therapist_id) ? A.me.therapist_id : null;
-      if (own && FA.isFisio()) return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + myDay(own) +
+      if (own && FA.isFisio()) return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + FA.alertsPanel(own) + myDay(own) +
         '<div class="big-actions"><button class="big-action" data-act="go" data-view="calendario" data-param="' + own + '/' + d + '/mese"><span class="t">Il mio tabulato del mese</span><span class="d">Scrivi, sposta, registra le sedute; mesi precedenti e successivi.</span></button>' +
         '<button class="big-action" data-act="abs-new" data-th="' + own + '"><span class="t">Ferie, permesso o malattia</span><span class="d">I pazienti coinvolti compaiono da ricollocare in «Sostituzioni».</span></button></div>';
       const absent = [];
@@ -667,7 +772,7 @@
             step(3, false, 'Registra ferie e malattie già note da “Gestisci assenza fisioterapista”; poi inserisci i pazienti fittizi da “Trova posto” o cliccando un posto libero in agenda.', '') + '</ul>'
           : '<p>Il coordinatore deve ancora completare fisioterapisti e turni.</p>') + '</div>';
       }
-      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + guide + (own ? myDay(own) : '') +
+      return '<h2>Oggi, ' + esc(FA.dayLabel(d)) + '</h2>' + guide + FA.alertsPanel(own) + (own ? myDay(own) : '') +
         '<div class="big-actions">' +
         '<button class="big-action urgent" data-act="go" data-view="assenze"><span class="t">Gestisci assenza fisioterapista</span><span class="d">Registra l’assenza e trova subito i sostituti per i pazienti coinvolti.</span></button>' +
         '<button class="big-action" data-act="go" data-view="trova"><span class="t">Trova posto per un paziente</span><span class="d">Chi può prenderlo, in quali giorni, a che ora e da quando.</span></button></div>' +
@@ -680,6 +785,7 @@
         (workday ? (seats.per.length ? '<ul>' + seats.per.sort((a, b) => b.n - a.n).slice(0, 4).map(p => '<li>' + esc(FA.thName(p.therapist_id)) + ': ' + p.n + '</li>').join('') + '</ul>' : '<span class="muted small">Nessun posto libero.</span>') : '<span class="muted small">Giorno non lavorativo.</span>') +
         '<button class="btn small" data-act="go" data-view="agenda" style="margin-top:6px">Apri l’agenda</button></div>' +
         '</div>' +
+        FA.sentAlertsPanel() +
         allToday() +
         '<div class="panel"><div class="row between"><h3>Attività ancora da sistemare</h3><button class="btn small" data-act="go" data-view="dasistemare">Elenco completo</button></div>' +
         (todos.length ? '<ul class="list">' + todos.slice(0, 8).map(FA.todoItem).join('') + '</ul>' + (todos.length > 8 ? '<p class="muted small">…e altre ' + (todos.length - 8) + '.</p>' : '') : '<p class="muted">Nulla da sistemare.</p>') + '</div>';

@@ -477,3 +477,29 @@ select.need, input.need { border-color: var(--warn) !important; box-shadow: 0 0 
   .tg-wrap { max-height: 68vh; }
 }
 .tg tr.tg-booked .tg-name { box-shadow: inset 4px 0 0 var(--ok); background: var(--ok-bg); }
+
+/* avvisi: icone, 1° livello (tabulato del fisioterapista), 2° livello (spia gialla) */
+.ico { vertical-align: -3px; flex: none; }
+.spia.avviso1.on { background: #b3261e; color: #fff; box-shadow: 0 0 0 3px rgba(179,38,30,.35); animation: spia 1.6s ease-in-out infinite; margin-right: 6px; }
+.spia.yellow .ico, .spia.avviso1 .ico { vertical-align: -4px; }
+.alert1-panel { border: 2px solid #b3261e; background: #fdecea; }
+.alert1-panel h3 { margin: 0; color: #8c1d18; display: flex; align-items: center; gap: 6px; }
+.alert1-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.alert1-item { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid #f1b0aa; border-left: 5px solid #b3261e; border-radius: 8px; padding: 10px; }
+.alert1-icon { color: #b3261e; padding-top: 2px; }
+.alert1-item .grow { flex: 1; min-width: 0; }
+.chg-th { margin: 12px 0 4px; }
+.chg-icon { color: #8a6a00; }
+.chg-detail { margin-top: 2px; }
+@media (max-width: 640px) {
+  .alert1-item { flex-wrap: wrap; }
+  .alert1-item > .row { width: 100%; justify-content: flex-end; }
+}
+/* spunta di lettura degli avvisi (segreteria, coordinatore, programmatore) */
+.read-mark { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: .8rem; font-weight: 700; white-space: nowrap; }
+.read-mark.read { background: #e3f4e8; color: #1e6b37; }
+.read-mark.sent { background: #eef1f5; color: #4a5765; }
+.read-mark.none { background: #fff4d6; color: #6b5200; }
+.sent-bar { background: #f6f8fb; }
+.sent-item .alert1-icon { vertical-align: middle; }
+@media (max-width: 640px) { .read-mark { white-space: normal; } }

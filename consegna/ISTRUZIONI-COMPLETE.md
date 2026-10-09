@@ -141,14 +141,24 @@ Pulsante **Orario** nel tabulato: per ogni giorno della settimana le fasce (ambu
 
 Ognuno cambia il **proprio** orario; segreteria, coordinatore e programmatore cambiano quello di tutti. Un'attività di un giorno solo: tocca la giornata nella vista Giorno → **Attività**.
 
+#### Avvisi per il fisioterapista (1° livello)
+
+Quando **un'altra persona** (segreteria, coordinatore…) scrive nel tuo tabulato un **paziente nuovo**, oppure ti **affida un paziente di un collega** (per esempio perché è in malattia), compare un **riquadro rosso** in cima al tuo tabulato e alla pagina **Oggi**, più la campanella rossa in alto con il numero.
+
+- **Un avviso per ogni paziente** e per ogni volta: se te ne affidano tre, vedi tre avvisi.
+- In ogni avviso: nome del paziente, **le sedute** (giorno e ora), di chi è il paziente e perché (es. «paziente di Rossi, in malattia»), chi l'ha inserito e quando.
+- **Vedi** apre il tabulato del mese con il paziente evidenziato; **Visto** spegne l'avviso (con più avvisi c'è anche **Visti tutti**). Segreteria e coordinatore vedono che l'hai letto (✓✓).
+- Quello che scrivi tu nel tuo tabulato non ti manda avvisi; nemmeno spostare le sedute di un paziente che hai già, o una seduta che torna a te dopo una sostituzione.
+
 #### Segreteria, coordinatore, programmatore
 
 - Menu **Trova posto** (cerca il primo posto libero) e **Assenze e sostituzioni**.
 - Nel tabulato, **Tutti i colleghi**: una colonna per ogni fisioterapista con l'orario di quel giorno.
 - **Ferie / permesso** dal tabulato o da Assenze.
-- **Le due spie in alto:**
+- **Le spie in alto:**
     - **Rossa** (lampeggia): qualcuno ha segnato ferie, permesso o malattia e ci sono **pazienti da ricollocare**. Toccandola si apre l'elenco di quei pazienti.
-    - **Gialla**: qualcuno ha cambiato il proprio tabulato (spostamenti, pazienti nuovi…); non serve fare nulla. Si può aprire e premere **Visto**, oppure ignorarla. Segnare un'assenza del paziente non la accende.
+    - **Gialla** (icona calendario con matita), **avviso di 2° livello**: un **fisioterapista** ha cambiato il proprio tabulato. Si apre l'elenco diviso per tabulato, con **cosa è cambiato** (tipo di modifica, paziente, giorno e ora), chi e quando; **Apri** porta al giorno, **Visto** la spegne (vale solo per te). Non serve intervenire. Le modifiche fatte dalla segreteria non la accendono; segnare un'assenza del paziente nemmeno.
+- **Avvisi ai fisioterapisti, con la spunta di lettura:** in **Oggi** e in cima al tabulato di ogni collega vedi gli avvisi che ha ricevuto: **✓ inviato, non ancora letto** oppure **✓✓ letto** con data e ora. La doppia spunta compare da sola, appena il fisioterapista preme «Visto». **Dettagli** mostra l'elenco completo (ultimi 30 giorni).
 - **Impostazioni → Fisioterapisti**: aggiungere o togliere colleghi (anche la segreteria).
 - **Impostazioni → Utenti e permessi** (coordinatore/programmatore): ruolo di ognuno e, per un fisioterapista che fa le veci della segreteria, **«Agende dei colleghi fino al…»**: fino a quella data può modificare tutte le agende e vede le spie; dopo torna a vedere solo la sua.
 
@@ -166,7 +176,7 @@ Tolte in questa versione: l'**importazione dei tabulati da foto** e la **lista d
 | “Configurazione mancante” | `config.js` non compilato: ripeti il punto 3.2 |
 | “Server non raggiungibile” | Supabase in pausa dopo una settimana senza uso: pannello Supabase → **Restore project** |
 | “Page not found” | Su Netlify è stato caricato lo zip sbagliato o la cartella sbagliata: vedi capitolo 1 |
-| Mancano le spie o «Svuota pazienti» dà errore | Esegui `aggiornamento-database.sql` (capitolo 4) |
+| Mancano le spie, gli avvisi o «Svuota pazienti» dà errore | Esegui `aggiornamento-database.sql` (capitolo 4) |
 | “Modificato nel frattempo da …” | Un collega ha cambiato lo stesso dato: i dati sono già ricaricati, ripeti |
 
 ## 7. Sicurezza

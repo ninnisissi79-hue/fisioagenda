@@ -3,7 +3,8 @@
 // del tabulato (lun-mer-ven alle 12:20, 6 sedute: 6…1 nelle caselle); 3 attività scritta a mano (gruppo con un nome);
 // 4 seduta spostata dalla casella con «Annulla», poi scambio; 5 una seduta a un collega con il conteggio invariato;
 // 6 assenza che non scala, seduta passata che conta da sola; 7 ferie → spia rossa e pazienti da ricollocare;
-// 8 mesi precedenti consultabili e non modificabili; 9 tempo reale, permessi e spia gialla; 10 orario della settimana.
+// 8 mesi precedenti consultabili e non modificabili; 9 tempo reale, permessi e spia gialla; 10 orario della settimana;
+// 11 avvisi di primo livello al fisioterapista (paziente nuovo, sostituzione per collega malato).
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -154,7 +155,7 @@ try {
   await sp.click('.modal button:has-text("Salva")');
   await sp.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
   await sp.waitForSelector(cell('Oggi Due', F[1]) + ' sub');
-  assert.equal((await sp.textContent(cell('Oggi Due', F[1]))).replace(/[A-Z]+$/, ''), left0, 'conteggio invariato, sigla del collega nella casella');
+  { const now = await sp.textContent(cell('Oggi Due', F[1])); assert.equal(now.replace(/[A-Z][A-Z0-9]*$/, ''), left0, 'conteggio invariato, sigla del collega nella casella: ' + left0 + ' → ' + now); }
   assert.equal(q(`select therapist_id from cycles where id='${cyc('Oggi Due')}'`), A, 'il ciclo resta del titolare');
   await goCal(sp, B, F[1], 'mese');
   await sp.waitForSelector(`.tg tr.tg-guestrow:has-text("Oggi Due ${RUN}")`);
@@ -218,7 +219,7 @@ try {
   assert.match(await sp.textContent('.modal'), /Fisio Prova/);
   await sp.click('.modal button:has-text("Segna tutti come visti")');
   await sp.waitForFunction(() => !document.querySelector('.spia.yellow.on'), null, { timeout: 15000 });
-  assert.ok(!(await fp.$('.spia')), 'i fisioterapisti non hanno le spie');
+  assert.ok(!(await fp.$('.spia.red, .spia.yellow')), 'i fisioterapisti non hanno le spie della segreteria');
   ok('Tempo reale: la modifica della segreteria compare al fisioterapista; la sua modifica accende la spia gialla alla segreteria («Visto» la spegne); agenda del collega in consultazione');
 
   // ------------------------------------------------------------------ 10
@@ -242,6 +243,48 @@ try {
   assert.equal(q(`select count(*) from shift_versions where therapist_id='${A}'`), '2', 'il passato resta: nuova versione dell’orario da quella data');
   void n2; void lastRow;
   ok('Il fisioterapista cambia il proprio orario (ambulatorio ortesi il martedì) da una data: il passato non cambia');
+
+  {
+  }
+
+  // ------------------------------------------------------------------ 11
+  await S.rpc(fisioSb, 'mark_alerts_seen', { p_ids: null });
+  await goCal(fp, A, F[2], 'mese');
+  await fp.waitForSelector('.tg');
+  await fp.waitForFunction(() => !document.querySelector('.alert1-panel'), null, { timeout: 15000 });
+  const G2 = work(E.addDays(F[2], 1), 1)[0];
+  const ra = await imp(A, [{ ref: 'av', target: 'nuovo', patient_name: 'Avviso Nuovo ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '09:00', cells: [{ day: F[2], start: '09:00' }, { day: G2, start: '09:00' }] }], F[2]);
+  assert.ok(ra.results[0].ok, JSON.stringify(ra.results));
+  const rb = await imp(B, [{ ref: 'bv', target: 'nuovo', patient_name: 'Di Collega ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '09:30', cells: [{ day: F[2], start: '09:30' }] }], F[2]);
+  assert.ok(rb.results[0].ok, JSON.stringify(rb.results));
+  await S.rpc(seg, 'save_absence', { p: { therapist_id: B, kind: 'malattia', start_date: F[2], end_date: F[2] } });
+  const dc = ap('Di Collega', F[2]);
+  await S.rpc(seg, 'edit_appointment', { p_id: dc.id, p_version: dc.version, p: { therapist_id: A, force: true } });
+  await fp.waitForSelector('.alert1-panel .alert1-item >> nth=1', { timeout: 20000 });
+  const panel = await fp.textContent('.alert1-panel');
+  assert.match(panel, /2 avvisi/); assert.match(panel, /Paziente nuovo:\s*Avviso Nuovo/); assert.match(panel, /2 sedute/);
+  assert.match(panel, /Sostituzione:\s*Di Collega/); assert.match(panel, /paziente di Collega .*\(in malattia\)/); assert.match(panel, /Segreteria Prova/);
+  assert.match(await fp.textContent('.spia.avviso1'), /2 avvisi/);
+  if (process.env.SHOTS) await fp.screenshot({ path: path.join(process.env.SHOTS, 'avvisi-telefono.png'), fullPage: false });
+  assert.equal(await fp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, 'nessuno scorrimento orizzontale sul telefono');
+  // la segreteria vede gli avvisi inviati: ✓ non ancora letti
+  if (await sp.$('.modal')) { await sp.click('.modal button:has-text("Chiudi")'); await sp.waitForSelector('.modal', { state: 'detached' }); }
+  await goCal(sp, A, F[2], 'mese');
+  await sp.waitForSelector('.sent-bar:has-text("2 non ancora letti")', { timeout: 20000 });
+  await fp.click('.alert1-item:has-text("Avviso Nuovo") button:has-text("Vedi")');
+  await fp.waitForSelector('.tg tr.tg-booked:has-text("Avviso Nuovo")');
+  await fp.click('.alert1-item:has-text("Avviso Nuovo") button:has-text("Visto")');
+  await fp.waitForFunction(() => document.querySelectorAll('.alert1-item').length === 1, null, { timeout: 15000 });
+  await fp.click('.alert1-item button:has-text("Visto")');
+  await fp.waitForFunction(() => !document.querySelector('.alert1-panel') && !document.querySelector('.spia.avviso1'), null, { timeout: 15000 });
+  assert.ok(!(await sp.$('.spia.avviso1')), 'la segreteria non riceve gli avvisi del tabulato del collega');
+  // ✓✓ letti: la segreteria lo vede subito, senza ricaricare
+  await sp.waitForFunction(() => { const b = document.querySelector('.sent-bar'); return b && /letti/.test(b.textContent) && !/non ancora/.test(b.textContent); }, null, { timeout: 20000 });
+  await sp.click('.sent-bar button:has-text("Dettagli")');
+  await sp.waitForSelector('.modal .sent-item:has-text("Di Collega") .read-mark.read');
+  if (process.env.SHOTS) await sp.screenshot({ path: path.join(process.env.SHOTS, 'avvisi-segreteria.png') });
+  await sp.click('.modal button:has-text("Chiudi")');
+  ok('Avvisi al fisioterapista (paziente nuovo, paziente del collega malato), uno per operazione, con le sedute; «Vedi» e «Visto»; la segreteria vede ✓ inviato e ✓✓ letto');
 
   assert.deepEqual(errors, [], 'nessun errore nella pagina');
 } finally {
