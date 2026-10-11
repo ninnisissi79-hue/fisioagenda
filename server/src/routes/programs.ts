@@ -87,7 +87,7 @@ export function programRoutes(app: FastifyInstance, db: DB) {
     const patient = get(db, 'SELECT code, affected_hand FROM patients WHERE id = ?', pid);
     const history = current ? all(db, `SELECT program_item_id, status, data, started_at FROM exercise_runs WHERE patient_id = ? AND program_version_id = ? AND technical_invalid = 0 ORDER BY started_at`, pid, current.id)
       .map((r) => { const d = JSON.parse(r.data); return { itemId: r.program_item_id, level: d.progression?.level ?? 0, successRate: d.metrics?.successRate ?? null, completed: r.status === 'completed', startedAt: r.started_at }; }) : [];
-    const todayRuns = all(db, `SELECT program_item_id AS itemId, status FROM exercise_runs WHERE patient_id = ? AND local_date = ?`, pid, date);
+    const todayRuns = all(db, `SELECT id, program_item_id AS itemId, status FROM exercise_runs WHERE patient_id = ? AND local_date = ?`, pid, date);
     return { patient: { code: patient?.code, affectedHand: patient?.affected_hand }, date, current, upcoming, calibration: latestCalibration(db, pid), progressionHistory: history, todayRuns, serverTime: nowIso() };
   });
 }

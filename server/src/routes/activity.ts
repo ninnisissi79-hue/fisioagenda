@@ -120,6 +120,12 @@ export function activityRoutes(app: FastifyInstance, db: DB) {
     return rows.map(rowToRunSummary);
   });
 
+  app.get('/api/patients/:id/symptoms', async (req) => {
+    const { id } = req.params as { id: string };
+    requirePatientAccess(db, req, id);
+    return all(db, 'SELECT * FROM symptom_reports WHERE patient_id = ? ORDER BY at', id).map(rowToSymptom);
+  });
+
   app.get('/api/runs/:rid', async (req) => {
     const { rid } = req.params as { rid: string };
     const r = get(db, 'SELECT * FROM exercise_runs WHERE id = ?', rid);

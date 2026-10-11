@@ -3,16 +3,25 @@
   "private": true,
   "version": "0.1.0",
   "description": "Hand Lab – esercizi interattivi della mano su tablet, con backend condiviso per il monitoraggio a distanza",
-  "workspaces": ["shared", "server", "web"],
-  "engines": { "node": ">=22.5" },
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w web",
     "start": "npm run start -w server",
-    "seed": "npm run seed -w server",
+    "seed": "npm run seed -w server --",
     "create-user": "npm run create-user -w server --",
     "test": "npm run test -w shared && npm run test -w server",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w web",
     "e2e": "node e2e/run.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.56.1"
   }
 }

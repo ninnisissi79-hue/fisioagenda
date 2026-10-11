@@ -1,0 +1,17 @@
+{
+  "name": "Hand Lab",
+  "short_name": "Hand Lab",
+  "description": "Esercizi interattivi della mano su tablet",
+  "lang": "it",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#f5f7f7",
+  "theme_color": "#0f6e6e",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

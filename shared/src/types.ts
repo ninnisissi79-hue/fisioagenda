@@ -152,6 +152,8 @@ export interface TrainingSession {
   device: DeviceInfo;
   repositioning: Repositioning | null;
   plannedItemIds: string[];
+  /** esito di ciascun esercizio previsto nella seduta */
+  itemOutcomes?: { itemId: string; status: 'completed' | 'interrupted' | 'skipped' | 'not_reached'; reason: string | null; runId: string | null }[];
   isDemo?: boolean;
 }
 

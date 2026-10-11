@@ -93,6 +93,7 @@ export const sessionSchema = z.object({
   device: deviceInfoSchema,
   repositioning: z.object({ method: z.enum(['accepted', 'offset', 'skipped']), offset: npoint, at: iso }).nullable(),
   plannedItemIds: z.array(z.string().max(64)).max(30),
+  itemOutcomes: z.array(z.object({ itemId: z.string().max(64), status: z.enum(['completed', 'interrupted', 'skipped', 'not_reached']), reason: z.string().max(200).nullable(), runId: z.string().max(64).nullable() })).max(60).optional(),
 });
 
 export const runSchema = z.object({
