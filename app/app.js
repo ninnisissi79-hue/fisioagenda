@@ -114,10 +114,10 @@ async function syncFromCloud() {
 function renderNav() {
   const n = $("#topnav"); if (!n) return;
   const m = MODE();
-  n.innerHTML = `${m === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste ${S.reqPending ? `<span class="badge">${S.reqPending}</span>` : ""}</button>` : ""}
-    <button class="btn btn-update" data-go="aggiorna">⟳ Aggiorna <span class="badge" id="upd-badge" hidden>0</span></button>
-    ${m === "admin" && S.userPending ? `<button class="btn" data-go="utenti">👥 Nuovi utenti <span class="badge">${S.userPending}</span></button>` : ""}
-    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : m === "errore" ? "⚠ Errore" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore", in_attesa: "In attesa" }[m] || "")}</button>` : ""}
+  n.innerHTML = `${m === "admin" ? `<button class="btn" data-go="richieste" title="Richieste di modifica">📨<span class="lbl-s"> Richieste</span> ${S.reqPending ? `<span class="badge">${S.reqPending}</span>` : ""}</button>` : ""}
+    <button class="btn btn-update" data-go="aggiorna" title="Aggiornamenti">⟳<span class="lbl-s"> Aggiorna</span> <span class="badge" id="upd-badge" hidden>0</span></button>
+    ${m === "admin" && S.userPending ? `<button class="btn" data-go="utenti" title="Nuovi utenti">👥<span class="lbl-s"> Nuovi utenti</span> <span class="badge">${S.userPending}</span></button>` : ""}
+    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? `🔑<span class="lbl-s"> Accedi</span>` : m === "errore" ? `⚠<span class="lbl-s"> Errore</span>` : `👤<span class="lbl-s"> ${({ admin: "Admin", editor: "Editor", lettore: "Lettore", in_attesa: "In attesa" }[m] || "")}</span>`}</button>` : ""}
     <button class="btn ghost" data-go="impostazioni" title="Impostazioni">⚙︎</button>`;
   updateBadge();
 }
@@ -174,7 +174,7 @@ async function checkFeed(silent) {
   }
   updateBadge();
   const n = pending().length;
-  if (silent && n) toast(`🔔 ${n} aggiornamenti proposti: tocca “Aggiorna”`, 4500);
+  if (silent && n && canPublish()) toast(`🔔 ${n} aggiornamenti da valutare`, 3000);
   return n;
 }
 function pending(docId) {
@@ -302,10 +302,11 @@ function viewDoc(v, doc, tab) {
     ${doc.stato === "bozza" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">📝 <b>Bozza da revisionare.</b> Preparata da Claude su letteratura scientifica e linee guida (vedi “Storico e fonti”).${canPublish() ? ` Controllate i testi e premete <button class="btn small green" id="approva">✓ Approva</button>` : " In attesa di approvazione dell’amministratrice."}</div>` : ""}
     ${doc.protocolli && doc.protocolli.length ? `<div class="toolbar"><label class="f" style="margin:0;flex:1;min-width:260px">Protocollo usato (cambia esercizi, fasi e ortesi)<select id="proto">${doc.protocolli.map((p) => `<option value="${esc(p.id)}" ${p.id === doc.protocollo ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select></label></div><p class="muted" style="margin-top:-6px;font-size:13px">${esc(((doc.protocolli.find((p) => p.id === doc.protocollo) || {}).descrizione) || "")}</p>` : ""}
     ${n ? `<div class="warnbox">🔔 Ci sono <b>${n}</b> aggiornamenti proposti per questa patologia. <a href="#/aggiorna">Valutali ora →</a></div>` : ""}
-    <div class="toolbar">
-      <button class="btn" id="p-broch">🖨 Stampa / PDF pieghevole</button>
-      <button class="btn" id="p-ex">🖨 Stampa / PDF esercizi</button>
-      <span class="spacer"></span>
+    <div class="toolbar doc-actions">
+      <button class="btn" id="p-broch">🖨 Pieghevole</button>
+      <button class="btn" id="p-ex">🖨 Esercizi</button>
+    </div>
+    <div class="toolbar doc-more">
       ${canEdit() ? `<button class="btn ghost small" id="dup" style="color:var(--blu)">Duplica</button>` : ""}
       <button class="btn ghost small" id="exp" style="color:var(--blu)">Esporta</button>
       ${canPublish() ? `<button class="btn red small" id="del">Elimina</button>` : ""}

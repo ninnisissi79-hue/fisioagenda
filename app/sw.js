@@ -1,7 +1,7 @@
 /* Service worker: l'app funziona anche senza internet. L'elenco aggiornamenti si scarica sempre fresco. */
-const CACHE = "rehand-v6";
+const CACHE = "rehand-v7";
 const SHELL = ["./", "index.html", "app.css", "sheets.css", "app.js", "cloud.js", "config.js", "vendor/supabase.js", "data/seed.js", "data/seed2.js", "data/seed3.js", "illustr.js", "vendor/qrcode.js", "aggiornamenti.js", "manifest.webmanifest",
-  "assets/icons/icon-192.png", "assets/icons/icon-512.png", "assets/logo/ats-liguria.png", "assets/logo/asl2-ats.png",
+  "assets/icons/icon-192.png", "assets/icons/icon-512.png", "assets/icons/apple-touch-icon.png", "assets/logo/ats-liguria.png", "assets/logo/asl2-ats.png",
   "assets/logo/rehand-more-mind.png", "assets/img/dito-a-scatto.png", "assets/img/de-quervain.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
