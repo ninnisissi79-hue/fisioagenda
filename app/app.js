@@ -71,7 +71,7 @@ const C = () => window.Cloud || { enabled: false };
 const MODE = () => (!C().enabled ? "locale" : !C().user ? "ospite" : C().ruolo || "lettore");
 const canEdit = () => ["locale", "admin", "editor"].includes(MODE());
 const canPublish = () => ["locale", "admin"].includes(MODE());
-const RUOLI = { admin: "Amministratrice/ore", editor: "Editor (propone modifiche)", lettore: "Lettore (solo lettura)" };
+const RUOLI = { admin: "Amministratrice/ore", editor: "Editor (propone modifiche)", lettore: "Lettore (solo lettura)", in_attesa: "In attesa di approvazione" };
 /* salva una modifica: l'admin pubblica subito sul cloud, l'editor la tiene come bozza da inviare */
 async function commit(doc) {
   if (MODE() === "editor") doc._modificheLocali = true;
@@ -90,6 +90,7 @@ async function setDecision(id, d) {
 }
 async function syncFromCloud() {
   if (!C().enabled || !C().user) return;
+  if (MODE() === "in_attesa") { renderNav(); return; }
   try {
     const remote = await C().pullDocs();
     S.cloudEmpty = !remote.length; S.unpublished = [];
@@ -103,6 +104,7 @@ async function syncFromCloud() {
     }
     const st = await C().pullSettings(); if (st) { S.settings = Object.assign(S.settings, st); await DB.set("settings", S.settings); applyTheme(); }
     S.decisions = await C().pullDecisions(); await DB.set("decisions", S.decisions);
+    S.userPending = MODE() === "admin" ? (await C().listProfiles()).filter((u) => u.ruolo === "in_attesa").length : 0;
     S.reqPending = MODE() === "admin" ? (await C().listRequests("in_attesa")).length : 0;
     S.syncError = "";
   } catch (e) { S.syncError = e.message; }
@@ -113,7 +115,8 @@ function renderNav() {
   const m = MODE();
   n.innerHTML = `${m === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste ${S.reqPending ? `<span class="badge">${S.reqPending}</span>` : ""}</button>` : ""}
     <button class="btn btn-update" data-go="aggiorna">⟳ Aggiorna <span class="badge" id="upd-badge" hidden>0</span></button>
-    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore" }[m] || "")}</button>` : ""}
+    ${m === "admin" && S.userPending ? `<button class="btn" data-go="utenti">👥 Nuovi utenti <span class="badge">${S.userPending}</span></button>` : ""}
+    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore", in_attesa: "In attesa" }[m] || "")}</button>` : ""}
     <button class="btn ghost" data-go="impostazioni" title="Impostazioni">⚙︎</button>`;
   updateBadge();
 }
@@ -175,13 +178,14 @@ function route() {
   const parts = location.hash.replace(/^#\/?/, "").split("/");
   const v = $("#view");
   window.scrollTo(0, 0);
+  if (MODE() === "in_attesa" && parts[0] !== "impostazioni") return viewAccount(v);
   if (parts[0] === "doc" && docById(parts[1])) return viewDoc(v, docById(parts[1]), parts[2] || "pieghevole");
   if (parts[0] === "aggiorna") return viewUpdates(v);
   if (parts[0] === "impostazioni") return viewSettings(v);
   if (parts[0] === "account") return viewAccount(v, parts[1]);
   if (parts[0] === "richieste" && MODE() === "admin") return viewRequests(v);
   if (parts[0] === "utenti" && MODE() === "admin") return viewUsers(v);
-  if (MODE() === "ospite" && !S.guestOk) return viewAccount(v);
+  if ((MODE() === "ospite" && !S.guestOk) || MODE() === "in_attesa") return viewAccount(v);
   return viewHome(v);
 }
 
@@ -806,7 +810,7 @@ async function viewAccount(v, sub) {
         <p style="margin:10px 0 0"><a href="#" id="lg-reset">Password dimenticata?</a></p>
         <p id="lg-msg" class="muted" style="font-size:13px"></p>
       </div>
-      <p class="muted" style="font-size:13px">Il primo utente che si registra diventa amministratore. Gli altri entrano in sola lettura finché l’amministratrice non li abilita.</p>
+      <p class="muted" style="font-size:13px">Il primo utente che si registra diventa amministratore. Gli altri restano in attesa finché l’amministratrice non li abilita. Se usi già un’altra app dello stesso progetto, accedi con le stesse credenziali.</p>
       <button class="btn ghost small" id="lg-guest" style="color:var(--blu)">Continua senza accesso (sola lettura)</button>`;
     const msg = (t) => ($("#lg-msg").textContent = t);
     const done = async () => { await syncFromCloud(); toast("Benvenuta/o " + C().email); go(""); route(); };
@@ -816,6 +820,7 @@ async function viewAccount(v, sub) {
     $("#lg-guest").onclick = () => { S.guestOk = true; go(""); route(); };
     return;
   }
+  if (MODE() === "in_attesa") { v.innerHTML = `<h1>Account in attesa</h1><div class="ed-panel" style="padding:16px"><p>Ciao <b>${esc(C().email)}</b>, la tua registrazione è arrivata. L’amministratrice deve abilitarti: appena lo fa, ricarica la pagina.</p><div class="row"><button class="btn" id="rl">⟳ Ricarica</button><button class="btn red" id="out">Esci</button></div></div>`; $("#rl").onclick = () => location.reload(); $("#out").onclick = async () => { await C().signOut(); location.reload(); }; return; }
   v.innerHTML = `<h1>Il mio account</h1>
     <div class="ed-panel" style="padding:14px"><p style="margin:0">${esc(C().email)} · <b>${esc(RUOLI[C().ruolo] || C().ruolo)}</b></p>
     <div class="row" style="margin-top:10px">${MODE() === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste</button><button class="btn" data-go="utenti">👥 Utenti e permessi</button>` : ""}<button class="btn light" id="sync">⟳ Sincronizza</button><button class="btn red" id="out">Esci</button></div></div>
@@ -884,13 +889,13 @@ async function viewRequests(v) {
 
 /* ------------------------------------------------------------------ UTENTI (admin) */
 async function viewUsers(v) {
-  v.innerHTML = `<h1>Utenti e permessi</h1><p class="muted">Chi si registra entra come <b>lettore</b>. Qui decidi chi può proporre modifiche (<b>editor</b>) e chi è <b>amministratore</b>.</p><div id="us">Caricamento…</div>`;
+  v.innerHTML = `<h1>Utenti e permessi</h1><p class="muted">Chi si registra resta <b>in attesa</b> finché non lo abiliti: scegli <b>lettore</b> (vede e stampa) o <b>editor</b> (propone modifiche). Qui decidi chi può proporre modifiche (<b>editor</b>) e chi è <b>amministratore</b>.</p><div id="us">Caricamento…</div>`;
   try {
-    const us = await C().listProfiles();
+    const us = (await C().listProfiles()).sort((a, b) => (a.ruolo === "in_attesa" ? -1 : 0) - (b.ruolo === "in_attesa" ? -1 : 0));
     $("#us").innerHTML = us.map((u) => `<div class="ed-block"><div class="head"><b>${esc(u.email || u.id)}</b>${u.id === C().user.id ? `<span class="pill">tu</span>` : ""}
       <select class="iconbtn" data-role="${u.id}">${Object.entries(RUOLI).map(([k, l]) => `<option value="${k}" ${u.ruolo === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
-      <small class="muted">Registrato il ${new Date(u.creato).toLocaleDateString("it-IT")}</small></div>`).join("");
-    $$("[data-role]", v).forEach((s) => (s.onchange = async () => { try { await C().setRole(s.dataset.role, s.value); toast("Permesso aggiornato"); } catch (e) { alert(e.message); viewUsers(v); } }));
+      <small class="muted">Registrato il ${new Date(u.creato).toLocaleDateString("it-IT")}</small>${u.ruolo === "in_attesa" ? ` <span class="pill warn">da approvare</span>` : ""}</div>`).join("");
+    $$("[data-role]", v).forEach((s) => (s.onchange = async () => { try { await C().setRole(s.dataset.role, s.value); toast("Permesso aggiornato"); S.userPending = (await C().listProfiles()).filter((u) => u.ruolo === "in_attesa").length; renderNav(); } catch (e) { alert(e.message); viewUsers(v); } }));
   } catch (e) { $("#us").textContent = "⚠ " + e.message; }
 }
 

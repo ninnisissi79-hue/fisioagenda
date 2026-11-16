@@ -1,50 +1,48 @@
-# Collegare RE-HAND a Supabase (una volta sola, circa 10 minuti)
+# Collegare RE-HAND a Supabase (circa 10 minuti)
 
-## 1. Creare il progetto
-1. Vai su **supabase.com** → *Start your project* → accedi (anche con GitHub).
-2. **New project**:
-   - Name: `rehand`
-   - Database password: inventane una e conservala
-   - Region: **Central EU (Frankfurt)**
-3. Attendi 1–2 minuti che il progetto sia pronto.
+RE-HAND può stare **dentro un progetto Supabase che usi già** (es. *fisioagenda*) senza toccare le altre app:
+- tutte le sue tabelle iniziano con `rehand_`;
+- non modifica gli utenti esistenti né le impostazioni di accesso;
+- chi usa le altre app **non vede nulla** di RE-HAND finché non lo abiliti tu.
 
-## 2. Creare le tabelle e le regole di sicurezza
-1. Menu a sinistra → **SQL Editor** → **New query**.
-2. Apri il file `supabase/schema.sql` di questo repository, copia **tutto** e incollalo.
-3. Premi **Run**. Deve comparire “Success”.
+## 1. Eseguire lo script
+1. supabase.com → apri il progetto (**fisioagenda**).
+2. Menu a sinistra → icona **`>_` SQL Editor** → **New query**
+   (scorciatoia: all’indirizzo del progetto aggiungi `/sql/new`).
+3. Copia **tutto** il file `supabase/schema.sql`, incollalo, premi **Run**. Deve comparire “Success”.
 
-## 3. Impostare l’accesso con email
-Menu a sinistra → **Authentication** → **Sign In / Providers** → **Email**:
-- lascia **Enable Email** attivo;
-- disattiva **Confirm email** (più semplice: i colleghi entrano subito dopo la registrazione).
+> Le impostazioni di *Authentication* valgono anche per le altre app: **non cambiarle**.
 
-Se preferisci lasciare la conferma via email: **Authentication → URL Configuration → Site URL** = indirizzo dell’app
+## 2. Indirizzo dell’app (solo quando sarà online)
+Authentication → **URL Configuration** → **Redirect URLs** → **Add URL** → indirizzo dell’app
 (es. `https://ninnisissi79-hue.github.io/fisioagenda/`).
+Serve solo per i link nelle email (conferma, password dimenticata). Non toccare il *Site URL*: è quello delle altre app.
 
-## 4. Prendere i due dati per l’app
-Menu → **Project Settings** (ingranaggio) → **API** (o *Data API* / *API Keys*):
+## 3. I due dati per l’app
+Menu → **Project Settings** (ingranaggio) → **API** / *API Keys*:
 - **Project URL** (es. `https://abcd1234.supabase.co`)
-- **anon public** key (una lunga stringa che inizia con `eyJ…`, oppure la *publishable key* `sb_publishable_…`)
+- **anon public** key (stringa lunga `eyJ…`, oppure *publishable key* `sb_publishable_…`)
 
-> ⚠️ Non usare e non condividere mai la **service_role** / *secret* key.
+> ⚠️ Mai la **service_role** / *secret* key.
 
-## 5. Inserirli nell’app
-- **Per tutti (consigliato):** mandali a Claude, che li scrive in `app/config.js`: così l’app pubblicata è già collegata per tutti i colleghi.
-- **Solo su un dispositivo:** nell’app → ⚙︎ Impostazioni → *Libreria condivisa (Supabase)* → incolla → **Salva e ricollega**.
+Mandali a Claude (li scrive in `app/config.js`, così l’app è collegata per tutti)
+oppure, su un solo dispositivo: app → ⚙︎ Impostazioni → *Libreria condivisa* → **Salva e ricollega**.
 
-## 6. Primo accesso
-1. Apri l’app → **Registrati** con la tua email: **il primo utente diventa amministratore**.
-2. In home compare “Il cloud è vuoto” → **Pubblica le brochure**.
-3. I colleghi si registrano: entrano come **lettori**. Da 👤 Admin → **Utenti e permessi** scegli chi è **editor**.
+## 4. Primo accesso
+1. Apri RE-HAND → **Accedi** (se hai già un account in una delle altre app usa le stesse credenziali) oppure **Registrati**.
+   - Se arriva un’email di conferma, clicca il link e poi torna nell’app e accedi.
+   - **Il primo che entra in RE-HAND diventa amministratore**: entra tu per prima.
+2. In home: “Il cloud è vuoto” → **Pubblica le brochure**.
+3. I colleghi si registrano e restano **in attesa**: in alto compare **👥 Nuovi utenti** → scegli **lettore** o **editor**.
 
 ## Chi può fare cosa
-| | Amministratrice | Editor | Lettore |
-|---|---|---|---|
-| Vedere e stampare | ✓ | ✓ | ✓ |
-| **Personalizzare la stampa per un paziente** | ✓ | ✓ | ✓ |
-| Modificare le brochure | ✓ subito pubblicato | ✓ diventa una richiesta | – |
-| Approvare/rifiutare richieste | ✓ | – | – |
-| Aggiornamenti scientifici (Sì/No) | ✓ | – | – |
-| Utenti, impostazioni, loghi, contatti | ✓ | – | – |
+| | Amministratrice | Editor | Lettore | In attesa |
+|---|---|---|---|---|
+| Vedere e stampare | ✓ | ✓ | ✓ | – |
+| Personalizzare la stampa per un paziente | ✓ | ✓ | ✓ | – |
+| Modificare le brochure | ✓ subito pubblicato | ✓ diventa richiesta | – | – |
+| Approvare / rifiutare richieste | ✓ | – | – | – |
+| Aggiornamenti scientifici (Sì/No) | ✓ | – | – | – |
+| Utenti, impostazioni, loghi, contatti | ✓ | – | – | – |
 
-Ogni modifica pubblicata salva automaticamente la versione precedente (tabella `revisioni`).
+Ogni modifica pubblicata salva la versione precedente (tabella `rehand_revisioni`).
