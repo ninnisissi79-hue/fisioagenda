@@ -147,6 +147,7 @@ function fronte(o) {
   }
   for (let i = 0; i < 3; i++) s += seg(tp[i], tp[i + 1], [21, 16, 14][i], SKIN);
   s += seg(P(12, -20), P(30, -22), 18, SKIN, false);
+  if (o.oggetto === "tessuto") { const c = P(40, 4); bb(c, 26); s += `<rect x="${f(c[0] - 26)}" y="${f(c[1] - 16)}" width="52" height="32" rx="6" fill="#b9d7f0" opacity=".85" stroke="#5d8fbd" stroke-width="1.4"/><path d="M${f(c[0] - 20)},${f(c[1] - 6)} q10,-8 20,0 t20,0 M${f(c[0] - 20)},${f(c[1] + 6)} q10,-8 20,0 t20,0" stroke="#5d8fbd" stroke-width="1.4" fill="none"/>`; }
   // oggetti
   if (o.oggetto === "moneta" && th.verso) s += `<ellipse cx="${f(tp[3][0])}" cy="${f(tp[3][1] - 2)}" rx="7" ry="3.5" fill="#f5c542" stroke="#a07c12" stroke-width="1.4"/>`;
   if (o.oggetto === "elastico") { const a = tips.indice, b = tips.mignolo; s += `<path d="M${f(a[0] - 4)},${f(a[1] + 14)} Q${f((a[0] + b[0]) / 2)},${f(Math.min(a[1], b[1]) + 4)} ${f(b[0] + 4)},${f(b[1] + 14)}" stroke="#2e9d4a" stroke-width="4" fill="none" stroke-linecap="round"/>`; }
@@ -180,11 +181,17 @@ function fronte(o) {
 /* ---------------- API ---------------- */
 function one(o) {
   BB = [1e9, 1e9, -1e9, -1e9];
-  const body = o.v === "fronte" ? fronte(o) : lato(o);
+  let body = o.v === "fronte" ? fronte(o) : lato(o);
+  if (o.specchio) { // specchio a sinistra della mano: la mano malata resta nascosta dietro
+    const x = BB[0] - 14, y0 = BB[1] - 4, y1 = BB[3] + 4;
+    body = `<rect x="${f(x - 10)}" y="${f(y0)}" width="10" height="${f(y1 - y0)}" rx="2" fill="#cfe3f5" stroke="#6e9cc6" stroke-width="1.6"/><line x1="${f(x - 7)}" y1="${f(y0 + 8)}" x2="${f(x - 3)}" y2="${f(y0 + 30)}" stroke="#fff" stroke-width="2"/>` + body;
+    bb([x - 10, y0]); bb([x, y1]);
+  }
   let [x0, y0, x1, y1] = BB; BB = null;
   const pad = 6; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
   let w = x1 - x0, h = y1 - y0; const side = Math.max(w, h, 120);
   x0 -= (side - w) / 2; y0 -= (side - h) / 2; w = h = side;
+  if (o.specchiata) body = `<g transform="translate(${f(2 * x0 + w)},0) scale(-1,1)">${body}</g>`;
   return `<svg viewBox="${f(x0)} ${f(y0)} ${f(w)} ${f(h)}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${(o.label || "").replace(/"/g, "")}">${DEFS}${body}</svg>`;
 }
 /* disegno = una posa o un elenco di pose (sequenza numerata) */
@@ -242,6 +249,15 @@ const LIB = {
   "mano-tavolo": { nome: "Mano appoggiata sul tavolo", pose: [L({ v: "fronte", tavolo: true }, "Mano appoggiata")] },
   "carico-tfcc": { nome: "Carico progressivo sul palmo", pose: [L({ v: "lato", orient: "orizzontale", tavolo: true, polso: 60, frecce: [{ tipo: "linea", da: [60, 40], a: [60, 90] }] }, "Spingi piano")] },
   "presa-bottiglia": { nome: "Presa cilindrica (bicchiere/bottiglia)", pose: [L({ v: "lato", mcp: 45, pip: 60, dip: 35, pollice: { abd: 35, mf: 10, ip: 10 }, oggetto: "pallina" }, "Presa morbida")] },
+  "lateralita": { nome: "Destra o sinistra? (riconoscimento)", pose: [L({ v: "fronte", dita: { indice: { mcp: 40, pip: 40 } } }, "Destra?"), L({ v: "fronte", specchiata: true, pollice: { abd: 60 } }, "Sinistra?"), L({ v: "lato", mcp: 85, specchiata: true }, "Destra?")] },
+  "immaginazione": { nome: "Immaginare il movimento", pose: [L({ v: "fronte" }, "Guarda"), L({ v: "fronte", ventaglio: true, pollice: { abd: 55 } }, "Immagina di aprire")] },
+  "specchio": { nome: "Terapia allo specchio", pose: [L({ v: "fronte", specchio: true, tavolo: true }, "La mano sana davanti allo specchio"), L({ v: "fronte", specchio: true, tavolo: true, ventaglio: true, pollice: { abd: 55 } }, "Muovila e guarda il riflesso")] },
+  "desensibilizzazione": { nome: "Desensibilizzazione con tessuti", pose: [L({ v: "fronte", oggetto: "tessuto" }, "Dal più morbido al più ruvido")] },
+  "zona-crps": { nome: "Zona: mano intera (CRPS)", pose: [{ v: "fronte", evid: ["tunnel", "a1", "radio"], dita: { medio: { mcp: 20, pip: 25 } } }] },
+  "flessione-mf": { nome: "Piegare le nocche (MF)", pose: [L(P.dritta, "Dita dritte"), L({ v: "lato", mcp: 85, evid: "mf", frecce: [{ tipo: "giunto", giunto: "mf", verso: "flex", r: 30 }] }, "Piega le nocche")] },
+  "blocking-mf": { nome: "Pugno con nocche piegate (MF + IF)", pose: [L({ v: "lato", mcp: 85, evid: "mf" }, "Nocche piegate"), L({ v: "lato", mcp: 90, pip: 95, dip: 60, evid: "mf" }, "Chiudi il pugno")] },
+  "tutore-flessione-mf": { nome: "Ortesi di flessione MF", pose: [L({ v: "lato", mcp: 65, tutore: { solo: "mano", lato: "volare" }, evid: "mf" }, "Nocche tenute piegate")] },
+  "zona-mf": { nome: "Zona: nocche (MF)", pose: [{ v: "lato", evid: "mf", mcp: 20 }] },
   "zona-a1": { nome: "Zona: puleggia A1", pose: [{ v: "fronte", evid: "a1", dito: "anulare" }] },
   "zona-dq": { nome: "Zona: primo compartimento (De Quervain)", pose: [{ v: "fronte", evid: "dq" }] },
   "zona-tfcc": { nome: "Zona: TFCC (lato ulnare del polso)", pose: [{ v: "fronte", evid: "tfcc" }] },

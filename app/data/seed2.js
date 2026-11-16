@@ -292,7 +292,7 @@ const SCAF = {
 
 /* =============================== RIGIDITÀ IFP =============================== */
 const IFP = {
-  id: "rigidita-ifp", titolo: "Riabilitazione – Rigidità dell’interfalangea prossimale (IFP)", categoria: "Articolazioni e legamenti", aggiornato: "2026-11-16", versione: 1, stato: "bozza", immagine: "", disegno: "zona-ifp",
+  id: "rigidita-ifp", titolo: "Riabilitazione – Rigidità dell’interfalangea prossimale (IFP / IPP)", categoria: "Articolazioni e legamenti", aggiornato: "2026-11-16", versione: 1, stato: "bozza", immagine: "", disegno: "zona-ifp",
   protocolli: [
     { id: "acuta", nome: "Distorsione / lesione della placca volare", descrizione: "“Dito slogato”: protezione breve e movimento precoce per prevenire la rigidità." },
     { id: "rigidita", nome: "Rigidità in flessione (contrattura)", descrizione: "Dito che non si stende: ortesi di estensione per molte ore al giorno ed esercizi." }

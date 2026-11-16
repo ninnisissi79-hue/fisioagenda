@@ -4,7 +4,7 @@ App per il **Centro Regionale di Chirurgia della Mano – ATS Liguria** (Progett
 Raccoglie brochure e opuscoli per i pazienti, li tiene aggiornati sulle evidenze scientifiche e li stampa in **A4** da PC o da telefono.
 
 ## Cosa fa
-- **Libreria di patologie** (12): dito a scatto, De Quervain, tunnel carpale, tendini estensori, edema/cicatrice/dolore post-operatorio, tendini flessori (3 protocolli), TFCC, rizoartrosi, frattura del radio distale, frattura di scafoide, rigidità IFP, Dupuytren. Le nuove sono **bozze** da approvare. Se ne aggiungono quante si vuole (“＋ Nuova patologia”, “Duplica”).
+- **Libreria di patologie** (14): CRPS tipo 1 e 2, rigidità MF, dito a scatto, De Quervain, tunnel carpale, tendini estensori, edema/cicatrice/dolore post-operatorio, tendini flessori (3 protocolli), TFCC, rizoartrosi, frattura del radio distale, frattura di scafoide, rigidità IFP, Dupuytren. Le nuove sono **bozze** da approvare. Se ne aggiungono quante si vuole (“＋ Nuova patologia”, “Duplica”).
 - **Due stampati, sempre A4**:
   - *Pieghevole* A4 orizzontale a 3 ante, fronte-retro (stampa “capovolgi sul lato corto”, poi piega in tre).
   - *Opuscolo esercizi* A4 verticale, si impagina da solo: foto, passi numerati, quanto farlo, avvertenze, QR del video, diario settimanale.
