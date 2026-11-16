@@ -55,6 +55,29 @@
       return ch;
     },
   }];
+  // seconda indicazione del centro: niente spugne da stringere
+  window.REHAND_MIGRAZIONI.push({
+    id: "2026-11-no-spugna",
+    nota: "Rimossi gli esercizi in cui si stringe una spugna (indicazione del centro).",
+    apply(doc) {
+      let ch = false;
+      (doc.esercizi || []).forEach((e, i) => {
+        const t = [e.nome, e.posizione, e.obiettivo].concat(e.passi || []).join(" ");
+        if (!/spugn/i.test(t)) return;
+        const altri = (e.passi || []).filter((p) => !/spugn/i.test(p));
+        if (altri.length && altri.every((p) => /elastic/i.test(p))) {
+          // esercizio di rinforzo: resta solo l'elastico, spiegato meglio
+          doc.esercizi[i] = Object.assign({}, e, { nome: "Rinforzo con elastico leggero", posizione: "Seduto, avambraccio appoggiato, elastico leggero intorno alle dita.",
+            passi: ["Apri lentamente le dita contro la resistenza dell’elastico", "Mantieni 3 secondi", "Torna piano alla posizione di partenza"], disegno: "elastico" });
+        } else {
+          doc.esercizi[i] = Object.assign({}, e, { nome: "Apertura e chiusura dolce delle dita", obiettivo: "Mantenere il movimento delle dita senza sovraccaricare la mano.",
+            posizione: "Avambraccio appoggiato, polso dritto, mano rilassata.", passi: ["Chiudi piano le dita, senza stringere", "Riapri completamente la mano"], disegno: "pugno-apri" });
+        }
+        ch = true;
+      });
+      return ch;
+    },
+  });
   // anche i contenuti originali dell'app partono già corretti
   (window.SEED_DOCS || []).forEach((d) => window.REHAND_MIGRAZIONI.forEach((m) => { m.apply(d); d.migrazioni = (d.migrazioni || []).concat(m.id); }));
 })();
