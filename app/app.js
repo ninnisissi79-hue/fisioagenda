@@ -219,6 +219,7 @@ function viewHome(v) {
       ${canPublish() ? `<label class="btn ghost" style="color:var(--blu)">⇪ Importa opuscolo<input type="file" id="imp" accept=".json,application/json" hidden></label>` : ""}
       ${S.installEvt ? `<button class="btn ghost" id="inst" style="color:var(--blu)">⤓ Installa app</button>` : ""}
     </div>
+    ${installHint()}
     <div class="grid" id="list"></div>
     <div id="richiedi"></div>
     <div id="patric"></div>`;
@@ -272,6 +273,19 @@ function viewHome(v) {
     catch { alert("File non valido."); }
   };
   if ($("#inst")) $("#inst").onclick = () => S.installEvt.prompt();
+}
+/* avviso di installazione sul telefono (iPhone non mostra mai il pulsante "Installa") */
+function installHint() {
+  const ua = navigator.userAgent || "";
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  if (standalone || localStorage.getItem("rehand-hint-off") || !/Android|iPhone|iPad|iPod/i.test(ua)) return "";
+  const inApp = /FBAN|FBAV|Instagram|WhatsApp|Line\/|GSA\/|wv\)/i.test(ua);
+  const ios = /iPhone|iPad|iPod/i.test(ua);
+  const txt = inApp ? "Hai aperto il link dentro un’altra app (WhatsApp, Gmail…): tocca ⋮ e scegli <b>Apri nel browser</b> (Chrome o Safari), poi installa."
+    : ios ? "Per installare RE-HAND: in <b>Safari</b> tocca <b>Condividi</b> (quadrato con la freccia ↑) → <b>Aggiungi alla schermata Home</b>."
+    : "Per installare RE-HAND: in <b>Chrome</b> tocca <b>⋮</b> → <b>Installa app</b> (o <b>Aggiungi a schermata Home</b>).";
+  setTimeout(() => { const x = document.getElementById("hint-off"); if (x) x.onclick = () => { localStorage.setItem("rehand-hint-off", "1"); x.parentElement.remove(); }; }, 0);
+  return `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">📲 ${txt} <button class="iconbtn" id="hint-off" style="float:right">✕</button></div>`;
 }
 function uniqueId(base) { let id = base, i = 2; while (docById(id)) id = base + "-" + i++; return id; }
 
