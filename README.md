@@ -13,6 +13,12 @@ Raccoglie brochure e opuscoli per i pazienti, li tiene aggiornati sulle evidenze
 - **Avviso 🔔**: all’apertura l’app controlla se ci sono nuove proposte.
 - **Funziona offline** e si installa come app su PC, Android e iPhone.
 
+## Personalizzare per il paziente (tutti)
+Scheda **“👤 Per il paziente”** in ogni brochure: particolarità del paziente, mano, data dell’intervento (le fasi mostrano le date reali), prossimo controllo, caratteristiche (gonfiore, dolore, diabete, lavoro manuale…), ortesi, esercizi da consegnare e ripetizioni. Anteprima immediata e stampa. **La brochure ufficiale non cambia e nulla viene salvato.** La possono usare tutti, anche i lettori.
+
+## Libreria condivisa e ruoli (Supabase)
+Amministratrice, editor (propongono modifiche da approvare), lettori. Istruzioni: `supabase/GUIDA.md`; database: `supabase/schema.sql`.
+
 ## Da dove arrivano gli aggiornamenti
 Le proposte stanno nel file `app/aggiornamenti.json`. Le prepara Claude cercando **solo letteratura peer-reviewed** su Consensus (revisioni Cochrane, revisioni sistematiche, RCT, consensus/linee guida), con le fonti citate. Si possono generare su richiesta oppure con una ricerca automatica periodica (es. mensile). L’app non cambia nulla senza il vostro Sì.
 

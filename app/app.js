@@ -238,7 +238,7 @@ function uniqueId(base) { let id = base, i = 2; while (docById(id)) id = base + 
 /* ------------------------------------------------------------------ DOCUMENTO */
 function viewDoc(v, doc, tab) {
   const n = pending(doc.id).length;
-  const tabs = [["pieghevole", "Pieghevole A4"], ["esercizi-a4", "Opuscolo esercizi A4"]].concat(canEdit() ? [["testi", "Modifica testi"], ["esercizi", "Modifica esercizi"]] : [], [["storico", "Storico e fonti"]]);
+  const tabs = [["paziente", "👤 Per il paziente"], ["pieghevole", "Pieghevole A4"], ["esercizi-a4", "Opuscolo esercizi A4"]].concat(canEdit() ? [["testi", "Modifica testi"], ["esercizi", "Modifica esercizi"]] : [], [["storico", "Storico e fonti"]]);
   if (!canEdit() && (tab === "testi" || tab === "esercizi")) tab = "pieghevole";
   v.innerHTML = `
     <div class="row"><button class="btn ghost small" data-go="home" style="color:var(--blu)">← Tutti</button><span class="spacer"></span><span class="saved" id="saved"></span></div>
@@ -269,13 +269,14 @@ function viewDoc(v, doc, tab) {
   $("#p-broch").onclick = () => printDoc(doc, "pieghevole");
   $("#p-ex").onclick = () => printDoc(doc, "esercizi");
   $("#exp").onclick = () => download(`${doc.id}.json`, JSON.stringify(doc, null, 1));
-  $("#dup").onclick = async () => { const t = prompt("Nome della copia", doc.titolo + " (copia)"); if (!t) return; const d = clone(doc); d.titolo = t; d.id = uniqueId(slug(t)); d.storico = [{ data: today(), testo: `Creato come copia di “${doc.titolo}”.`, fonte: "" }]; delete d._modificheLocali; await commit(d); go("doc/" + d.id + "/testi"); };
+  if ($("#dup")) $("#dup").onclick = async () => { const t = prompt("Nome della copia", doc.titolo + " (copia)"); if (!t) return; const d = clone(doc); d.titolo = t; d.id = uniqueId(slug(t)); d.storico = [{ data: today(), testo: `Creato come copia di “${doc.titolo}”.`, fonte: "" }]; delete d._modificheLocali; await commit(d); go("doc/" + d.id + "/testi"); };
   if ($("#del")) $("#del").onclick = async () => { if (!confirm(`Eliminare definitivamente “${doc.titolo}”?\n(Consiglio: prima usa “Esporta” per tenerne una copia.)`)) return; if (MODE() === "admin") { try { await C().deleteDoc(doc.id); } catch (e) { return alert(e.message); } } await DB.del(doc.id); S.docs = S.docs.filter((d) => d.id !== doc.id); go(""); };
   const body = $("#tabbody");
   if (tab === "pieghevole") tabBrochure(body, doc);
   else if (tab === "esercizi-a4") tabBooklet(body, doc);
   else if (tab === "testi") tabEditTexts(body, doc);
   else if (tab === "esercizi") tabEditExercises(body, doc);
+  else if (tab === "paziente") tabPatient(body, doc);
   else tabHistory(body, doc);
 }
 
@@ -318,7 +319,7 @@ function blockHTML(b, doc, preview) {
     const c = b.campi || {}; const rows = [["Quale", c.tipo], ["Quando", c.quando], ["Quanto", c.quanto], ["Per quanto tempo", c.durata], ["Note", c.note]].filter((r) => r[1]);
     return `<div class="${cls} box-ortesi">${h}<table>${rows.map((r) => `<tr><td>${r[0]}</td><td>${esc(r[1])}</td></tr>`).join("")}</table></div>`;
   }
-  if (b.tipo === "personalizzate") return `<div class="${cls} box-pers">${h}${'<div class="line"></div>'.repeat(b.righe || 5)}</div>`;
+  if (b.tipo === "personalizzate") { const t = b.paz || []; return `<div class="${cls} box-pers">${h}${t.map((x) => `<p class="paz">${esc(x)}</p>`).join("")}${'<div class="line"></div>'.repeat(t.length ? Math.max(1, (b.righe || 5) - t.length) : b.righe || 5)}</div>`; }
   if (b.tipo === "contatti") return `<div class="${cls} box-contatti">${h}${S.settings.contatti.map((c) => `<p><b>${esc(c.nome)}</b>Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`;
   if (b.tipo === "qr") {
     const ex = doc.esercizi.filter((e) => e.video && vis(e, doc));
@@ -388,7 +389,7 @@ async function buildBooklet(doc, target, preview) {
     if (pendingHead && el.parentElement !== before && pendingHead.parentElement === before) { before.removeChild(pendingHead); body.insertBefore(pendingHead, el); }
     pendingHead = null;
   }
-  add(`<div class="bk-notes"><h4>Note del fisioterapista</h4>${'<div class="line"></div>'.repeat(4)}
+  add(`<div class="bk-notes"><h4>Note del fisioterapista</h4>${(doc._pazNote || []).map((x) => `<p class="paz">${esc(x)}</p>`).join("")}${'<div class="line"></div>'.repeat(doc._pazNote && doc._pazNote.length ? 2 : 4)}
     <table class="bk-diary"><tr><th>Diario esercizi – settimana</th>${["L", "M", "M", "G", "V", "S", "D"].map((g) => `<th>${g}</th>`).join("")}</tr>${'<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(3)}</table></div>`);
   add(`<div class="bk-notes"><h4>Contatti</h4>${s.contatti.map((c) => `<p style="margin:0 0 1mm"><b>${esc(c.nome)}</b> – Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`);
   if (doc.bibliografia && doc.bibliografia.length) add(`<div class="bk-refs"><b>Riferimenti bibliografici</b><ol>${doc.bibliografia.map((r) => `<li>${esc(r.testo)}</li>`).join("")}</ol></div>`);
@@ -420,6 +421,87 @@ async function onProtoBox(e, doc) {
   if (sel.length === all.length) delete item.protocolli; else item.protocolli = sel;
   autosave(doc); return true;
 }
+/* ---------- personalizzazione per il singolo paziente (non modifica la brochure) */
+const PERS_DEFAULT = [
+  { id: "edema", nome: "Gonfiore importante", testo: "Gonfiore importante: tieni la mano sollevata sopra il cuore più volte al giorno e muovi le dita ogni ora; bendaggio o guanto compressivo solo se indicato.", attenzione: "", esercizio: "elevazione" },
+  { id: "dolore", nome: "Dolore elevato", testo: "Dolore elevato: esegui gli esercizi con ampiezza e ripetizioni ridotte; fermati se il dolore supera 3–4 su 10.", attenzione: "Con dolore: riduci ampiezza e ripetizioni." },
+  { id: "diabete", nome: "Diabete", testo: "Diabete: la guarigione può essere più lenta e la rigidità maggiore. Sii costante con gli esercizi e controlla ogni giorno la pelle sotto l’ortesi.", attenzione: "" },
+  { id: "manuale", nome: "Lavoro manuale / pesante", testo: "Lavoro manuale: il ritorno al lavoro va graduale, con pause frequenti; prese forti e carichi solo con il via libera.", attenzione: "" },
+  { id: "anziano", nome: "Persona anziana / fragile", testo: "Esegui gli esercizi con calma, seduto, anche con l’aiuto di un familiare; meglio pochi minuti più volte al giorno.", attenzione: "" },
+  { id: "pelle", nome: "Pelle fragile o sensibilità ridotta", testo: "Pelle fragile o poco sensibile: controlla la pelle a ogni rimozione dell’ortesi; arrossamenti che non passano in 20 minuti vanno segnalati.", attenzione: "" },
+  { id: "fumo", nome: "Fumatore", testo: "Il fumo rallenta la guarigione di ossa, tendini e ferite: ridurlo o sospenderlo aiuta il recupero.", attenzione: "" },
+  { id: "aderenza", nome: "Fatica a seguire il programma", testo: "Programma ridotto: fai solo gli esercizi indicati, ma tutti i giorni. Usa il diario in fondo all’opuscolo.", attenzione: "" }
+];
+const persList = () => (S.settings.personalizzazioni && S.settings.personalizzazioni.length ? S.settings.personalizzazioni : PERS_DEFAULT);
+S.paz = {}; // solo in memoria, per sessione: nulla viene salvato
+const addDays = (iso, d) => { const t = new Date(iso + "T12:00:00"); t.setDate(t.getDate() + d); return t; };
+const dm = (t) => t.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" });
+function withDates(title, iso) {
+  if (!iso || !title || !/settiman/i.test(title) || /\(dal /.test(title)) return title;
+  const m = title.match(/(\d+)\s*[–-]\s*(\d+)/); if (m) return `${title} (dal ${dm(addDays(iso, +m[1] * 7))} al ${dm(addDays(iso, +m[2] * 7))})`;
+  const m2 = title.match(/dalla?\s+(\d+)/i); if (m2) return `${title} (dal ${dm(addDays(iso, +m2[1] * 7))})`;
+  return title;
+}
+function personalize(doc, P) {
+  const d = clone(doc);
+  const mods = persList().filter((m) => P.mods && P.mods[m.id]);
+  const righe = [];
+  if (P.lato) righe.push("Mano: " + P.lato + (P.dominante ? " (dominante)" : ""));
+  if (P.dataInt) righe.push("Intervento / inizio trattamento: " + new Date(P.dataInt + "T12:00:00").toLocaleDateString("it-IT"));
+  lines(P.testo).forEach((x) => righe.push(x));
+  mods.forEach((m) => righe.push(m.testo));
+  if (P.controllo) righe.push("Prossimo controllo: " + P.controllo);
+  // riquadro personalizzato: se non c’è nelle ante visibili, lo aggiungo sul retro
+  let pers = PANEL_ORDER.flatMap((k) => d.pannelli[k] || []).filter((b) => vis(b, d)).find((b) => b.tipo === "personalizzate");
+  if (!pers && righe.length) { pers = { id: "personalizzate", tipo: "personalizzate", titolo: "Indicazioni personalizzate", righe: 3 }; (d.pannelli.e2 = d.pannelli.e2 || []).unshift(pers); }
+  if (pers) pers.paz = righe;
+  d._pazNote = righe;
+  // ortesi
+  PANEL_ORDER.forEach((k) => (d.pannelli[k] || []).forEach((b) => { if (b.tipo === "ortesi" && vis(b, d) && P.ortesi) b.campi = Object.assign({}, b.campi, P.ortesi); }));
+  // date sulle fasi
+  if (P.dataInt) { PANEL_ORDER.forEach((k) => (d.pannelli[k] || []).forEach((b) => (b.titolo = withDates(b.titolo, P.dataInt)))); d.esercizi.forEach((e) => (e.fase = withDates(e.fase, P.dataInt))); }
+  // esercizi
+  d.esercizi = d.esercizi.filter((e) => !(P.escludi && P.escludi[e.id])).map((e) => { const x = Object.assign({}, e); if (P.dosi && P.dosi[e.id]) x.dosaggio = P.dosi[e.id]; mods.forEach((m) => { if (m.attenzione) x.attenzione = x.attenzione ? x.attenzione + " " + m.attenzione : m.attenzione; }); return x; });
+  mods.forEach((m) => { if (m.esercizio && window.RH_ILL.LIB[m.esercizio] && !d.esercizi.some((e) => e.id === "paz-" + m.id)) d.esercizi.unshift({ id: "paz-" + m.id, fase: "Per te", nome: window.RH_ILL.LIB[m.esercizio].nome, obiettivo: m.testo, posizione: "", passi: [], dosaggio: "Più volte al giorno", attenzione: "", disegno: m.esercizio }); });
+  return d;
+}
+function tabPatient(body, doc) {
+  const P = (S.paz[doc.id] = S.paz[doc.id] || { mods: {}, escludi: {}, dosi: {} });
+  const ort = PANEL_ORDER.flatMap((k) => doc.pannelli[k] || []).find((b) => b.tipo === "ortesi" && vis(b, doc));
+  if (ort && !P.ortesi) P.ortesi = Object.assign({}, ort.campi);
+  const exs = doc.esercizi.filter((e) => vis(e, doc));
+  body.innerHTML = `<div class="paz-grid"><div class="paz-form">
+    <div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6;margin-top:0">👤 Personalizza la stampa per <b>questo paziente</b>. La brochure ufficiale <b>non cambia</b> e qui non viene salvato nulla: chiudendo la pagina tutto si azzera.<br><small>Non scrivere nome o dati identificativi: puoi aggiungerli a penna sulla stampa.</small></div>
+    <label class="f">Particolarità del paziente / indicazioni (una per riga)<textarea id="pz-testo" rows="4" placeholder="es. Evitare carichi con la mano destra fino al controllo">${esc(P.testo || "")}</textarea></label>
+    <div class="row"><label class="f" style="flex:1">Mano<select id="pz-lato"><option value="">—</option><option ${P.lato === "destra" ? "selected" : ""}>destra</option><option ${P.lato === "sinistra" ? "selected" : ""}>sinistra</option></select></label>
+      <label class="f" style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="pz-dom" ${P.dominante ? "checked" : ""}> dominante</label></div>
+    <div class="row"><label class="f" style="flex:1">Data intervento / inizio<input type="date" id="pz-data" value="${esc(P.dataInt || "")}"></label><label class="f" style="flex:1">Prossimo controllo<input id="pz-ctrl" value="${esc(P.controllo || "")}" placeholder="es. 3 dicembre, ore 10"></label></div>
+    <p class="muted" style="font-size:12px;margin:2px 0 0">Con la data, accanto a ogni fase (“Settimane 0–4”…) compaiono le date reali.</p>
+    <h3 style="margin:14px 0 4px;font-size:15px">Caratteristiche del paziente</h3>
+    <div class="paz-mods">${persList().map((m) => `<label title="${esc(m.testo)}"><input type="checkbox" data-mod="${m.id}" ${P.mods[m.id] ? "checked" : ""}> ${esc(m.nome)}</label>`).join("")}</div>
+    ${ort ? `<h3 style="margin:14px 0 4px;font-size:15px">Ortesi per questo paziente</h3>${[["tipo", "Quale"], ["quando", "Quando"], ["quanto", "Quanto"], ["durata", "Per quanto tempo"], ["note", "Note"]].map(([k, l]) => `<label class="f">${l}<input data-ort="${k}" value="${esc((P.ortesi || {})[k] || "")}"></label>`).join("")}` : ""}
+    <h3 style="margin:14px 0 4px;font-size:15px">Esercizi da consegnare</h3>
+    <div class="paz-ex">${exs.map((e) => `<div class="row" style="align-items:flex-start;gap:6px;border-bottom:1px solid var(--bd);padding:5px 0"><input type="checkbox" data-ex="${esc(e.id)}" ${P.escludi[e.id] ? "" : "checked"} style="margin-top:4px"><div style="flex:1"><b style="font-size:14px">${esc(e.nome)}</b><br><input data-dose="${esc(e.id)}" value="${esc(P.dosi[e.id] || e.dosaggio || "")}" style="width:100%;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px" placeholder="ripetizioni / volte al giorno"></div></div>`).join("")}</div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="pz-pb">🖨 Stampa pieghevole</button><button class="btn" id="pz-pe">🖨 Stampa esercizi</button><button class="btn red small" id="pz-reset">Azzera</button></div>
+  </div><div class="paz-prev"><div class="tabs" style="margin-bottom:6px"><button class="on" data-pv="b">Pieghevole</button><button data-pv="e">Esercizi</button></div><div class="preview-wrap"><div class="scaler" id="pz-sc"></div></div></div></div>`;
+  let which = "b", t;
+  const draw = async () => { const d = personalize(doc, P); const sc = $("#pz-sc"); if (which === "b") { sc.innerHTML = brochureHTML(d, false); await afterImages(sc); fitPanels(sc); } else await buildBooklet(d, sc, false); scalePreviews(); };
+  const upd = () => { clearTimeout(t); t = setTimeout(draw, 250); };
+  const onEdit = (e) => {
+    const el = e.target;
+    if (el.id === "pz-testo") P.testo = el.value; else if (el.id === "pz-ctrl") P.controllo = el.value; else if (el.id === "pz-data") P.dataInt = el.value; else if (el.id === "pz-lato") P.lato = el.value; else if (el.id === "pz-dom") P.dominante = el.checked;
+    else if (el.dataset.mod) P.mods[el.dataset.mod] = el.checked; else if (el.dataset.ort) P.ortesi[el.dataset.ort] = el.value;
+    else if (el.dataset.ex) P.escludi[el.dataset.ex] = !el.checked; else if (el.dataset.dose) P.dosi[el.dataset.dose] = el.value; else return;
+    upd();
+  };
+  body.addEventListener("input", onEdit); body.addEventListener("change", onEdit);
+  $$("[data-pv]", body).forEach((b) => (b.onclick = () => { which = b.dataset.pv; $$("[data-pv]", body).forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
+  $("#pz-pb").onclick = () => printDoc(personalize(doc, P), "pieghevole");
+  $("#pz-pe").onclick = () => printDoc(personalize(doc, P), "esercizi");
+  $("#pz-reset").onclick = () => { delete S.paz[doc.id]; tabPatient(body, doc); };
+  draw();
+}
+
 /* ---------- editor testi */
 function markEdited(doc) {
   if (!S.edited.has(doc.id)) {
@@ -661,6 +743,7 @@ function viewSettings(v) {
     <div class="row"><label class="f">Colore principale <input type="color" data-s="colore" value="${esc(s.colore)}"></label><label class="f">Colore secondario <input type="color" data-s="colore2" value="${esc(s.colore2)}"></label></div>
   </div>
   <div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">Contatti</h2><div id="cts"></div><button class="btn small light" id="addct">＋ Aggiungi contatto</button></div>
+  <div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">Caratteristiche del paziente (personalizzazione)</h2><p class="muted" style="font-size:13px">Il testo che compare nella stampa quando un collega spunta la caratteristica. Una per riga, nel formato: <b>Nome | testo</b></p><label class="f"><textarea id="persmods" rows="8">${esc(persList().map((m) => m.nome + " | " + m.testo).join("\n"))}</textarea></label></div>
   <div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">Regole generali (opuscolo esercizi)</h2><label class="f">Una per riga<textarea id="regole" rows="4">${esc((s.regoleEsercizi || []).join("\n"))}</textarea></label></div>
   <div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">Aggiornamenti</h2>
     <label class="f">Indirizzo dell’elenco aggiornamenti<input data-s="feedUrl" value="${esc(s.feedUrl)}"></label>
@@ -678,6 +761,7 @@ function viewSettings(v) {
     if (el.dataset.s) { s[el.dataset.s] = el.value; sv(); }
     if (el.dataset.ct) { const [i, k] = el.dataset.ct.split("."); s.contatti[+i][k] = el.value; sv(); }
     if (el.id === "regole") { s.regoleEsercizi = lines(el.value); sv(); }
+    if (el.id === "persmods") { const old = persList(); s.personalizzazioni = lines(el.value).map((l, i) => { const [n, ...r] = l.split("|"); const prev = old.find((m) => m.nome.trim() === n.trim()) || {}; return { id: prev.id || "m" + i + "-" + slug(n), nome: n.trim(), testo: r.join("|").trim(), attenzione: prev.attenzione || "", esercizio: prev.esercizio || "" }; }); sv(); }
   });
   v.addEventListener("change", async (e) => { const k = e.target.dataset.logo; if (k && e.target.files[0]) { s[k] = await imageToDataUrl(e.target.files[0], 1400); await saveSettings(); viewSettings(v); } });
   v.addEventListener("click", async (e) => {
