@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RE-HAND · Opuscoli riabilitazione mano</title>
+<meta name="theme-color" content="#1d4f9c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="sheets.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <button class="brand" data-go="home" title="Home">
+      <img src="assets/icons/icon-192.png" alt="">
+      <span><b>RE-HAND</b> <small>Opuscoli riabilitazione mano</small></span>
+    </button>
+    <nav>
+      <button class="btn btn-update" data-go="aggiorna">⟳ Aggiorna <span class="badge" id="upd-badge" hidden>0</span></button>
+      <button class="btn ghost" data-go="impostazioni" title="Impostazioni">⚙︎</button>
+    </nav>
+  </header>
+  <main id="view"></main>
+  <div id="toast" hidden></div>
+</div>
+<div id="print-root" aria-hidden="true"></div>
+<style id="page-style"></style>
+<script src="vendor/qrcode.js"></script>
+<script src="data/seed.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

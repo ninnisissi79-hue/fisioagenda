@@ -1,0 +1,87 @@
+/* ====== Fogli A4 (anteprima e stampa) ====== */
+.sheet{background:#fff;color:#1d2733;overflow:hidden;position:relative;font-family:"Segoe UI",Calibri,"Helvetica Neue",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sheet.land{width:297mm;height:210mm;display:grid;grid-template-columns:repeat(3,99mm)}
+.sheet.port{width:210mm;height:297mm;padding:12mm 13mm 14mm;display:flex;flex-direction:column}
+.preview-wrap .sheet{box-shadow:0 2px 10px rgba(0,0,0,.25);margin-bottom:10mm}
+@media print{.sheet{page-break-after:always;break-after:page;box-shadow:none;margin:0}}
+
+/* Pannelli del pieghevole */
+.panel{height:210mm;padding:9mm 7.5mm 8mm;overflow:hidden;font-size:9.5pt;line-height:1.32;position:relative}
+.panel + .panel{border-left:0.2mm dashed #d0d7e0}
+@media print{.panel + .panel{border-left-color:transparent}}
+.panel.overflow{outline:2px solid #e74c3c;outline-offset:-2px}
+.sheet .blk{margin:0 0 .75em}
+.sheet .blk h3{font-size:1.08em;margin:0 0 .3em;color:var(--blu,#1d4f9c);text-transform:uppercase;letter-spacing:.02em;line-height:1.2}
+.sheet .blk p{margin:0 0 .3em;white-space:pre-line}
+.sheet .blk ul{margin:.1em 0 .3em;padding-left:1.15em}
+.sheet .blk li{margin:0 0 .12em}
+.sheet .blk li::marker{color:var(--verde,#3aa635)}
+.sheet .blk .nota{font-style:italic;color:#3d4b5a}
+.sheet .blk.nuovo{background:#fff4c2;box-shadow:0 0 0 1.5mm #fff4c2}
+@media print{.sheet .blk.nuovo{background:none;box-shadow:none}}
+
+.cover{text-align:center}
+.cover .logos{display:flex;align-items:center;justify-content:center;gap:3mm;margin-bottom:4mm}
+.cover .logos img{max-height:16mm;max-width:58mm;object-fit:contain}
+.cover .logos img.proj{max-height:15mm}
+.cover h1{font-size:1.75em;line-height:1.15;color:var(--blu,#1d4f9c);text-transform:uppercase;margin:0 0 2.5mm;letter-spacing:.01em}
+.cover .centro{font-size:1.02em;color:#2c3e50;margin:0}
+.cover .progetto{font-size:1.02em;color:var(--verde,#3aa635);font-weight:700;margin:.5mm 0 4mm}
+.cover .blk{text-align:left}
+.cover .bar{height:1.2mm;background:linear-gradient(90deg,var(--verde,#3aa635),var(--blu,#1d4f9c));border-radius:1mm;margin:0 0 4mm}
+.sheet .cover-img{display:block;max-width:70%;max-height:42mm;margin:2mm auto 3mm;object-fit:contain}
+
+.box-ortesi{border:0.4mm solid var(--verde,#3aa635);border-radius:2mm;padding:2mm 2.5mm;background:#f2faf1}
+.box-ortesi h3{color:#21731c !important}
+.box-ortesi table{width:100%;border-collapse:collapse}
+.box-ortesi td{vertical-align:top;padding:.25em 0;border-bottom:0.2mm solid #d4ead1}
+.box-ortesi tr:last-child td{border-bottom:0}
+.box-ortesi td:first-child{font-weight:700;width:30%;color:#21731c;padding-right:2mm}
+
+.box-pers .line{border-bottom:0.25mm solid #9aa7b5;height:6mm}
+.box-contatti{background:#eef3fa;border-radius:2mm;padding:2mm 2.5mm}
+.box-contatti p{margin:0 0 .45em}
+.box-contatti b{display:block}
+.qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2mm}
+.qr-grid figure{margin:0;text-align:center;font-size:.78em;line-height:1.15}
+.qr-grid svg{width:100%;height:auto;display:block}
+.sheet .footer-agg{position:absolute;left:7.5mm;right:7.5mm;bottom:4mm;font-size:6.5pt;color:#7a8794;text-align:center}
+
+/* ====== Opuscolo esercizi A4 verticale ====== */
+.bk-head{display:flex;align-items:center;gap:4mm;border-bottom:0.6mm solid var(--blu,#1d4f9c);padding-bottom:2.5mm;margin-bottom:4mm}
+.bk-head img{max-height:11mm;max-width:50mm;object-fit:contain}
+.bk-head .t{flex:1;text-align:right;font-size:9pt;color:#3d4b5a;line-height:1.25}
+.bk-head .t b{display:block;color:var(--blu,#1d4f9c);font-size:10.5pt;text-transform:uppercase}
+.bk-body{flex:1;overflow:hidden;font-size:10.5pt;line-height:1.38}
+.bk-foot{display:flex;justify-content:space-between;font-size:7.5pt;color:#7a8794;border-top:0.2mm solid #d0d7e0;padding-top:1.5mm;margin-top:2mm}
+.bk-title{font-size:20pt;color:var(--blu,#1d4f9c);text-transform:uppercase;margin:0 0 1mm;line-height:1.15}
+.bk-sub{color:var(--verde,#3aa635);font-weight:700;margin:0 0 4mm;font-size:12pt}
+.bk-intro{background:#eef3fa;border-radius:2mm;padding:3mm 4mm;margin-bottom:4mm}
+.bk-intro p{margin:0 0 .4em}
+.bk-rules{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:4mm}
+.bk-rules > div{border:0.3mm solid #d0d7e0;border-radius:2mm;padding:2.5mm 3mm;font-size:9.5pt}
+.bk-rules h4{margin:0 0 1mm;color:var(--blu,#1d4f9c);font-size:10pt;text-transform:uppercase}
+.bk-rules ul{margin:0;padding-left:4.5mm}
+.bk-fase{background:var(--blu,#1d4f9c);color:#fff;font-weight:700;padding:1.8mm 3.5mm;border-radius:1.5mm;margin:1mm 0 3mm;font-size:11pt;text-transform:uppercase;letter-spacing:.02em}
+.ex{display:grid;grid-template-columns:52mm 1fr;gap:4mm;border:0.3mm solid #d0d7e0;border-radius:2.5mm;padding:3mm;margin-bottom:3.5mm;break-inside:avoid}
+.ex.nofoto{grid-template-columns:1fr}
+.ex .ph{width:52mm;height:52mm;border-radius:2mm;background:#f0f3f7 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#9aa7b5;font-size:9pt;text-align:center}
+.ex h4{margin:0 0 1mm;font-size:12pt;color:var(--blu,#1d4f9c);display:flex;gap:2mm;align-items:baseline}
+.ex h4 .n{background:var(--verde,#3aa635);color:#fff;border-radius:999px;min-width:6.5mm;height:6.5mm;display:inline-flex;align-items:center;justify-content:center;font-size:9.5pt;flex:none}
+.ex .ob{margin:0 0 1.5mm;color:#3d4b5a}
+.ex .pos{margin:0 0 1.5mm;font-size:9.8pt}
+.ex ol{margin:0 0 2mm;padding-left:5mm}
+.ex ol li{margin-bottom:.6mm}
+.ex .tags{display:flex;gap:2mm;flex-wrap:wrap;align-items:flex-start}
+.ex .dose{background:#e3f4e1;color:#1d5f19;border-radius:1.5mm;padding:1mm 2.5mm;font-weight:700;font-size:9.5pt}
+.ex .att{background:#fdecea;color:#8a2a20;border-radius:1.5mm;padding:1mm 2.5mm;font-size:9.5pt}
+.ex .qr{width:22mm;float:right;margin-left:2mm;text-align:center;font-size:7pt;color:#7a8794}
+.ex .qr svg{width:22mm;height:22mm;display:block}
+.bk-notes h4{color:var(--blu,#1d4f9c);text-transform:uppercase;margin:2mm 0}
+.bk-notes .line{border-bottom:0.25mm solid #9aa7b5;height:8mm}
+.bk-diary{width:100%;border-collapse:collapse;font-size:9pt;margin-top:3mm}
+.bk-diary th,.bk-diary td{border:0.25mm solid #b8c3cf;padding:1.5mm;height:7mm;text-align:center}
+.bk-diary th{background:#eef3fa;color:var(--blu,#1d4f9c)}
+.bk-diary td:first-child{text-align:left;width:38%}
+.bk-refs{font-size:8pt;color:#3d4b5a}
+.bk-refs ol{padding-left:5mm;margin:1mm 0}
