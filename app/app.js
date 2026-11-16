@@ -66,7 +66,57 @@ const protoName = (doc) => { const p = (doc.protocolli || []).find((x) => x.id =
 const ill = (d) => (window.RH_ILL && d ? window.RH_ILL.disegno(window.RH_ILL.risolvi(d)) : "");
 
 async function saveDoc(doc) { await DB.put(doc); const i = S.docs.findIndex((d) => d.id === doc.id); if (i >= 0) S.docs[i] = doc; else S.docs.push(doc); }
-async function saveSettings() { await DB.set("settings", S.settings); applyTheme(); }
+/* ruoli: locale (nessun cloud) · ospite (cloud senza accesso) · admin · editor · lettore */
+const C = () => window.Cloud || { enabled: false };
+const MODE = () => (!C().enabled ? "locale" : !C().user ? "ospite" : C().ruolo || "lettore");
+const canEdit = () => ["locale", "admin", "editor"].includes(MODE());
+const canPublish = () => ["locale", "admin"].includes(MODE());
+const RUOLI = { admin: "Amministratrice/ore", editor: "Editor (propone modifiche)", lettore: "Lettore (solo lettura)" };
+/* salva una modifica: l'admin pubblica subito sul cloud, l'editor la tiene come bozza da inviare */
+async function commit(doc) {
+  if (MODE() === "editor") doc._modificheLocali = true;
+  await saveDoc(doc);
+  if (MODE() === "admin") { try { await C().pushDoc(doc); } catch (e) { toast("⚠ Non salvato sul cloud: " + e.message, 5000); } }
+}
+let setTimer;
+async function saveSettings() {
+  await DB.set("settings", S.settings); applyTheme();
+  if (MODE() === "admin") { clearTimeout(setTimer); setTimer = setTimeout(() => C().pushSettings(S.settings).catch((e) => toast("⚠ Impostazioni non salvate sul cloud: " + e.message)), 600); }
+}
+async function setDecision(id, d) {
+  if (d) S.decisions[id] = d; else delete S.decisions[id];
+  await DB.set("decisions", S.decisions);
+  if (MODE() === "admin") { try { d ? await C().pushDecision(id, d) : await C().deleteDecision(id); } catch (e) { toast("⚠ " + e.message); } }
+}
+async function syncFromCloud() {
+  if (!C().enabled || !C().user) return;
+  try {
+    const remote = await C().pullDocs();
+    S.cloudEmpty = !remote.length; S.unpublished = [];
+    if (remote.length) {
+      const ids = new Set(remote.map((d) => d.id));
+      for (const d of remote) { const l = docById(d.id); if (l && l._modificheLocali && MODE() === "editor") continue; await saveDoc(d); }
+      for (const l of S.docs.slice()) if (!ids.has(l.id)) {
+        if (MODE() === "admin") S.unpublished.push(l.id);
+        else if (!l._modificheLocali) { await DB.del(l.id); S.docs = S.docs.filter((x) => x.id !== l.id); }
+      }
+    }
+    const st = await C().pullSettings(); if (st) { S.settings = Object.assign(S.settings, st); await DB.set("settings", S.settings); applyTheme(); }
+    S.decisions = await C().pullDecisions(); await DB.set("decisions", S.decisions);
+    S.reqPending = MODE() === "admin" ? (await C().listRequests("in_attesa")).length : 0;
+    S.syncError = "";
+  } catch (e) { S.syncError = e.message; }
+  renderNav(); updateBadge();
+}
+function renderNav() {
+  const n = $("#topnav"); if (!n) return;
+  const m = MODE();
+  n.innerHTML = `${m === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste ${S.reqPending ? `<span class="badge">${S.reqPending}</span>` : ""}</button>` : ""}
+    <button class="btn btn-update" data-go="aggiorna">⟳ Aggiorna <span class="badge" id="upd-badge" hidden>0</span></button>
+    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore" }[m] || "")}</button>` : ""}
+    <button class="btn ghost" data-go="impostazioni" title="Impostazioni">⚙︎</button>`;
+  updateBadge();
+}
 function applyTheme() { document.documentElement.style.setProperty("--blu", S.settings.colore || "#1d4f9c"); document.documentElement.style.setProperty("--verde", S.settings.colore2 || "#3aa635"); }
 
 async function init() {
@@ -81,6 +131,9 @@ async function init() {
     await DB.set("seedVersion", window.SEED_VERSION);
   }
   applyTheme();
+  if (window.Cloud) { await window.Cloud.init(); if (window.Cloud.sb) window.Cloud.sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") go("account/nuova-password"); }); }
+  renderNav();
+  if (C().user) await syncFromCloud();
   window.addEventListener("hashchange", route);
   document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go === "home" ? "" : g.dataset.go); } });
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.installEvt = e; });
@@ -115,7 +168,7 @@ function pending(docId) {
   const ps = (S.feed && S.feed.proposte) || [];
   return ps.filter((p) => !S.decisions[p.id] && docById(p.patologia) && (!docId || p.patologia === docId));
 }
-function updateBadge() { const n = pending().length; const b = $("#upd-badge"); b.textContent = n; b.hidden = !n; }
+function updateBadge() { const n = pending().length; const b = $("#upd-badge"); if (!b) return; b.textContent = n; b.hidden = !n || !canPublish(); }
 
 /* ------------------------------------------------------------------ router */
 function route() {
@@ -125,6 +178,10 @@ function route() {
   if (parts[0] === "doc" && docById(parts[1])) return viewDoc(v, docById(parts[1]), parts[2] || "pieghevole");
   if (parts[0] === "aggiorna") return viewUpdates(v);
   if (parts[0] === "impostazioni") return viewSettings(v);
+  if (parts[0] === "account") return viewAccount(v, parts[1]);
+  if (parts[0] === "richieste" && MODE() === "admin") return viewRequests(v);
+  if (parts[0] === "utenti" && MODE() === "admin") return viewUsers(v);
+  if (MODE() === "ospite" && !S.guestOk) return viewAccount(v);
   return viewHome(v);
 }
 
@@ -137,9 +194,14 @@ function viewHome(v) {
       <input class="search" id="q" placeholder="Cerca patologia…" autocomplete="off">
       <select id="cat" class="search" style="flex:0 0 auto;min-width:150px"><option value="">Tutte le categorie</option>${cats.map((c) => `<option>${esc(c)}</option>`).join("")}</select>
     </div>
+    ${S.syncError ? `<div class="warnbox">⚠ Cloud non raggiungibile (${esc(S.syncError)}): lavori sulla copia salvata su questo dispositivo.</div>` : ""}
+    ${MODE() === "admin" && S.cloudEmpty ? `<div class="warnbox" style="background:#e7f6e5;border-color:#a9dca3">☁️ Il cloud è vuoto. <button class="btn small green" id="upall">Pubblica le ${S.docs.length} brochure, le impostazioni e le decisioni</button></div>` : ""}
+    ${MODE() === "admin" && !S.cloudEmpty && S.unpublished && S.unpublished.length ? `<div class="warnbox">🆕 ${S.unpublished.length} opuscoli presenti nell’app non sono ancora nel cloud (${S.unpublished.map((id) => esc((docById(id) || {}).titolo || id)).join(", ")}). <button class="btn small green" id="upnew">Pubblica</button></div>` : ""}
+    ${MODE() === "editor" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">✏️ Sei <b>editor</b>: puoi modificare le brochure, ma le modifiche vanno all’amministratrice per l’approvazione.</div>` : ""}
+    ${MODE() === "lettore" || MODE() === "ospite" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">👁 Sola lettura: puoi vedere e stampare le brochure.</div>` : ""}
     <div class="toolbar">
-      <button class="btn green" id="new">＋ Nuova patologia</button>
-      <label class="btn ghost" style="color:var(--blu)">⇪ Importa opuscolo<input type="file" id="imp" accept=".json,application/json" hidden></label>
+      ${canEdit() ? `<button class="btn green" id="new">＋ Nuova patologia</button>` : ""}
+      ${canPublish() ? `<label class="btn ghost" style="color:var(--blu)">⇪ Importa opuscolo<input type="file" id="imp" accept=".json,application/json" hidden></label>` : ""}
       ${S.installEvt ? `<button class="btn ghost" id="inst" style="color:var(--blu)">⤓ Installa app</button>` : ""}
     </div>
     <div class="grid" id="list"></div>`;
@@ -148,22 +210,25 @@ function viewHome(v) {
     const list = S.docs.filter((d) => (!q || norm(d.titolo).includes(q)) && (!c || (d.categoria || "Altro") === c)).sort((a, b) => a.titolo.localeCompare(b.titolo, "it"));
     $("#list").innerHTML = list.map((d) => { const n = pending(d.id).length; return `
       <div class="card" data-id="${esc(d.id)}">
-        <div class="row"><span class="pill">${esc(d.categoria || "Altro")}</span>${n ? `<span class="pill warn">🔔 ${n} aggiornament${n > 1 ? "i" : "o"}</span>` : ""}${d.stato === "bozza" ? `<span class="pill" style="background:#eef3fa">📝 bozza</span>` : ""}${d.protocolli ? `<span class="pill">${d.protocolli.length} protocolli</span>` : ""}</div>
+        <div class="row"><span class="pill">${esc(d.categoria || "Altro")}</span>${n ? `<span class="pill warn">🔔 ${n} aggiornament${n > 1 ? "i" : "o"}</span>` : ""}${d.stato === "bozza" ? `<span class="pill" style="background:#eef3fa">📝 bozza</span>` : ""}${d._modificheLocali ? `<span class="pill warn">✏️ modifiche da inviare</span>` : ""}${d.protocolli ? `<span class="pill">${d.protocolli.length} protocolli</span>` : ""}</div>
         <h3>${esc(d.titolo)}</h3>
         <div class="meta">Aggiornato il ${fmtDate(d.aggiornato)} · versione ${d.versione || 1} · ${d.esercizi.length} esercizi</div>
       </div>`; }).join("") || `<p class="muted">Nessun opuscolo trovato.</p>`;
   };
   $("#q").oninput = draw; $("#cat").onchange = draw; draw();
   $("#list").onclick = (e) => { const c = e.target.closest(".card"); if (c) go("doc/" + c.dataset.id); };
-  $("#new").onclick = async () => {
+  const pubAll = async (ids) => { try { for (const id of ids) await C().pushDoc(docById(id)); await C().pushSettings(S.settings); for (const [k, d] of Object.entries(S.decisions)) await C().pushDecision(k, d); toast("Pubblicato sul cloud ✓"); await syncFromCloud(); viewHome(v); } catch (e) { alert("Errore: " + e.message); } };
+  if ($("#upall")) $("#upall").onclick = () => pubAll(S.docs.map((d) => d.id));
+  if ($("#upnew")) $("#upnew").onclick = () => pubAll(S.unpublished);
+  if ($("#new")) $("#new").onclick = async () => {
     const t = prompt("Nome della patologia (es. Rizoartrosi, Frattura di scafoide…)"); if (!t) return;
     const d = clone(window.TEMPLATE_DOC); d.titolo = "Riabilitazione – " + t.trim(); d.id = uniqueId(slug(t)); d.aggiornato = today(); d.versione = 1;
     d.storico = [{ data: today(), testo: "Creato dal modello vuoto.", fonte: "" }];
-    await saveDoc(d); go("doc/" + d.id + "/testi");
+    await commit(d); go("doc/" + d.id + "/testi");
   };
-  $("#imp").onchange = async (e) => {
+  if ($("#imp")) $("#imp").onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { const d = JSON.parse(await readFile(f)); if (!d.pannelli) throw 0; if (docById(d.id) && !confirm(`Esiste già “${docById(d.id).titolo}”. Sostituirlo?`)) d.id = uniqueId(d.id); await saveDoc(d); toast("Opuscolo importato"); draw(); }
+    try { const d = JSON.parse(await readFile(f)); if (!d.pannelli) throw 0; if (docById(d.id) && !confirm(`Esiste già “${docById(d.id).titolo}”. Sostituirlo?`)) d.id = uniqueId(d.id); await commit(d); toast("Opuscolo importato"); draw(); }
     catch { alert("File non valido."); }
   };
   if ($("#inst")) $("#inst").onclick = () => S.installEvt.prompt();
@@ -173,32 +238,39 @@ function uniqueId(base) { let id = base, i = 2; while (docById(id)) id = base + 
 /* ------------------------------------------------------------------ DOCUMENTO */
 function viewDoc(v, doc, tab) {
   const n = pending(doc.id).length;
-  const tabs = [["pieghevole", "Pieghevole A4"], ["esercizi-a4", "Opuscolo esercizi A4"], ["testi", "Modifica testi"], ["esercizi", "Modifica esercizi"], ["storico", "Storico e fonti"]];
+  const tabs = [["pieghevole", "Pieghevole A4"], ["esercizi-a4", "Opuscolo esercizi A4"]].concat(canEdit() ? [["testi", "Modifica testi"], ["esercizi", "Modifica esercizi"]] : [], [["storico", "Storico e fonti"]]);
+  if (!canEdit() && (tab === "testi" || tab === "esercizi")) tab = "pieghevole";
   v.innerHTML = `
     <div class="row"><button class="btn ghost small" data-go="home" style="color:var(--blu)">← Tutti</button><span class="spacer"></span><span class="saved" id="saved"></span></div>
     <h1>${esc(doc.titolo)}</h1>
     <p class="muted" style="margin-top:-8px">Aggiornato il ${fmtDate(doc.aggiornato)} · versione ${doc.versione || 1}</p>
-    ${doc.stato === "bozza" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">📝 <b>Bozza da revisionare.</b> Preparata da Claude su letteratura scientifica e linee guida (vedi “Storico e fonti”). Controllate i testi e premete <button class="btn small green" id="approva">✓ Approva</button></div>` : ""}
+    ${doc._modificheLocali && MODE() === "editor" ? `<div class="warnbox">✏️ <b>Hai modifiche non ancora approvate.</b> Sono solo su questo dispositivo. <button class="btn small green" id="invia">📨 Invia all’amministratrice</button> <button class="btn small red" id="annulla">↺ Annulla le mie modifiche</button></div>` : ""}
+    ${doc.stato === "bozza" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">📝 <b>Bozza da revisionare.</b> Preparata da Claude su letteratura scientifica e linee guida (vedi “Storico e fonti”).${canPublish() ? ` Controllate i testi e premete <button class="btn small green" id="approva">✓ Approva</button>` : " In attesa di approvazione dell’amministratrice."}</div>` : ""}
     ${doc.protocolli && doc.protocolli.length ? `<div class="toolbar"><label class="f" style="margin:0;flex:1;min-width:260px">Protocollo usato (cambia esercizi, fasi e ortesi)<select id="proto">${doc.protocolli.map((p) => `<option value="${esc(p.id)}" ${p.id === doc.protocollo ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select></label></div><p class="muted" style="margin-top:-6px;font-size:13px">${esc(((doc.protocolli.find((p) => p.id === doc.protocollo) || {}).descrizione) || "")}</p>` : ""}
     ${n ? `<div class="warnbox">🔔 Ci sono <b>${n}</b> aggiornamenti proposti per questa patologia. <a href="#/aggiorna">Valutali ora →</a></div>` : ""}
     <div class="toolbar">
       <button class="btn" id="p-broch">🖨 Stampa / PDF pieghevole</button>
       <button class="btn" id="p-ex">🖨 Stampa / PDF esercizi</button>
       <span class="spacer"></span>
-      <button class="btn ghost small" id="dup" style="color:var(--blu)">Duplica</button>
+      ${canEdit() ? `<button class="btn ghost small" id="dup" style="color:var(--blu)">Duplica</button>` : ""}
       <button class="btn ghost small" id="exp" style="color:var(--blu)">Esporta</button>
-      <button class="btn red small" id="del">Elimina</button>
+      ${canPublish() ? `<button class="btn red small" id="del">Elimina</button>` : ""}
     </div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>
     <div id="tabbody"></div>`;
   $$(".tabs button", v).forEach((b) => (b.onclick = () => go(`doc/${doc.id}/${b.dataset.tab}`)));
-  if ($("#proto")) $("#proto").onchange = async (e) => { doc.protocollo = e.target.value; await saveDoc(doc); viewDoc(v, doc, tab); };
-  if ($("#approva")) $("#approva").onclick = async () => { doc.stato = "approvata"; doc.storico = doc.storico || []; doc.storico.push({ data: today(), testo: "Bozza revisionata e approvata dal fisioterapista.", fonte: "" }); await saveDoc(doc); viewDoc(v, doc, tab); };
+  if ($("#proto")) $("#proto").onchange = async (e) => { doc.protocollo = e.target.value; await saveDoc(doc); viewDoc(v, doc, tab); }; // scelta di visualizzazione: resta sul dispositivo
+  if ($("#approva")) $("#approva").onclick = async () => { doc.stato = "approvata"; doc.versione = (doc.versione || 1) + 1; doc.aggiornato = today(); doc.storico = doc.storico || []; doc.storico.push({ data: today(), testo: `Bozza revisionata e approvata${C().email ? " da " + C().email : ""}.`, fonte: "" }); await commit(doc); viewDoc(v, doc, tab); };
+  if ($("#invia")) $("#invia").onclick = async () => {
+    const nota = prompt("Spiega in breve cosa hai cambiato e perché (la leggerà l’amministratrice):", ""); if (nota === null) return;
+    try { await C().submitRequest(doc, nota); await revertLocal(doc.id); toast("📨 Richiesta inviata all’amministratrice"); go("account"); } catch (e) { alert("Invio non riuscito: " + e.message); }
+  };
+  if ($("#annulla")) $("#annulla").onclick = async () => { if (!confirm("Annullare tutte le tue modifiche a questa brochure?")) return; await revertLocal(doc.id); go("doc/" + doc.id); route(); };
   $("#p-broch").onclick = () => printDoc(doc, "pieghevole");
   $("#p-ex").onclick = () => printDoc(doc, "esercizi");
   $("#exp").onclick = () => download(`${doc.id}.json`, JSON.stringify(doc, null, 1));
-  $("#dup").onclick = async () => { const t = prompt("Nome della copia", doc.titolo + " (copia)"); if (!t) return; const d = clone(doc); d.titolo = t; d.id = uniqueId(slug(t)); d.storico = [{ data: today(), testo: `Creato come copia di “${doc.titolo}”.`, fonte: "" }]; await saveDoc(d); go("doc/" + d.id + "/testi"); };
-  $("#del").onclick = async () => { if (!confirm(`Eliminare definitivamente “${doc.titolo}”?\n(Consiglio: prima usa “Esporta” per tenerne una copia.)`)) return; await DB.del(doc.id); S.docs = S.docs.filter((d) => d.id !== doc.id); go(""); };
+  $("#dup").onclick = async () => { const t = prompt("Nome della copia", doc.titolo + " (copia)"); if (!t) return; const d = clone(doc); d.titolo = t; d.id = uniqueId(slug(t)); d.storico = [{ data: today(), testo: `Creato come copia di “${doc.titolo}”.`, fonte: "" }]; delete d._modificheLocali; await commit(d); go("doc/" + d.id + "/testi"); };
+  if ($("#del")) $("#del").onclick = async () => { if (!confirm(`Eliminare definitivamente “${doc.titolo}”?\n(Consiglio: prima usa “Esporta” per tenerne una copia.)`)) return; if (MODE() === "admin") { try { await C().deleteDoc(doc.id); } catch (e) { return alert(e.message); } } await DB.del(doc.id); S.docs = S.docs.filter((d) => d.id !== doc.id); go(""); };
   const body = $("#tabbody");
   if (tab === "pieghevole") tabBrochure(body, doc);
   else if (tab === "esercizi-a4") tabBooklet(body, doc);
@@ -357,7 +429,7 @@ function markEdited(doc) {
   }
 }
 let saveTimer;
-function autosave(doc) { clearTimeout(saveTimer); const sv = $("#saved"); if (sv) sv.textContent = "…"; saveTimer = setTimeout(async () => { markEdited(doc); await saveDoc(doc); if ($("#saved")) $("#saved").textContent = "✓ Salvato"; }, 500); }
+function autosave(doc) { clearTimeout(saveTimer); const sv = $("#saved"); if (sv) sv.textContent = "…"; saveTimer = setTimeout(async () => { markEdited(doc); await commit(doc); if ($("#saved")) $("#saved").textContent = "✓ Salvato"; }, 500); }
 function bindInputs(root, doc) {
   root.addEventListener("input", (e) => {
     const el = e.target; const p = el.dataset.bind; if (!p) return;
@@ -404,7 +476,7 @@ function tabEditTexts(body, doc) {
       <div class="row"><button class="btn small light" data-add="${k}" data-type="">＋ Sezione di testo</button><button class="btn small light" data-add="${k}" data-type="ortesi">＋ Ortesi</button><button class="btn small light" data-add="${k}" data-type="personalizzate">＋ Indicazioni personalizzate</button><button class="btn small light" data-add="${k}" data-type="qr">＋ QR video</button><button class="btn small light" data-add="${k}" data-type="contatti">＋ Contatti</button></div>
     </div></details>`).join("")}`;
   bindInputs(body, doc);
-  const rerender = async () => { markEdited(doc); await saveDoc(doc); const open = $$("details", body).map((d) => d.open); tabEditTexts(body, doc); $$("details", body).forEach((d, i) => (d.open = open[i])); };
+  const rerender = async () => { markEdited(doc); await commit(doc); const open = $$("details", body).map((d) => d.open); tabEditTexts(body, doc); $$("details", body).forEach((d, i) => (d.open = open[i])); };
   body.addEventListener("click", async (e) => {
     const add = e.target.closest("[data-add]");
     if (add) { const k = add.dataset.add, t = add.dataset.type; const nb = { id: (t || "sez") + "-" + Date.now().toString(36), titolo: { ortesi: "Ortesi (tutore)", personalizzate: "Indicazioni personalizzate", qr: "Esercizi – QR code video", contatti: "Contattaci" }[t] || "Nuova sezione" }; if (t) nb.tipo = t; if (t === "ortesi") nb.campi = { tipo: "", quando: "", quanto: "", durata: "", note: "" }; if (!t) nb.punti = []; (doc.pannelli[k] = doc.pannelli[k] || []).push(nb); return rerender(); }
@@ -446,7 +518,7 @@ function tabEditExercises(body, doc) {
       </div></div></div>`).join("")}
     <button class="btn green" id="add-ex">＋ Aggiungi esercizio</button>`;
   bindInputs(body, doc);
-  const rerender = async () => { markEdited(doc); await saveDoc(doc); tabEditExercises(body, doc); };
+  const rerender = async () => { markEdited(doc); await commit(doc); tabEditExercises(body, doc); };
   $("#add-ex").onclick = () => { doc.esercizi.push({ id: "ex-" + Date.now().toString(36), fase: fasi[fasi.length - 1] || "", nome: "Nuovo esercizio", obiettivo: "", posizione: "", passi: [], dosaggio: "", attenzione: "", foto: "", video: "" }); rerender(); };
   body.addEventListener("click", (e) => {
     const a = e.target.closest("[data-act]"); if (!a) return; const i = +a.closest(".ed-block").dataset.i; const arr = doc.esercizi;
@@ -544,13 +616,15 @@ function viewUpdates(v) {
   if ($("#acc")) $("#acc").onclick = async () => {
     const ids = sel(); const changed = new Set();
     for (const id of ids) { const p = S.feed.proposte.find((x) => x.id === id); if (!check(p).ok) continue; const d = apply(p); changed.add(d.id); S.decisions[id] = { stato: "accettata", data: today() }; }
-    for (const id of changed) { const d = docById(id); d.versione = (d.versione || 1) + 1; await saveDoc(d); }
-    await DB.set("decisions", S.decisions); updateBadge();
+    for (const id of changed) { const d = docById(id); d.versione = (d.versione || 1) + 1; await commit(d); }
+    for (const id of ids) if (S.decisions[id]) await setDecision(id, S.decisions[id]);
+    updateBadge();
     viewUpdates(v);
     v.insertAdjacentHTML("afterbegin", `<div class="warnbox" style="background:#e7f6e5;border-color:#a9dca3">✓ Applicati ${ids.length} aggiornamenti. Opuscoli pronti da stampare: ${[...changed].map((id) => `<a href="#/doc/${id}">${esc(docById(id).titolo)}</a>`).join(", ")}. Le parti modificate sono evidenziate in giallo nell’anteprima (non in stampa).</div>`);
   };
-  if ($("#rej")) $("#rej").onclick = async () => { for (const id of sel()) S.decisions[id] = { stato: "rifiutata", data: today() }; await DB.set("decisions", S.decisions); updateBadge(); viewUpdates(v); };
-  $$("[data-undo]", v).forEach((b) => (b.onclick = async () => { delete S.decisions[b.dataset.undo]; await DB.set("decisions", S.decisions); updateBadge(); viewUpdates(v); }));
+  if ($("#rej")) $("#rej").onclick = async () => { for (const id of sel()) await setDecision(id, { stato: "rifiutata", data: today() }); updateBadge(); viewUpdates(v); };
+  $$("[data-undo]", v).forEach((b) => (b.onclick = async () => { await setDecision(b.dataset.undo, null); updateBadge(); viewUpdates(v); }));
+  if (!canPublish()) { $$("input[data-pid]", v).forEach((c) => (c.disabled = true)); const sa = $(".sticky-actions", v); if (sa) sa.innerHTML = `<span class="muted">Solo l’amministratrice può applicare o scartare gli aggiornamenti.</span>`; $$("[data-undo]", v).forEach((b) => b.remove()); }
 }
 function updCard(p) {
   const c = check(p);
@@ -568,7 +642,15 @@ function updCard(p) {
 function viewSettings(v) {
   const s = S.settings;
   const logoSlot = (key, label) => `<div><label class="f">${label}</label><div class="row"><label class="photo-slot has" style="width:200px;height:90px;background-size:contain;background-image:${s[key] ? `url('${esc(s[key])}')` : "none"}">${s[key] ? "" : "Tocca per caricare"}<input type="file" accept="image/*" data-logo="${key}"></label><button class="iconbtn" data-rmlogo="${key}">Rimuovi</button><button class="iconbtn" data-deflogo="${key}">Originale</button></div></div>`;
-  v.innerHTML = `<h1>Impostazioni</h1>
+  const cc = C().config ? C().config() : { url: "", key: "" };
+  const cloudBox = `<div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">☁️ Libreria condivisa (Supabase)</h2>
+    <p class="muted" style="font-size:13px">${C().enabled ? (C().user ? `Collegata come <b>${esc(C().email)}</b> – ruolo <b>${esc(RUOLI[C().ruolo] || C().ruolo)}</b>.` : "Collegata, ma non hai effettuato l’accesso.") : "Non collegata: i dati restano solo su questo dispositivo."}</p>
+    <label class="f">Project URL<input id="sb-url" value="${esc(cc.url)}" placeholder="https://xxxx.supabase.co"></label>
+    <label class="f">Anon public key<input id="sb-key" value="${esc(cc.key)}" placeholder="eyJ…"></label>
+    <div class="row" style="margin-top:8px"><button class="btn light" id="sb-save">Salva e ricollega</button>${C().user ? `<button class="btn red" id="sb-out">Esci</button>` : ""}</div>
+    <p class="muted" style="font-size:12px">Non inserire mai la “service_role key”.</p></div>`;
+  if (!canPublish()) { v.innerHTML = `<h1>Impostazioni</h1><div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">Le impostazioni comuni (loghi, contatti, testi) le modifica l’amministratrice.</div>${cloudBox}`; bindCloudBox(); return; }
+  v.innerHTML = `<h1>Impostazioni</h1>${cloudBox}
   <div class="ed-panel" style="padding:14px">
     <h2 style="margin-top:0">Intestazione (vale per tutti gli opuscoli)</h2>
     <label class="f">Ente<input data-s="ente" value="${esc(s.ente)}"></label>
@@ -586,6 +668,7 @@ function viewSettings(v) {
   <div class="ed-panel" style="padding:14px"><h2 style="margin-top:0">Backup e condivisione</h2>
     <p class="muted" style="font-size:13px">I contenuti sono salvati su questo dispositivo. Esporta un backup per non perderli o per passarli a un collega.</p>
     <div class="row"><button class="btn light" id="bk-exp">⤓ Esporta tutto</button><label class="btn light">⇪ Importa backup<input type="file" id="bk-imp" accept=".json" hidden></label>${S.installEvt ? `<button class="btn light" id="inst">⤓ Installa app</button>` : ""}<button class="btn red" id="reset">Ripristina opuscoli originali</button></div></div>`;
+  bindCloudBox();
   const drawCts = () => { $("#cts").innerHTML = s.contatti.map((c, i) => `<div class="ed-block"><div class="head"><b>Contatto ${i + 1}</b><button class="iconbtn" data-rmct="${i}" style="color:var(--rosso)">✕</button></div><label class="f">Nome<input data-ct="${i}.nome" value="${esc(c.nome)}"></label><label class="f">Telefono<input data-ct="${i}.tel" value="${esc(c.tel)}"></label><label class="f">Orari<input data-ct="${i}.orari" value="${esc(c.orari || "")}"></label></div>`).join(""); };
   drawCts();
   let t;
@@ -606,13 +689,127 @@ function viewSettings(v) {
   $("#addct").onclick = async () => { s.contatti.push({ nome: "", tel: "", orari: "" }); await saveSettings(); drawCts(); };
   $("#bk-exp").onclick = () => download(`rehand-backup-${today()}.json`, JSON.stringify({ tipo: "rehand-backup", data: today(), settings: s, decisions: S.decisions, docs: S.docs }));
   $("#bk-imp").onchange = async (e) => {
-    try { const b = JSON.parse(await readFile(e.target.files[0])); if (b.tipo !== "rehand-backup") throw 0; if (!confirm(`Importare ${b.docs.length} opuscoli? Quelli con lo stesso nome verranno sostituiti.`)) return; for (const d of b.docs) await saveDoc(d); if (b.settings) S.settings = Object.assign(S.settings, b.settings); S.decisions = Object.assign(S.decisions, b.decisions || {}); await saveSettings(); await DB.set("decisions", S.decisions); toast("Backup importato"); viewSettings(v); }
+    try { const b = JSON.parse(await readFile(e.target.files[0])); if (b.tipo !== "rehand-backup") throw 0; if (!confirm(`Importare ${b.docs.length} opuscoli? Quelli con lo stesso nome verranno sostituiti.`)) return; for (const d of b.docs) await commit(d); if (b.settings) S.settings = Object.assign(S.settings, b.settings); S.decisions = Object.assign(S.decisions, b.decisions || {}); await saveSettings(); await DB.set("decisions", S.decisions); toast("Backup importato"); viewSettings(v); }
     catch { alert("File di backup non valido."); }
   };
   if ($("#inst")) $("#inst").onclick = () => S.installEvt.prompt();
-  $("#reset").onclick = async () => { if (!confirm("Ripristinare i 5 opuscoli originali? Le tue modifiche a quegli opuscoli andranno perse (gli opuscoli nuovi restano).")) return; for (const d of window.SEED_DOCS) await saveDoc(clone(d)); toast("Opuscoli originali ripristinati"); };
+  $("#reset").onclick = async () => { if (!confirm("Ripristinare gli opuscoli originali? Le modifiche a quegli opuscoli andranno perse (gli opuscoli nuovi restano).")) return; for (const d of window.SEED_DOCS) await commit(clone(d)); toast("Opuscoli originali ripristinati"); };
+}
+
+function bindCloudBox() {
+  $("#sb-save").onclick = () => { C().saveConfig($("#sb-url").value, $("#sb-key").value); location.hash = "#/"; location.reload(); };
+  if ($("#sb-out")) $("#sb-out").onclick = async () => { await C().signOut(); location.hash = "#/account"; location.reload(); };
+}
+async function revertLocal(id) {
+  const remote = (await C().pullDocs()).find((d) => d.id === id);
+  if (remote) await saveDoc(remote); else { await DB.del(id); S.docs = S.docs.filter((d) => d.id !== id); }
+}
+
+/* ------------------------------------------------------------------ ACCESSO / ACCOUNT */
+async function viewAccount(v, sub) {
+  if (!C().enabled) { v.innerHTML = `<h1>Account</h1><p>La libreria condivisa non è collegata: vai in ⚙︎ Impostazioni.</p>`; return; }
+  if (sub === "nuova-password") {
+    v.innerHTML = `<h1>Nuova password</h1><div class="ed-panel" style="padding:14px;max-width:420px"><label class="f">Nuova password<input id="np" type="password" autocomplete="new-password"></label><button class="btn" id="npok" style="margin-top:10px">Salva</button></div>`;
+    $("#npok").onclick = async () => { const { error } = await C().sb.auth.updateUser({ password: $("#np").value }); if (error) return alert(error.message); toast("Password aggiornata"); go(""); };
+    return;
+  }
+  if (!C().user) {
+    v.innerHTML = `<h1>Accedi a RE-HAND</h1>
+      <div class="ed-panel" style="padding:16px;max-width:420px">
+        <label class="f">Email<input id="lg-mail" type="email" autocomplete="username"></label>
+        <label class="f">Password<input id="lg-pw" type="password" autocomplete="current-password"></label>
+        <div class="row" style="margin-top:12px"><button class="btn" id="lg-in">Accedi</button><button class="btn light" id="lg-up">Registrati</button></div>
+        <p style="margin:10px 0 0"><a href="#" id="lg-reset">Password dimenticata?</a></p>
+        <p id="lg-msg" class="muted" style="font-size:13px"></p>
+      </div>
+      <p class="muted" style="font-size:13px">Il primo utente che si registra diventa amministratore. Gli altri entrano in sola lettura finché l’amministratrice non li abilita.</p>
+      <button class="btn ghost small" id="lg-guest" style="color:var(--blu)">Continua senza accesso (sola lettura)</button>`;
+    const msg = (t) => ($("#lg-msg").textContent = t);
+    const done = async () => { await syncFromCloud(); toast("Benvenuta/o " + C().email); go(""); route(); };
+    $("#lg-in").onclick = async () => { try { msg("Accesso…"); await C().signIn($("#lg-mail").value.trim(), $("#lg-pw").value); await done(); } catch (e) { msg("⚠ " + e.message); } };
+    $("#lg-up").onclick = async () => { try { msg("Registrazione…"); const ok = await C().signUp($("#lg-mail").value.trim(), $("#lg-pw").value); if (ok) await done(); else msg("Controlla la tua email e clicca il link di conferma, poi accedi."); } catch (e) { msg("⚠ " + e.message); } };
+    $("#lg-reset").onclick = async (e) => { e.preventDefault(); try { await C().resetPassword($("#lg-mail").value.trim()); msg("Ti abbiamo mandato un’email per reimpostare la password."); } catch (er) { msg("⚠ " + er.message); } };
+    $("#lg-guest").onclick = () => { S.guestOk = true; go(""); route(); };
+    return;
+  }
+  v.innerHTML = `<h1>Il mio account</h1>
+    <div class="ed-panel" style="padding:14px"><p style="margin:0">${esc(C().email)} · <b>${esc(RUOLI[C().ruolo] || C().ruolo)}</b></p>
+    <div class="row" style="margin-top:10px">${MODE() === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste</button><button class="btn" data-go="utenti">👥 Utenti e permessi</button>` : ""}<button class="btn light" id="sync">⟳ Sincronizza</button><button class="btn red" id="out">Esci</button></div></div>
+    <h2>Le mie richieste di modifica</h2><div id="myreq" class="muted">Caricamento…</div>`;
+  $("#out").onclick = async () => { await C().signOut(); location.reload(); };
+  $("#sync").onclick = async () => { await syncFromCloud(); toast(S.syncError ? "⚠ " + S.syncError : "Sincronizzato ✓"); };
+  try {
+    const rs = (await C().listRequests()).filter((r) => r.autore === C().user.id);
+    $("#myreq").innerHTML = rs.length ? rs.map((r) => `<div class="ed-block"><div class="head"><b>${esc((docById(r.opuscolo_id) || r.dati || {}).titolo || r.opuscolo_id)}</b><span class="pill ${r.stato === "approvata" ? "ok" : r.stato === "rifiutata" ? "" : "warn"}">${esc(r.stato.replace("_", " "))}</span>${r.stato === "in_attesa" ? `<button class="iconbtn" data-wd="${r.id}">Ritira</button>` : ""}</div><small class="muted">Inviata il ${new Date(r.creato).toLocaleString("it-IT")}</small>${r.nota ? `<p style="margin:4px 0">${esc(r.nota)}</p>` : ""}${r.commento ? `<p style="margin:4px 0"><b>Risposta:</b> ${esc(r.commento)}</p>` : ""}</div>`).join("") : "<p>Nessuna richiesta.</p>";
+    $$("[data-wd]", v).forEach((b) => (b.onclick = async () => { if (!confirm("Ritirare la richiesta?")) return; await C().withdrawRequest(+b.dataset.wd); viewAccount(v); }));
+  } catch (e) { $("#myreq").textContent = "⚠ " + e.message; }
+}
+
+/* ------------------------------------------------------------------ RICHIESTE (admin) */
+function flatDoc(d) {
+  const m = new Map(); const F = { titolo: "titolo", testo: "testo", punti: "elenco", nota: "nota" };
+  const put = (k, label, v) => m.set(k, { label, v: v == null ? "" : Array.isArray(v) ? v.join("\n") : typeof v === "object" ? JSON.stringify(v) : String(v) });
+  put("titolo", "Titolo dell’opuscolo", d.titolo); put("categoria", "Categoria", d.categoria);
+  put("immagine", "Immagine di copertina", d.immagine ? "immagine (" + String(d.immagine).length + ")" : "");
+  for (const k of PANEL_ORDER) (d.pannelli[k] || []).forEach((b, i) => {
+    const L = `${PANEL_NAMES[k]} › ${b.titolo || b.tipo || b.id}`;
+    put(`b:${b.id}:pos`, `${L} – posizione`, `${PANEL_NAMES[k]} #${i + 1}`);
+    Object.keys(F).forEach((f) => b[f] != null && put(`b:${b.id}:${f}`, `${L} – ${F[f]}`, b[f]));
+    if (b.campi) Object.entries(b.campi).forEach(([c, x]) => put(`b:${b.id}:c:${c}`, `${L} – ortesi: ${c}`, x));
+  });
+  (d.esercizi || []).forEach((e, i) => {
+    const L = `Esercizio “${e.nome}”`;
+    ["nome", "fase", "obiettivo", "posizione", "passi", "dosaggio", "attenzione", "video", "disegno"].forEach((f) => put(`e:${e.id}:${f}`, `${L} – ${f}`, e[f]));
+    put(`e:${e.id}:foto`, `${L} – foto`, e.foto ? "foto (" + e.foto.length + ")" : ""); put(`e:${e.id}:ord`, `${L} – ordine`, i + 1);
+  });
+  (d.bibliografia || []).forEach((r, i) => put(`bib:${i}`, `Bibliografia ${i + 1}`, r.testo));
+  return m;
+}
+function diffDocs(a, b) {
+  const A = a ? flatDoc(a) : new Map(), B = flatDoc(b); const out = [];
+  for (const k of new Set([...A.keys(), ...B.keys()])) { const x = A.get(k), y = B.get(k); const va = x ? x.v : "", vb = y ? y.v : ""; if (va !== vb) out.push({ label: (y || x).label, prima: va, dopo: vb }); }
+  return out;
+}
+const showDiffVal = (t) => (/^(foto|immagine) \(\d+\)$/.test(t) ? "<i>(immagine)</i>" : esc(t).replace(/\n/g, "<br>") || "<i class='muted'>(niente)</i>");
+async function viewRequests(v) {
+  v.innerHTML = `<h1>Richieste di modifica</h1><p class="muted">Gli editor propongono modifiche; tu decidi se pubblicarle. Approvando, la brochure viene aggiornata per tutti.</p><div id="rq">Caricamento…</div>`;
+  let rs; try { rs = await C().listRequests(); } catch (e) { $("#rq").textContent = "⚠ " + e.message; return; }
+  const pend = rs.filter((r) => r.stato === "in_attesa"), past = rs.filter((r) => r.stato !== "in_attesa").slice(0, 30);
+  S.reqPending = pend.length; renderNav();
+  $("#rq").innerHTML = (pend.length ? pend.map((r) => {
+    const cur = docById(r.opuscolo_id); const df = diffDocs(cur, r.dati);
+    return `<div class="upd" style="grid-template-columns:1fr"><div>
+      <h4>${esc(r.dati.titolo || r.opuscolo_id)} ${cur ? "" : `<span class="pill warn">nuovo opuscolo</span>`}</h4>
+      <div class="muted" style="font-size:13px">Da <b>${esc(r.autore_email || "")}</b> · ${new Date(r.creato).toLocaleString("it-IT")}</div>
+      ${r.nota ? `<p class="why"><b>Nota:</b> ${esc(r.nota)}</p>` : ""}
+      ${df.length ? df.slice(0, 60).map((x) => `<div style="margin-top:8px"><small style="font-weight:700;color:var(--mut)">${esc(x.label)}</small><div class="diff"><div class="old"><small>Prima</small><div class="t">${showDiffVal(x.prima)}</div></div><div class="new"><small>Dopo</small>${showDiffVal(x.dopo)}</div></div></div>`).join("") + (df.length > 60 ? `<p class="muted">…e altre ${df.length - 60} modifiche</p>` : "") : `<p class="muted">Nessuna differenza nei testi.</p>`}
+      <div class="row" style="margin-top:10px"><button class="btn green" data-ok="${r.id}">✓ Approva e pubblica</button><button class="btn red" data-no="${r.id}">✕ Rifiuta</button><button class="btn light" data-see="${r.id}">👁 Anteprima</button></div>
+    </div></div>`; }).join("") : `<div class="ed-panel" style="padding:16px">✅ Nessuna richiesta in attesa.</div>`)
+    + (past.length ? `<details class="ed-panel" style="margin-top:16px"><summary>Già decise (${past.length})</summary><div class="body">${past.map((r) => `<div class="row" style="padding:4px 0;border-bottom:1px solid var(--bd)"><span class="pill ${r.stato === "approvata" ? "ok" : ""}">${r.stato}</span><span style="flex:1">${esc(r.dati.titolo || r.opuscolo_id)} – ${esc(r.autore_email || "")}</span><small class="muted">${r.deciso_il ? new Date(r.deciso_il).toLocaleDateString("it-IT") : ""}</small></div>`).join("")}</div></details>` : "");
+  const byId = (id) => rs.find((r) => r.id === +id);
+  $$("[data-ok]", v).forEach((b) => (b.onclick = async () => {
+    const r = byId(b.dataset.ok); const commento = prompt("Commento per l’editor (facoltativo):", "") ; if (commento === null) return;
+    const cur = docById(r.opuscolo_id); const d = clone(r.dati); delete d._modificheLocali;
+    d.versione = ((cur && cur.versione) || 0) + 1; d.aggiornato = today(); d.storico = d.storico || [];
+    d.storico.push({ data: today(), testo: `Modifica proposta da ${r.autore_email || "editor"} approvata${commento ? " – " + commento : ""}.`, fonte: r.nota || "" });
+    try { await saveDoc(d); await C().pushDoc(d); await C().decideRequest(r.id, "approvata", commento); toast("Pubblicato ✓"); viewRequests(v); } catch (e) { alert(e.message); }
+  }));
+  $$("[data-no]", v).forEach((b) => (b.onclick = async () => { const commento = prompt("Motivo del rifiuto (lo vedrà l’editor):", ""); if (commento === null) return; try { await C().decideRequest(+b.dataset.no, "rifiutata", commento); viewRequests(v); } catch (e) { alert(e.message); } }));
+  $$("[data-see]", v).forEach((b) => (b.onclick = () => { const r = byId(b.dataset.see); const w = document.createElement("div"); w.className = "preview-wrap"; w.innerHTML = `<div class="scaler">${brochureHTML(r.dati, true)}</div>`; b.closest(".upd").appendChild(w); afterImages(w).then(() => { fitPanels(w); scalePreviews(); }); scalePreviews(); b.remove(); }));
+}
+
+/* ------------------------------------------------------------------ UTENTI (admin) */
+async function viewUsers(v) {
+  v.innerHTML = `<h1>Utenti e permessi</h1><p class="muted">Chi si registra entra come <b>lettore</b>. Qui decidi chi può proporre modifiche (<b>editor</b>) e chi è <b>amministratore</b>.</p><div id="us">Caricamento…</div>`;
+  try {
+    const us = await C().listProfiles();
+    $("#us").innerHTML = us.map((u) => `<div class="ed-block"><div class="head"><b>${esc(u.email || u.id)}</b>${u.id === C().user.id ? `<span class="pill">tu</span>` : ""}
+      <select class="iconbtn" data-role="${u.id}">${Object.entries(RUOLI).map(([k, l]) => `<option value="${k}" ${u.ruolo === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <small class="muted">Registrato il ${new Date(u.creato).toLocaleDateString("it-IT")}</small></div>`).join("");
+    $$("[data-role]", v).forEach((s) => (s.onchange = async () => { try { await C().setRole(s.dataset.role, s.value); toast("Permesso aggiornato"); } catch (e) { alert(e.message); viewUsers(v); } }));
+  } catch (e) { $("#us").textContent = "⚠ " + e.message; }
 }
 
 init().catch((e) => { document.body.insertAdjacentHTML("afterbegin", `<p style="padding:20px;color:#c0392b">Errore di avvio: ${esc(e.message)}</p>`); console.error(e); });
-window.__rehand = { S, printDoc, buildBooklet, brochureHTML, fitPanels, check, apply };
+window.__rehand = { S, printDoc, buildBooklet, brochureHTML, fitPanels, check, apply, diffDocs, MODE, syncFromCloud };
 })();
