@@ -427,7 +427,7 @@ function freeSpace(p) {
 /* approfondimenti pertinenti a questo opuscolo */
 function approFor(doc) {
   const txt = JSON.stringify([PANEL_ORDER.flatMap((k) => (doc.pannelli[k] || []).filter((b) => vis(b, doc))), (doc.esercizi || []).filter((e) => vis(e, doc))]).toLowerCase();
-  return (window.APPROFONDIMENTI || []).filter((a) => a.sempre || new RegExp(a.chiavi, "i").test(txt)).sort((a, b) => (a.sempre ? 1 : 0) - (b.sempre ? 1 : 0));
+  return (window.APPROFONDIMENTI || []).filter((a) => !(a.escludi || []).includes(doc.id) && (a.sempre || new RegExp(a.chiavi, "i").test(txt))).sort((a, b) => (a.sempre ? 1 : 0) - (b.sempre ? 1 : 0));
 }
 const approHTML = (a, tag) => `<div class="${tag}"><h3>ℹ️ ${esc(a.titolo)}</h3><p>${esc(a.testo)}</p></div>`;
 /* riempie gli spazi vuoti delle ante: prima approfondimenti, poi disegni degli esercizi */
