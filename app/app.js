@@ -447,6 +447,54 @@ function enrichPanels(root, doc) {
   }
 }
 
+/* consiglio pratico per eseguire bene l’esercizio (in base al tipo di esercizio) */
+const CONSIGLI = [
+  [/^gliding/, "Passa da una posizione all’altra lentamente e fermati 2–3 secondi in ognuna; il polso resta dritto."],
+  [/^pugno-apri/, "Apri le dita fino in fondo e chiudi il pugno senza stringere forte."],
+  [/^polso/, "Appoggia bene l’avambraccio e muovi solo il polso, lentamente e senza slancio."],
+  [/^deviazioni/, "Fai scivolare la mano sul tavolo senza sollevarla e senza ruotare l’avambraccio."],
+  [/^pronosupinazione/, "Tieni il gomito attaccato al fianco: così ruota solo l’avambraccio."],
+  [/^(ventaglio|elastico)/, "Apri le dita lentamente, tieni un attimo la posizione e torna con controllo."],
+  [/^(opposizione|pinch)/, "Forma una “O” rotonda: le punte delle dita si toccano senza schiacciare."],
+  [/^pollice/, "Muovi solo il pollice: il resto della mano rimane appoggiato e rilassato."],
+  [/^(pallina|presa)/, "Stringi per 3–5 secondi e rilascia lentamente; all’inizio usa una pallina morbida."],
+  [/^cicatrice/, "Solo a ferita chiusa: crema neutra, pressione decisa ma sopportabile, piccoli cerchi."],
+  [/^elevazione/, "La mano deve stare più in alto del cuore, sostenuta da un cuscino."],
+  [/^blocking/, "Tieni ben ferma con l’altra mano la parte sotto: deve muoversi solo l’articolazione indicata."],
+  [/^(estensione|flessione)-ifp/, "Vai lentamente fino al limite senza dolore e mantieni la posizione 3–5 secondi."],
+  [/^(kleinert|place-hold|tenodesi|tutore-dorsale)/, "Sempre dentro il tutore e senza forza: segui esattamente le istruzioni del terapista."],
+  [/^(tutore|spica)/, "Ogni volta che togli il tutore controlla la pelle: niente arrossamenti che durano."],
+  [/^(lateralita|immaginazione|specchio)/, "Scegli un luogo tranquillo; se il dolore aumenta fermati e riprova più tardi."],
+  [/^desensibilizzazione/, "Passa al materiale successivo solo quando il fastidio è diminuito."],
+  [/^carico/, "Aumenta il peso sulla mano molto gradualmente; fermati se il dolore aumenta."],
+  [/mf$|^(flessione|blocking)-mf/, "Il movimento parte dalla base delle dita: piega bene le nocche."],
+  [/^mano-tavolo/, "Mano rilassata e ben appoggiata, spalle sciolte."],
+];
+const consiglio = (e) => { const k = typeof e.disegno === "string" ? e.disegno : ""; const c = CONSIGLI.find(([rx]) => rx.test(k)); return c ? c[1] : "Esegui lentamente, con movimenti completi e senza provocare dolore."; };
+/* scheda esercizio: figure con il passo accanto/sotto, poi raccomandazioni */
+function exerciseCard(e, n, preview) {
+  const hasFoto = !!e.foto;
+  const frames = !hasFoto && e.disegno ? window.RH_ILL.risolvi(e.disegno) || [] : [];
+  const passi = e.passi || [];
+  const head = `<div class="ex-h"><h4><span class="n">${n}</span>${esc(e.nome)}</h4>${e.obiettivo ? `<p class="ob">${esc(e.obiettivo)}</p>` : ""}</div>`;
+  const pos = e.posizione ? `<p class="pos"><b>Posizione di partenza:</b> ${esc(e.posizione)}</p>` : "";
+  const qr = e.video ? `<div class="qr">${qrSvg(e.video)}video</div>` : "";
+  const reco = `<div class="ex-r">${e.dosaggio ? `<span class="dose">⏱ ${esc(e.dosaggio)}</span>` : ""}${e.attenzione ? `<span class="att">⚠ ${esc(e.attenzione)}</span>` : ""}<span class="tip">💡 ${esc(consiglio(e))}</span></div>`;
+  const fig = (o) => window.RH_ILL.one(o);
+  let body;
+  if (frames.length >= 3 && passi.length === frames.length) {
+    // sequenza: ogni figura con il suo passo scritto sotto
+    body = `${qr}${pos}<div class="ex-steps">${frames.map((o, i) => `<figure><div class="f">${fig(o)}</div><figcaption><b>${i + 1}</b> ${esc(passi[i])}</figcaption></figure>`).join("")}</div>`;
+  } else if (frames.length >= 3) {
+    body = `${qr}<div class="ex-steps lab">${frames.map((o, i) => `<figure><div class="f">${fig(o)}</div><figcaption><b>${i + 1}</b> ${esc(o.label || "")}</figcaption></figure>`).join("")}</div>${pos}${passi.length ? `<p class="come"><b>Come si fa</b></p><ol class="cols">${passi.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}`;
+  } else {
+    // una o due figure a sinistra, istruzioni a destra
+    const media = hasFoto ? `<div class="ph" style="background-image:url('${e.foto}')"></div>` : frames.length ? frames.map((o) => `<figure><div class="f">${fig(o)}</div>${o.label ? `<figcaption>${esc(o.label)}</figcaption>` : ""}</figure>`).join("") : preview ? `<div class="ph">foto o disegno<br>non inseriti</div>` : "";
+    body = `<div class="ex-side ${media ? "" : "nomedia"} ${frames.length === 2 ? "two" : ""}">${media ? `<div class="ex-media">${media}</div>` : ""}<div class="ex-txt">${qr}${pos}${passi.length ? `<p class="come"><b>Come si fa</b></p><ol>${passi.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}</div></div>`;
+  }
+  return `<div class="ex2">${head}${body}${reco}</div>`;
+}
+
 /* ---------- opuscolo esercizi A4 */
 async function buildBooklet(doc, target, preview) {
   const s = S.settings;
@@ -485,7 +533,7 @@ async function buildBooklet(doc, target, preview) {
     const t = document.createElement("div"); t.innerHTML = html; const el = t.firstElementChild;
     body.appendChild(el);
     if (!fits() && body.children.length > 1) {
-      if (el.classList.contains("ex")) { el.classList.add("compact"); if (fits()) return el; el.classList.remove("compact"); }
+      if (el.classList.contains("ex2")) { el.classList.add("compact"); if (fits()) return el; el.classList.remove("compact"); }
       body.removeChild(el); fillGap(); body = newPage(); body.appendChild(el);
     }
     return el;
@@ -505,15 +553,7 @@ async function buildBooklet(doc, target, preview) {
     if (e.fase !== fase) { fase = e.fase; const fi = faseInfo(fase); const ob = fi ? (fi.testo || "") + (fi.punti && fi.punti.length ? (fi.testo ? " " : "Obiettivi: ") + fi.punti.slice(0, 4).join(" · ") : "") : "";
       pendingHead = add(`<div class="bk-fase">${esc(fase || "Esercizi")}${ob ? `<small>${esc(ob.length > 260 ? ob.slice(0, 257) + "…" : ob)}</small>` : ""}</div>`); }
     n++;
-    const hasFoto = !!e.foto;
-    const dis = !hasFoto && e.disegno ? window.RH_ILL.risolvi(e.disegno) : null;
-    const seq = dis && Array.isArray(dis) && dis.length > 1;
-    const media = hasFoto ? `<div class="ph" style="background-image:url('${e.foto}')"></div>` : dis && !seq ? `<div class="ph ill-ph">${ill(dis)}</div>` : !seq && preview ? `<div class="ph">foto o disegno<br>non inseriti</div>` : "";
-    const card = `<div class="ex ${seq ? "seqx" : ""} ${media ? "" : "nofoto"}">${seq ? `<div class="strip">${ill(dis)}</div>` : media}
-      <div>${e.video ? `<div class="qr">${qrSvg(e.video)}video</div>` : ""}<h4><span class="n">${n}</span>${esc(e.nome)}</h4>
-      ${e.obiettivo ? `<p class="ob">${esc(e.obiettivo)}</p>` : ""}${e.posizione ? `<p class="pos"><b>Posizione:</b> ${esc(e.posizione)}</p>` : ""}
-      ${e.passi && e.passi.length ? `<ol>${e.passi.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
-      <div class="tags">${e.dosaggio ? `<span class="dose">⏱ ${esc(e.dosaggio)}</span>` : ""}${e.attenzione ? `<span class="att">⚠ ${esc(e.attenzione)}</span>` : ""}</div></div></div>`;
+    const card = exerciseCard(e, n, preview);
     const before = body;
     const el = add(card);
     // il titolo della fase non resta da solo in fondo alla pagina

@@ -176,3 +176,48 @@
 .ex.compact .ill-ph{width:32mm;height:32mm}
 .ex.compact .ill-ph .ill{width:30mm}
 .ex.compact .strip .ill.seq figure{width:30mm;max-width:30mm}
+
+/* ===== scheda esercizio: figure + spiegazione accanto + raccomandazioni ===== */
+.ex2{border:0.3mm solid #d0d7e0;border-radius:2.5mm;padding:3mm 3.5mm;margin-bottom:3.5mm;break-inside:avoid;font-size:11pt;line-height:1.4}
+.ex2 .ex-h h4{margin:0 0 .8mm;font-size:12.5pt;color:var(--blu,#1d4f9c);display:flex;gap:2mm;align-items:baseline}
+.ex2 .ex-h h4 .n{background:var(--verde,#3aa635);color:#fff;border-radius:999px;min-width:7mm;height:7mm;display:inline-flex;align-items:center;justify-content:center;font-size:10pt;flex:none}
+.ex2 .ob{margin:0 0 1.5mm;color:#3d4b5a;font-style:italic}
+.ex2 .pos{margin:0 0 1.5mm}
+.ex2 .come{margin:1mm 0 .5mm;color:var(--blu,#1d4f9c)}
+.ex2 ol{margin:0 0 1mm;padding-left:5.5mm}
+.ex2 ol li{margin-bottom:.8mm}
+.ex2 ol.cols{columns:2;column-gap:6mm}
+.ex2 .f svg{width:100%;height:auto;display:block}
+/* sequenza: figura con il passo sotto, a tutta larghezza */
+.ex2 .ex-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(31mm,1fr));gap:2.5mm;margin:1mm 0 2mm}
+.ex2 .ex-steps figure{margin:0;text-align:center}
+.ex2 .ex-steps .f{width:34mm;max-width:100%;margin:0 auto}
+.ex2 .ex-steps figcaption{font-size:9.8pt;line-height:1.25;margin-top:1mm;text-align:center}
+.ex2 .ex-steps figcaption b{display:inline-flex;align-items:center;justify-content:center;width:5mm;height:5mm;border-radius:999px;background:var(--verde,#3aa635);color:#fff;font-size:8pt;margin-right:1mm}
+/* una o due figure a sinistra, testo a destra */
+.ex2 .ex-side{display:grid;grid-template-columns:40mm 1fr;gap:4mm;align-items:start}
+.ex2 .ex-side.nomedia{grid-template-columns:1fr}
+.ex2 .ex-media{display:flex;flex-direction:column;gap:2mm}
+.ex2 .ex-media figure{margin:0;text-align:center}
+.ex2 .ex-media .f{width:36mm;margin:0 auto}
+.ex2 .ex-media figcaption{font-size:9pt;color:#3d4b5a}
+.ex2 .ex-media .ph{width:40mm;height:40mm;border-radius:2mm;background:#f0f3f7 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#9aa7b5;font-size:9pt;text-align:center}
+.ex2 .qr{width:22mm;float:right;margin-left:2mm;text-align:center;font-size:7pt;color:#7a8794}
+.ex2 .qr svg{width:22mm;height:22mm;display:block}
+/* fascia raccomandazioni */
+.ex2 .ex-r{display:flex;flex-wrap:wrap;gap:1.5mm 2mm;border-top:0.3mm dashed #d0d7e0;padding-top:2mm;margin-top:1mm;clear:both}
+.ex2 .ex-r span{border-radius:1.5mm;padding:1mm 2.5mm;font-size:9.8pt}
+.ex2 .dose{background:#e3f4e1;color:#1d5f19;font-weight:700}
+.ex2 .att{background:#fdecea;color:#8a2a20}
+.ex2 .tip{background:#eef3fa;color:#1d3f73;flex:1 1 100%}
+/* compatta: figure un po' più piccole */
+.ex2.compact{padding:2.2mm 3mm;margin-bottom:2.5mm}
+.ex2.compact .ex-steps .f{width:28mm}
+.ex2.compact .ex-media .f{width:30mm}
+.ex2.compact .ex-side{grid-template-columns:33mm 1fr}
+
+.ex2 .ex-side.two{grid-template-columns:72mm 1fr}
+.ex2 .ex-side.two .ex-media{flex-direction:row}
+.ex2 .ex-side.two .ex-media .f{width:34mm}
+.ex2.compact .ex-side.two{grid-template-columns:62mm 1fr}
+.ex2.compact .ex-side.two .ex-media .f{width:29mm}
