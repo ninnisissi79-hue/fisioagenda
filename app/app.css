@@ -106,3 +106,5 @@ label.f textarea{min-height:60px;resize:vertical}
   #print-root{position:static;left:auto}
   body{background:#fff}
 }
+.mini-ill{display:block;width:120px}
+.mini-ill .ill.seq{display:flex}.mini-ill svg{width:100%;height:auto}.mini-ill figcaption,.mini-ill span{display:none}

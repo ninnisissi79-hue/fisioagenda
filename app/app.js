@@ -60,6 +60,10 @@ const PANEL_NAMES = {
 };
 const PANEL_ORDER = ["cover", "e1", "e2", "i1", "i2", "i3"];
 const docById = (id) => S.docs.find((d) => d.id === id);
+/* protocolli alternativi (es. flessori: Kleinert / attivo precoce / pull-out): un elemento con "protocolli" compare solo se è attivo uno di quelli */
+const vis = (item, doc) => !item.protocolli || !item.protocolli.length || !doc.protocollo || item.protocolli.includes(doc.protocollo);
+const protoName = (doc) => { const p = (doc.protocolli || []).find((x) => x.id === doc.protocollo); return p ? p.nome : ""; };
+const ill = (d) => (window.RH_ILL && d ? window.RH_ILL.disegno(window.RH_ILL.risolvi(d)) : "");
 
 async function saveDoc(doc) { await DB.put(doc); const i = S.docs.findIndex((d) => d.id === doc.id); if (i >= 0) S.docs[i] = doc; else S.docs.push(doc); }
 async function saveSettings() { await DB.set("settings", S.settings); applyTheme(); }
@@ -73,7 +77,7 @@ async function init() {
   S.docs = await DB.all();
   const seeded = (await DB.get("seedVersion")) || 0;
   if (seeded < window.SEED_VERSION) {
-    for (const d of window.SEED_DOCS) if (!docById(d.id)) await saveDoc(clone(d));
+    for (const d of window.SEED_DOCS) { const cur = docById(d.id); if (!cur || ((cur.versione || 1) === 1 && (d.versione || 1) >= 1 && (cur.storico || []).length <= 1)) await saveDoc(clone(d)); }
     await DB.set("seedVersion", window.SEED_VERSION);
   }
   applyTheme();
@@ -144,7 +148,7 @@ function viewHome(v) {
     const list = S.docs.filter((d) => (!q || norm(d.titolo).includes(q)) && (!c || (d.categoria || "Altro") === c)).sort((a, b) => a.titolo.localeCompare(b.titolo, "it"));
     $("#list").innerHTML = list.map((d) => { const n = pending(d.id).length; return `
       <div class="card" data-id="${esc(d.id)}">
-        <div class="row"><span class="pill">${esc(d.categoria || "Altro")}</span>${n ? `<span class="pill warn">🔔 ${n} aggiornament${n > 1 ? "i" : "o"}</span>` : ""}</div>
+        <div class="row"><span class="pill">${esc(d.categoria || "Altro")}</span>${n ? `<span class="pill warn">🔔 ${n} aggiornament${n > 1 ? "i" : "o"}</span>` : ""}${d.stato === "bozza" ? `<span class="pill" style="background:#eef3fa">📝 bozza</span>` : ""}${d.protocolli ? `<span class="pill">${d.protocolli.length} protocolli</span>` : ""}</div>
         <h3>${esc(d.titolo)}</h3>
         <div class="meta">Aggiornato il ${fmtDate(d.aggiornato)} · versione ${d.versione || 1} · ${d.esercizi.length} esercizi</div>
       </div>`; }).join("") || `<p class="muted">Nessun opuscolo trovato.</p>`;
@@ -174,6 +178,8 @@ function viewDoc(v, doc, tab) {
     <div class="row"><button class="btn ghost small" data-go="home" style="color:var(--blu)">← Tutti</button><span class="spacer"></span><span class="saved" id="saved"></span></div>
     <h1>${esc(doc.titolo)}</h1>
     <p class="muted" style="margin-top:-8px">Aggiornato il ${fmtDate(doc.aggiornato)} · versione ${doc.versione || 1}</p>
+    ${doc.stato === "bozza" ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">📝 <b>Bozza da revisionare.</b> Preparata da Claude su letteratura scientifica e linee guida (vedi “Storico e fonti”). Controllate i testi e premete <button class="btn small green" id="approva">✓ Approva</button></div>` : ""}
+    ${doc.protocolli && doc.protocolli.length ? `<div class="toolbar"><label class="f" style="margin:0;flex:1;min-width:260px">Protocollo usato (cambia esercizi, fasi e ortesi)<select id="proto">${doc.protocolli.map((p) => `<option value="${esc(p.id)}" ${p.id === doc.protocollo ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select></label></div><p class="muted" style="margin-top:-6px;font-size:13px">${esc(((doc.protocolli.find((p) => p.id === doc.protocollo) || {}).descrizione) || "")}</p>` : ""}
     ${n ? `<div class="warnbox">🔔 Ci sono <b>${n}</b> aggiornamenti proposti per questa patologia. <a href="#/aggiorna">Valutali ora →</a></div>` : ""}
     <div class="toolbar">
       <button class="btn" id="p-broch">🖨 Stampa / PDF pieghevole</button>
@@ -186,6 +192,8 @@ function viewDoc(v, doc, tab) {
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>
     <div id="tabbody"></div>`;
   $$(".tabs button", v).forEach((b) => (b.onclick = () => go(`doc/${doc.id}/${b.dataset.tab}`)));
+  if ($("#proto")) $("#proto").onchange = async (e) => { doc.protocollo = e.target.value; await saveDoc(doc); viewDoc(v, doc, tab); };
+  if ($("#approva")) $("#approva").onclick = async () => { doc.stato = "approvata"; doc.storico = doc.storico || []; doc.storico.push({ data: today(), testo: "Bozza revisionata e approvata dal fisioterapista.", fonte: "" }); await saveDoc(doc); viewDoc(v, doc, tab); };
   $("#p-broch").onclick = () => printDoc(doc, "pieghevole");
   $("#p-ex").onclick = () => printDoc(doc, "esercizi");
   $("#exp").onclick = () => download(`${doc.id}.json`, JSON.stringify(doc, null, 1));
@@ -223,11 +231,13 @@ function afterImages(el) { return Promise.all($$("img", el).map((i) => (i.comple
 
 /* ---------- pieghevole: HTML */
 function brochureHTML(doc, preview) {
-  const P = (k, extra = "") => `<section class="panel ${k === "cover" ? "cover" : ""}" data-panel="${k}">${extra}${(doc.pannelli[k] || []).map((b) => blockHTML(b, doc, preview)).join("")}${k === "e2" ? `<div class="footer-agg">${esc(S.settings.ente)} · ${esc(doc.titolo)} · aggiornato il ${fmtDate(doc.aggiornato)} (v.${doc.versione || 1})</div>` : ""}</section>`;
+  const P = (k, extra = "") => `<section class="panel ${k === "cover" ? "cover" : ""}" data-panel="${k}">${extra}${(doc.pannelli[k] || []).filter((b) => vis(b, doc)).map((b) => blockHTML(b, doc, preview)).join("")}${k === "e2" ? `<div class="footer-agg">${esc(S.settings.ente)} · ${esc(doc.titolo)} · aggiornato il ${fmtDate(doc.aggiornato)} (v.${doc.versione || 1})</div>` : ""}</section>`;
   const s = S.settings;
   const coverHead = `<div class="logos">${s.logoEnte ? `<img src="${esc(s.logoEnte)}" alt="${esc(s.ente)}">` : ""}${s.logoProgetto ? `<img class="proj" src="${esc(s.logoProgetto)}" alt="">` : ""}</div>
-    <h1>${esc(doc.titolo)}</h1><p class="centro">${esc(s.centro)}</p><p class="progetto">${esc(s.progetto)}</p><div class="bar"></div>`;
-  return `<div class="sheet land">${P("e1")}${P("e2")}${P("cover", coverHead)}</div><div class="sheet land">${P("i1")}${P("i2")}${P("i3")}</div>`;
+    <h1>${esc(doc.titolo)}</h1>${protoName(doc) ? `<p class="protocollo">Protocollo: ${esc(protoName(doc))}</p>` : ""}<p class="centro">${esc(s.centro)}</p><p class="progetto">${esc(s.progetto)}</p><div class="bar"></div>`;
+  // piega "a portafoglio": l'aletta che si ripiega dentro (e1 / i3) è 3 mm più stretta
+  const marks = (xs) => xs.map((x) => `<i class="fold" style="left:${x}mm"></i><i class="fold b" style="left:${x}mm"></i>`).join("");
+  return `<div class="sheet land out">${P("e1")}${P("e2")}${P("cover", coverHead)}${marks([97, 197])}</div><div class="sheet land in">${P("i1")}${P("i2")}${P("i3")}${marks([100, 200])}</div>`;
 }
 function blockHTML(b, doc, preview) {
   const cls = "blk" + (preview && b._nuovo ? " nuovo" : "");
@@ -239,11 +249,12 @@ function blockHTML(b, doc, preview) {
   if (b.tipo === "personalizzate") return `<div class="${cls} box-pers">${h}${'<div class="line"></div>'.repeat(b.righe || 5)}</div>`;
   if (b.tipo === "contatti") return `<div class="${cls} box-contatti">${h}${S.settings.contatti.map((c) => `<p><b>${esc(c.nome)}</b>Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`;
   if (b.tipo === "qr") {
-    const ex = doc.esercizi.filter((e) => e.video);
+    const ex = doc.esercizi.filter((e) => e.video && vis(e, doc));
     if (!ex.length) return `<div class="${cls}">${h}<p>Gli esercizi sono spiegati nell’<b>opuscolo esercizi</b> consegnato insieme a questa brochure.</p></div>`;
     return `<div class="${cls}">${h}<div class="qr-grid">${ex.slice(0, 9).map((e) => `<figure>${qrSvg(e.video)}<figcaption>${esc(e.nome)}</figcaption></figure>`).join("")}</div></div>`;
   }
-  let img = b.immagine && doc.immagine ? `<img class="cover-img" src="${esc(doc.immagine)}" alt="">` : "";
+  let img = !b.immagine ? "" : doc.immagine ? `<img class="cover-img" src="${esc(doc.immagine)}" alt="">` : doc.disegno ? `<div class="cover-ill">${ill(doc.disegno)}</div>` : "";
+  if (b.disegno) img += `<div class="blk-ill">${ill(b.disegno)}</div>`;
   return `<div class="${cls}">${h}${b.testo ? `<p>${esc(b.testo)}</p>` : ""}${img}${b.punti && b.punti.length ? `<ul>${b.punti.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}${b.nota ? `<p class="nota">${esc(b.nota)}</p>` : ""}</div>`;
 }
 function qrSvg(text) {
@@ -279,19 +290,22 @@ async function buildBooklet(doc, target, preview) {
     return el;
   };
   const intro = (doc.pannelli.cover || []).find((b) => b.testo);
-  const ort = PANEL_ORDER.flatMap((k) => doc.pannelli[k] || []).find((b) => b.tipo === "ortesi");
+  const ort = PANEL_ORDER.flatMap((k) => doc.pannelli[k] || []).find((b) => b.tipo === "ortesi" && vis(b, doc));
   const oc = (ort && ort.campi) || {};
-  add(`<div><h1 class="bk-title">Esercizi a casa</h1><p class="bk-sub">${esc(doc.titolo)}</p></div>`);
+  add(`<div><h1 class="bk-title">Esercizi a casa</h1><p class="bk-sub">${esc(doc.titolo)}${protoName(doc) ? ` · Protocollo: ${esc(protoName(doc))}` : ""}</p></div>`);
   if (intro) add(`<div class="bk-intro">${intro.titolo ? `<b>${esc(intro.titolo)}</b>` : ""}<p>${esc(intro.testo)}</p></div>`);
   add(`<div class="bk-rules"><div><h4>Regole generali</h4><ul>${(s.regoleEsercizi || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
        <div><h4>Ortesi</h4>${ort ? `<ul>${[["Quale", oc.tipo], ["Quando", oc.quando], ["Quanto", oc.quanto], ["Per quanto", oc.durata]].filter((r) => r[1]).map((r) => `<li><b>${r[0]}:</b> ${esc(r[1])}</li>`).join("")}</ul>` : "<p>Nessuna ortesi prevista, salvo diversa indicazione.</p>"}</div></div>`);
   await afterImages(target);
   let fase = null, n = 0, pendingHead = null;
-  for (const e of doc.esercizi) {
+  for (const e of doc.esercizi.filter((x) => vis(x, doc))) {
     if (e.fase !== fase) { fase = e.fase; pendingHead = add(`<div class="bk-fase">${esc(fase || "Esercizi")}</div>`); }
     n++;
     const hasFoto = !!e.foto;
-    const card = `<div class="ex ${hasFoto || preview ? "" : "nofoto"}">${hasFoto ? `<div class="ph" style="background-image:url('${e.foto}')"></div>` : preview ? `<div class="ph">foto non inserita<br>(non verrà stampata)</div>` : ""}
+    const dis = !hasFoto && e.disegno ? window.RH_ILL.risolvi(e.disegno) : null;
+    const seq = dis && Array.isArray(dis) && dis.length > 1;
+    const media = hasFoto ? `<div class="ph" style="background-image:url('${e.foto}')"></div>` : dis && !seq ? `<div class="ph ill-ph">${ill(dis)}</div>` : !seq && preview ? `<div class="ph">foto o disegno<br>non inseriti</div>` : "";
+    const card = `<div class="ex ${seq ? "seqx" : ""} ${media ? "" : "nofoto"}">${seq ? `<div class="strip">${ill(dis)}</div>` : media}
       <div>${e.video ? `<div class="qr">${qrSvg(e.video)}video</div>` : ""}<h4><span class="n">${n}</span>${esc(e.nome)}</h4>
       ${e.obiettivo ? `<p class="ob">${esc(e.obiettivo)}</p>` : ""}${e.posizione ? `<p class="pos"><b>Posizione:</b> ${esc(e.posizione)}</p>` : ""}
       ${e.passi && e.passi.length ? `<ol>${e.passi.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
@@ -326,6 +340,14 @@ async function printDoc(doc, kind) {
   setTimeout(() => window.print(), 50);
 }
 
+const protoBoxes = (item, path, doc) => !doc.protocolli || !doc.protocolli.length ? "" : `<div class="f" style="font-size:12px;font-weight:600;color:var(--mut);margin-top:6px">Vale per il protocollo: ${doc.protocolli.map((p) => `<label style="font-weight:400;margin-right:10px;white-space:nowrap"><input type="checkbox" data-proto="${path}" value="${esc(p.id)}" ${!item.protocolli || item.protocolli.includes(p.id) ? "checked" : ""}> ${esc(p.nome)}</label>`).join("")}</div>`;
+async function onProtoBox(e, doc) {
+  const el = e.target; if (!el.dataset || !el.dataset.proto) return false;
+  const item = getPath(doc, el.dataset.proto); const all = doc.protocolli.map((p) => p.id);
+  const sel = $$(`input[data-proto="${el.dataset.proto}"]`).filter((c) => c.checked).map((c) => c.value);
+  if (sel.length === all.length) delete item.protocolli; else item.protocolli = sel;
+  autosave(doc); return true;
+}
 /* ---------- editor testi */
 function markEdited(doc) {
   if (!S.edited.has(doc.id)) {
@@ -366,7 +388,7 @@ function tabEditTexts(body, doc) {
         <label class="f">Nota finale (corsivo)<textarea data-bind="${base}.nota" rows="2">${esc(b.nota || "")}</textarea></label>
         <label class="f" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-bind="${base}.immagine" ${b.immagine ? "checked" : ""}> Mostra qui l’immagine della copertina</label>`;
     }
-    return `<div class="ed-block ${b.tipo === "ortesi" ? "t-ortesi" : auto ? "t-auto" : ""}" data-k="${k}" data-i="${i}">${ctl}${f}</div>`;
+    return `<div class="ed-block ${b.tipo === "ortesi" ? "t-ortesi" : auto ? "t-auto" : ""}" data-k="${k}" data-i="${i}">${ctl}${f}${protoBoxes(b, base, doc)}</div>`;
   };
   body.innerHTML = `
     <div class="ed-panel" style="padding:12px 14px">
@@ -395,6 +417,7 @@ function tabEditTexts(body, doc) {
     rerender();
   });
   body.addEventListener("change", async (e) => {
+    if (await onProtoBox(e, doc)) return;
     if (e.target.dataset.act === "move" && e.target.value) { const blk = e.target.closest(".ed-block"); const [b] = doc.pannelli[blk.dataset.k].splice(+blk.dataset.i, 1); (doc.pannelli[e.target.value] = doc.pannelli[e.target.value] || []).push(b); rerender(); }
     if (e.target.id === "cover-img" && e.target.files[0]) { doc.immagine = await imageToDataUrl(e.target.files[0]); rerender(); }
   });
@@ -408,7 +431,9 @@ function tabEditExercises(body, doc) {
     <datalist id="fasi">${fasi.map((f) => `<option>${esc(f)}</option>`).join("")}</datalist>
     ${doc.esercizi.map((e, i) => `<div class="ed-block" data-i="${i}"><div class="head"><b>${i + 1}. ${esc(e.nome)}</b>
       <button class="iconbtn" data-act="up">↑</button><button class="iconbtn" data-act="down">↓</button><button class="iconbtn" data-act="del" style="color:var(--rosso)">✕</button></div>
-      <div class="ed-ex"><div><label class="photo-slot ${e.foto ? "has" : ""}" style="background-image:${e.foto ? `url('${e.foto}')` : "none"}">${e.foto ? "" : "Tocca per<br>inserire foto"}<input type="file" accept="image/*" data-photo="${i}"></label>${e.foto ? `<button class="iconbtn" data-act="rmfoto" style="margin-top:4px">Rimuovi foto</button>` : ""}</div>
+      <div class="ed-ex"><div><label class="photo-slot ${e.foto ? "has" : ""}" style="background-image:${e.foto ? `url('${e.foto}')` : "none"}">${e.foto ? "" : e.disegno ? `<span class="mini-ill">${ill(e.disegno)}</span>` : "Tocca per<br>inserire foto"}<input type="file" accept="image/*" data-photo="${i}"></label>${e.foto ? `<button class="iconbtn" data-act="rmfoto" style="margin-top:4px">Rimuovi foto</button>` : ""}
+        <label class="f">Disegno<select data-dis="${i}"><option value="">— nessuno —</option>${Object.entries(window.RH_ILL.LIB).map(([k, v]) => `<option value="${k}" ${e.disegno === k ? "selected" : ""}>${esc(v.nome)}</option>`).join("")}${e.disegno && typeof e.disegno !== "string" ? `<option selected value="__custom">(personalizzato)</option>` : ""}</select></label>
+        <small class="muted">La foto, se c’è, ha la precedenza sul disegno.</small></div>
       <div>
         <label class="f">Nome<input data-bind="esercizi.${i}.nome" value="${esc(e.nome)}"></label>
         <label class="f">Fase<input data-bind="esercizi.${i}.fase" value="${esc(e.fase || "")}" list="fasi"></label>
@@ -417,7 +442,7 @@ function tabEditExercises(body, doc) {
         <label class="f">Passi (uno per riga)<textarea data-kind="lines" data-bind="esercizi.${i}.passi" rows="${Math.max(3, (e.passi || []).length + 1)}">${esc((e.passi || []).join("\n"))}</textarea></label>
         <label class="f">Quanto (ripetizioni, serie, volte al giorno)<input data-bind="esercizi.${i}.dosaggio" value="${esc(e.dosaggio || "")}"></label>
         <label class="f">Attenzione<input data-bind="esercizi.${i}.attenzione" value="${esc(e.attenzione || "")}"></label>
-        <label class="f">Link video (per il QR code)<input type="url" data-bind="esercizi.${i}.video" value="${esc(e.video || "")}" placeholder="https://…"></label>
+        <label class="f">Link video (per il QR code)<input type="url" data-bind="esercizi.${i}.video" value="${esc(e.video || "")}" placeholder="https://…"></label>${protoBoxes(e, "esercizi." + i, doc)}
       </div></div></div>`).join("")}
     <button class="btn green" id="add-ex">＋ Aggiungi esercizio</button>`;
   bindInputs(body, doc);
@@ -432,7 +457,7 @@ function tabEditExercises(body, doc) {
     else return;
     rerender();
   });
-  body.addEventListener("change", async (e) => { const i = e.target.dataset.photo; if (i != null && e.target.files[0]) { doc.esercizi[+i].foto = await imageToDataUrl(e.target.files[0], 900); rerender(); } });
+  body.addEventListener("change", async (e) => { if (await onProtoBox(e, doc)) return; const di = e.target.dataset.dis; if (di != null && e.target.value !== "__custom") { doc.esercizi[+di].disegno = e.target.value; return rerender(); } const i = e.target.dataset.photo; if (i != null && e.target.files[0]) { doc.esercizi[+i].foto = await imageToDataUrl(e.target.files[0], 900); rerender(); } });
 }
 
 /* ---------- storico e fonti */

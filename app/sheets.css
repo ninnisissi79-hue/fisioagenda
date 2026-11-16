@@ -1,6 +1,10 @@
 /* ====== Fogli A4 (anteprima e stampa) ====== */
 .sheet{background:#fff;color:#1d2733;overflow:hidden;position:relative;font-family:"Segoe UI",Calibri,"Helvetica Neue",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .sheet.land{width:297mm;height:210mm;display:grid;grid-template-columns:repeat(3,99mm)}
+.sheet.land.out{grid-template-columns:97mm 100mm 100mm}
+.sheet.land.in{grid-template-columns:100mm 100mm 97mm}
+.sheet .fold{position:absolute;top:0;width:0;height:4mm;border-left:0.25mm solid #9aa7b5}
+.sheet .fold.b{top:auto;bottom:0}
 .sheet.port{width:210mm;height:297mm;padding:12mm 13mm 14mm;display:flex;flex-direction:column}
 .preview-wrap .sheet{box-shadow:0 2px 10px rgba(0,0,0,.25);margin-bottom:10mm}
 @media print{.sheet{page-break-after:always;break-after:page;box-shadow:none;margin:0}}
@@ -85,3 +89,19 @@
 .bk-diary td:first-child{text-align:left;width:38%}
 .bk-refs{font-size:8pt;color:#3d4b5a}
 .bk-refs ol{padding-left:5mm;margin:1mm 0}
+
+/* disegni */
+.ill svg{display:block;width:100%;height:auto}
+.ill.seq{display:flex;gap:1.5mm;justify-content:center}
+.ill.seq figure{margin:0;flex:1;max-width:30mm;text-align:center;font-size:8pt;line-height:1.1;color:#3d4b5a}
+.ill.seq figcaption b{display:inline-flex;align-items:center;justify-content:center;width:4mm;height:4mm;border-radius:999px;background:var(--verde,#3aa635);color:#fff;font-size:7pt}
+.ill.one span{display:none}
+.cover-ill{width:46mm;margin:1mm auto 2mm}
+.blk-ill{margin:1mm 0 2mm}
+.blk-ill .ill.seq figure{max-width:22mm;font-size:6.5pt}
+.ex .ill-ph{background:#fbf7f3}
+.ex .ill-ph .ill{width:48mm}
+.ex.seqx{grid-template-columns:1fr}
+.ex .strip{border-bottom:0.3mm dashed #d0d7e0;padding-bottom:2mm}
+.ex .strip .ill.seq figure{max-width:25mm}
+.sheet .cover .protocollo{margin:-1mm 0 2mm;font-weight:700;color:#8a2a20;font-size:1.02em}
