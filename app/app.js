@@ -411,9 +411,16 @@ function freeSpace(p) {
   [...p.children].forEach((c) => { if (getComputedStyle(c).position !== "absolute") bottom = Math.max(bottom, c.offsetTop + c.offsetHeight + parseFloat(getComputedStyle(c).marginBottom || 0)); });
   return p.clientHeight - parseFloat(cs.paddingBottom) - bottom;
 }
-/* aggiunge i disegni degli esercizi dove le ante hanno spazio vuoto */
+/* approfondimenti pertinenti a questo opuscolo */
+function approFor(doc) {
+  const txt = JSON.stringify([PANEL_ORDER.flatMap((k) => (doc.pannelli[k] || []).filter((b) => vis(b, doc))), (doc.esercizi || []).filter((e) => vis(e, doc))]).toLowerCase();
+  return (window.APPROFONDIMENTI || []).filter((a) => a.sempre || new RegExp(a.chiavi, "i").test(txt)).sort((a, b) => (a.sempre ? 1 : 0) - (b.sempre ? 1 : 0));
+}
+const approHTML = (a, tag) => `<div class="${tag}"><h3>ℹ️ ${esc(a.titolo)}</h3><p>${esc(a.testo)}</p></div>`;
+/* riempie gli spazi vuoti delle ante: prima approfondimenti, poi disegni degli esercizi */
 function enrichPanels(root, doc) {
-  $$(".auto-fig", root).forEach((x) => x.remove());
+  $$(".auto-fig, .appro", root).forEach((x) => x.remove());
+  const appro = approFor(doc); let ai = 0;
   const MM = 3.78; const seen = new Set();
   const cand = (doc.esercizi || []).filter((e) => vis(e, doc) && e.disegno && !e.foto).filter((e) => { const k = JSON.stringify(e.disegno); if (seen.has(k)) return false; seen.add(k); return true; });
   let ci = 0;
@@ -421,6 +428,13 @@ function enrichPanels(root, doc) {
     p.style.fontSize = "11pt";
     if (p.dataset.panel === "cover") continue;
     while (p.scrollHeight > p.clientHeight + 1 && parseFloat(p.style.fontSize) > 6.75) p.style.fontSize = parseFloat(p.style.fontSize) - 0.25 + "pt";
+    // approfondimenti (se uno non entra, prova il successivo)
+    let tries = 0;
+    while (ai < appro.length && tries < 4 && freeSpace(p) > 26 * MM) {
+      const t = document.createElement("div"); t.innerHTML = approHTML(appro[ai], "blk appro"); const el = t.firstElementChild;
+      p.insertBefore(el, p.querySelector(".footer-agg"));
+      if (p.scrollHeight > p.clientHeight + 1) { el.remove(); const [x] = appro.splice(ai, 1); appro.push(x); tries++; } else { ai++; tries = 0; }
+    }
     let guard = 0;
     while (ci < cand.length && guard++ < 4 && freeSpace(p) > 34 * MM) {
       const e = cand[ci]; const seq = Array.isArray(window.RH_ILL.risolvi(e.disegno)) && window.RH_ILL.risolvi(e.disegno).length > 1;
@@ -454,7 +468,13 @@ async function buildBooklet(doc, target, preview) {
   (s.regoleEsercizi || []).forEach((t) => { if (!tipSeen.has(t)) tips.push(t); });
   let tipI = 0;
   const usedH = () => { let m = 0; [...body.children].forEach((c) => (m = Math.max(m, c.offsetTop - body.offsetTop + c.offsetHeight))); return m; };
+  const appro = approFor(doc); let apI = 0;
   const fillGap = () => {
+    let tries = 0;
+    while (apI < appro.length && tries < 4 && body.clientHeight - usedH() > body.clientHeight * 0.1) {
+      const t = document.createElement("div"); t.innerHTML = approHTML(appro[apI], "bk-appro"); const el = t.firstElementChild; body.appendChild(el);
+      if (!fits()) { el.remove(); const [x] = appro.splice(apI, 1); appro.push(x); tries++; } else { apI++; tries = 0; }
+    }
     if (body.clientHeight - usedH() < body.clientHeight * 0.1 || tipI >= tips.length) return;
     const box = document.createElement("div"); box.className = "bk-tip"; box.innerHTML = `<h4>💡 Ricorda</h4><ul></ul>`; body.appendChild(box);
     const ul = $("ul", box); let added = 0;

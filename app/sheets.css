@@ -155,3 +155,24 @@
 .ex.compact .strip .ill.seq figure{width:24mm;max-width:24mm}
 .ex.compact:has(.ph:not(.ill-ph)){grid-template-columns:38mm 1fr}
 .cover-ill{width:40mm}
+
+/* approfondimenti */
+.sheet .appro{background:#eef3fa;border-left:1mm solid var(--blu,#1d4f9c);border-radius:1.5mm;padding:1.5mm 2.2mm}
+.sheet .appro h3{font-size:1em;text-transform:none;letter-spacing:0}
+.sheet .appro p{margin:0}
+.bk-appro{background:#eef3fa;border-left:1.2mm solid var(--blu,#1d4f9c);border-radius:2mm;padding:2.5mm 3.5mm;margin-bottom:3mm;font-size:10pt}
+.bk-appro h3{margin:0 0 1mm;color:var(--blu,#1d4f9c);font-size:11pt}
+.bk-appro p{margin:0}
+
+/* ===== figure un po' più grandi (leggibilità per persone anziane) ===== */
+.sheet .auto-fig .ill.one,.sheet .blk-ill .ill.one{width:26mm}
+.sheet .auto-fig .ill.seq figure,.sheet .blk-ill .ill.seq figure,.sheet .auto-fig.seq .ill.seq figure{width:26mm;max-width:26mm;font-size:6.5pt}
+.box-ortesi .ort-ill{width:26mm}
+.ex{grid-template-columns:38mm 1fr}
+.ex .ill-ph{width:38mm;height:38mm}
+.ex .ill-ph .ill{width:36mm}
+.ex .strip .ill.seq figure{width:36mm;max-width:36mm;font-size:8.5pt}
+.ex.compact{grid-template-columns:32mm 1fr}
+.ex.compact .ill-ph{width:32mm;height:32mm}
+.ex.compact .ill-ph .ill{width:30mm}
+.ex.compact .strip .ill.seq figure{width:30mm;max-width:30mm}
