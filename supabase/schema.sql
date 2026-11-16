@@ -185,3 +185,31 @@ create policy rh_decisioni_admin on public.rehand_decisioni for all to authentic
 -- le funzioni RE-HAND sono usabili solo da utenti autenticati
 revoke all on function public.rehand_registrati() from public, anon;
 grant execute on function public.rehand_registrati() to authenticated;
+
+-- =====================================================================
+--  Richieste di NUOVE PATOLOGIE (dall'app "Cerca o richiedi una patologia")
+--  Le legge la ricerca automatica di Claude, che prepara la brochure
+--  e la propone in "Aggiorna" (l'amministratrice sceglie Sì/No).
+--  La ricerca automatica può leggere solo nome della patologia e dettagli
+--  (non chi l'ha chiesta).
+-- =====================================================================
+create table if not exists public.rehand_patologie_richieste (
+  id         bigserial primary key,
+  patologia  text not null check (length(patologia) between 2 and 120),
+  dettagli   text check (dettagli is null or length(dettagli) <= 600),
+  autore     uuid not null default auth.uid() references auth.users(id),
+  creato     timestamptz not null default now()
+);
+alter table public.rehand_patologie_richieste enable row level security;
+drop policy if exists rh_patric_leggi on public.rehand_patologie_richieste;
+create policy rh_patric_leggi on public.rehand_patologie_richieste for select to authenticated using (public.rehand_attivo());
+drop policy if exists rh_patric_nuova on public.rehand_patologie_richieste;
+create policy rh_patric_nuova on public.rehand_patologie_richieste for insert to authenticated
+  with check (autore = auth.uid() and public.rehand_attivo());
+drop policy if exists rh_patric_admin_del on public.rehand_patologie_richieste;
+create policy rh_patric_admin_del on public.rehand_patologie_richieste for delete to authenticated using (public.rehand_is_admin());
+-- lettura per la ricerca automatica (chiave pubblica): solo le colonne non personali
+drop policy if exists rh_patric_anon on public.rehand_patologie_richieste;
+create policy rh_patric_anon on public.rehand_patologie_richieste for select to anon using (true);
+revoke all on public.rehand_patologie_richieste from anon;
+grant select (id, patologia, dettagli, creato) on public.rehand_patologie_richieste to anon;

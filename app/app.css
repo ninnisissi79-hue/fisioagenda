@@ -116,3 +116,4 @@ label.f textarea{min-height:60px;resize:vertical}
 .paz-mods{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:14px}
 .paz-mods label{display:flex;gap:6px;align-items:flex-start}
 .paz-ex{max-height:340px;overflow:auto}
+.fonti,.why{overflow-wrap:anywhere}

@@ -179,7 +179,7 @@ async function checkFeed(silent) {
 }
 function pending(docId) {
   const ps = (S.feed && S.feed.proposte) || [];
-  return ps.filter((p) => !S.decisions[p.id] && docById(p.patologia) && (!docId || p.patologia === docId));
+  return ps.filter((p) => !S.decisions[p.id] && (p.op === "nuova_patologia" ? !docById(p.proposto.id) && !docId : docById(p.patologia) && (!docId || p.patologia === docId)));
 }
 function updateBadge() { const n = pending().length; const b = $("#upd-badge"); if (!b) return; b.textContent = n; b.hidden = !n || !canPublish(); }
 
@@ -219,7 +219,9 @@ function viewHome(v) {
       ${canPublish() ? `<label class="btn ghost" style="color:var(--blu)">⇪ Importa opuscolo<input type="file" id="imp" accept=".json,application/json" hidden></label>` : ""}
       ${S.installEvt ? `<button class="btn ghost" id="inst" style="color:var(--blu)">⤓ Installa app</button>` : ""}
     </div>
-    <div class="grid" id="list"></div>`;
+    <div class="grid" id="list"></div>
+    <div id="richiedi"></div>
+    <div id="patric"></div>`;
   const draw = () => {
     const q = norm($("#q").value), c = $("#cat").value;
     const list = S.docs.filter((d) => (!q || norm(d.titolo).includes(q)) && (!c || (d.categoria || "Altro") === c)).sort((a, b) => a.titolo.localeCompare(b.titolo, "it"));
@@ -230,7 +232,28 @@ function viewHome(v) {
         <div class="meta">Aggiornato il ${fmtDate(d.aggiornato)} · versione ${d.versione || 1} · ${d.esercizi.length} esercizi</div>
       </div>`; }).join("") || `<p class="muted">Nessun opuscolo trovato.</p>`;
   };
-  $("#q").oninput = draw; $("#cat").onchange = draw; draw();
+  const drawReq = () => {
+    const q = $("#q").value.trim(); const box = $("#richiedi");
+    const found = S.docs.some((d) => norm(d.titolo).includes(norm(q)));
+    if (q.length < 3) { box.innerHTML = `<p class="muted" style="font-size:13px;margin-top:14px">🔎 Non trovi una patologia? Scrivila nella ricerca: se non c’è ancora potrai chiederne la preparazione.</p>`; return; }
+    const canReq = C().enabled && ["admin", "editor", "lettore"].includes(MODE());
+    box.innerHTML = `<div class="ed-panel" style="padding:14px;margin-top:14px"><b>${found ? "Non è quella che cercavi?" : `🔎 “${esc(q)}” non c’è ancora.`}</b>
+      ${canReq ? `<p class="muted" style="font-size:13px;margin:4px 0 8px">Chiedi la preparazione della brochure: verrà cercata in letteratura scientifica e linee guida alla prossima ricerca automatica (ogni settimana) e comparirà in “Aggiorna” per l’approvazione.</p>
+        <label class="f">Dettagli (facoltativi): tipo di intervento, protocollo, conservativo/chirurgico…<input id="rq-det" maxlength="600"></label>
+        <button class="btn green" id="rq-go" style="margin-top:8px">📨 Richiedi la brochure “${esc(q)}”</button>`
+      : `<p class="muted" style="font-size:13px">Chiedila a Claude in chat${C().enabled ? " oppure accedi per inviare la richiesta" : ""}.</p>`}</div>`;
+    if ($("#rq-go")) $("#rq-go").onclick = async () => { try { await C().requestPathology(q, $("#rq-det").value.trim()); toast("📨 Richiesta inviata"); $("#q").value = ""; draw(); drawReq(); drawPat(); } catch (e) { alert("Richiesta non inviata: " + e.message); } };
+  };
+  const drawPat = async () => {
+    const box = $("#patric"); if (!box || !C().enabled || !["admin", "editor", "lettore"].includes(MODE())) return;
+    let rs; try { rs = await C().listPathologyRequests(); } catch { return; }
+    if (!rs.length) { box.innerHTML = ""; return; }
+    const props = ((S.feed && S.feed.proposte) || []).filter((p) => p.op === "nuova_patologia");
+    const stato = (r) => { const pr = props.find((p) => p.richiesta === r.id); if (pr && docById(pr.proposto.id)) return `<span class="pill ok">pubblicata</span>`; if (pr && S.decisions[pr.id] && S.decisions[pr.id].stato === "rifiutata") return `<span class="pill">non accettata</span>`; if (pr) return `<span class="pill warn">pronta in “Aggiorna”</span>`; return `<span class="pill">in preparazione</span>`; };
+    box.innerHTML = `<h2>Patologie richieste</h2>${rs.map((r) => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--bd)">${stato(r)}<b style="flex:1">${esc(r.patologia)}</b><small class="muted">${new Date(r.creato).toLocaleDateString("it-IT")}${r.dettagli ? " · " + esc(r.dettagli) : ""}</small>${MODE() === "admin" ? `<button class="iconbtn" data-delpr="${r.id}">✕</button>` : ""}</div>`).join("")}`;
+    $$("[data-delpr]", box).forEach((b) => (b.onclick = async () => { if (!confirm("Eliminare la richiesta?")) return; await C().deletePathologyRequest(+b.dataset.delpr); drawPat(); }));
+  };
+  $("#q").oninput = () => { draw(); drawReq(); }; $("#cat").onchange = draw; draw(); drawReq(); drawPat();
   $("#list").onclick = (e) => { const c = e.target.closest(".card"); if (c) go("doc/" + c.dataset.id); };
   const pubAll = async (ids) => { try { for (const id of ids) await C().pushDoc(docById(id)); await C().pushSettings(S.settings); for (const [k, d] of Object.entries(S.decisions)) await C().pushDecision(k, d); toast("Pubblicato sul cloud ✓"); await syncFromCloud(); viewHome(v); } catch (e) { alert("Errore: " + e.message); } };
   if ($("#retry")) $("#retry").onclick = () => location.reload();
@@ -644,6 +667,7 @@ function tabHistory(body, doc) {
 /* ------------------------------------------------------------------ AGGIORNAMENTI */
 function findBlock(doc, id) { for (const k of PANEL_ORDER) { const arr = doc.pannelli[k] || []; const i = arr.findIndex((b) => b.id === id); if (i >= 0) return { k, i, b: arr[i] }; } return null; }
 function check(p) {
+  if (p.op === "nuova_patologia") return { ok: !docById(p.proposto.id), why: "Opuscolo già presente" };
   const doc = docById(p.patologia); if (!doc) return { ok: false, why: "Opuscolo non presente" };
   if (p.op === "aggiungi_esercizio") return { ok: !doc.esercizi.some((e) => e.id === p.proposto.id), why: "Esercizio già presente" };
   if (p.op === "modifica_esercizio") { const e = doc.esercizi.find((x) => x.id === p.esercizio); if (!e) return { ok: false, why: "Esercizio non trovato (forse rinominato o eliminato)" }; const cur = Array.isArray(e[p.campo]) ? e[p.campo].join(" ") : e[p.campo]; return { ok: !p.attuale || norm(cur).includes(norm(Array.isArray(p.attuale) ? p.attuale.join(" ") : p.attuale)), why: "Il testo attuale dell’esercizio è stato modificato a mano" }; }
@@ -659,7 +683,13 @@ function check(p) {
   return { ok: false, why: "Tipo di modifica sconosciuto" };
 }
 function apply(p) {
-  const doc = docById(p.patologia); const t = today();
+  const t = today();
+  if (p.op === "nuova_patologia") {
+    const d = clone(p.proposto); d.stato = "bozza"; d.versione = 1; d.aggiornato = t; d.storico = d.storico || [];
+    d.storico.push({ data: t, testo: "Nuova patologia preparata da Claude su letteratura scientifica e accettata dall’amministratrice: da revisionare e approvare.", fonte: "" });
+    S.docs.push(d); return d;
+  }
+  const doc = docById(p.patologia);
   if (p.op === "aggiungi_esercizio") doc.esercizi.push(clone(p.proposto));
   else if (p.op === "modifica_esercizio") { const e = doc.esercizi.find((x) => x.id === p.esercizio); if (typeof e[p.campo] === "string" && typeof p.attuale === "string" && p.attuale && norm(e[p.campo]) !== norm(p.attuale)) e[p.campo] = e[p.campo].replace(p.attuale, p.proposto); else e[p.campo] = clone(p.proposto); }
   else if (p.op === "aggiungi_blocco") { const nb = clone(p.proposto); nb._nuovo = t; (doc.pannelli[p.pannello || "i3"] = doc.pannelli[p.pannello || "i3"] || []).push(nb); }
@@ -691,7 +721,7 @@ const OP_LABEL = { sostituisci_testo: "Modifica testo", sostituisci_nota: "Modif
 
 function viewUpdates(v) {
   const list = pending();
-  const byDoc = {}; list.forEach((p) => (byDoc[p.patologia] = byDoc[p.patologia] || []).push(p));
+  const byDoc = {}; list.forEach((p) => { const k = p.op === "nuova_patologia" ? "__nuove" : p.patologia; (byDoc[k] = byDoc[k] || []).push(p); });
   const decided = ((S.feed && S.feed.proposte) || []).filter((p) => S.decisions[p.id]);
   v.innerHTML = `
     <h1>Aggiornamenti proposti</h1>
@@ -703,9 +733,9 @@ function viewUpdates(v) {
       <span class="muted" style="font-size:13px">${S.feed && S.feed.generato ? `Ultima ricerca: ${fmtDate(S.feed.generato)}` : ""}</span>
     </div>
     ${S.feed && S.feed.nota ? `<div class="warnbox" style="background:#eef3fa;border-color:#b9cbe6">${esc(S.feed.nota)}</div>` : ""}
-    ${list.length ? Object.entries(byDoc).map(([id, ps]) => `<h2>${esc(docById(id).titolo)} <span class="pill warn">${ps.length}</span></h2>${ps.map(updCard).join("")}`).join("") : `<div class="ed-panel" style="padding:16px">✅ Nessun nuovo aggiornamento da valutare.</div>`}
+    ${list.length ? Object.entries(byDoc).map(([id, ps]) => `<h2>${ps[0].op === "nuova_patologia" ? "🆕 Nuove patologie proposte" : esc(docById(id).titolo)} <span class="pill warn">${ps.length}</span></h2>${ps.map(updCard).join("")}`).join("") : `<div class="ed-panel" style="padding:16px">✅ Nessun nuovo aggiornamento da valutare.</div>`}
     ${list.length ? `<div class="sticky-actions"><button class="btn small light" id="selall">Seleziona tutte</button><span class="spacer"></span><button class="btn red" id="rej" disabled>✕ No, scarta selezionate</button><button class="btn green" id="acc" disabled>✓ Sì, applica selezionate</button></div>` : ""}
-    ${decided.length ? `<details class="ed-panel" style="margin-top:16px"><summary>Già valutate (${decided.length})</summary><div class="body">${decided.map((p) => `<div class="row" style="padding:4px 0;border-bottom:1px solid var(--bd)"><span class="pill ${S.decisions[p.id].stato === "accettata" ? "ok" : ""}">${S.decisions[p.id].stato}</span> <span style="flex:1">${esc((docById(p.patologia) || {}).titolo || p.patologia)} – ${esc(p.titolo)}</span> <small class="muted">${fmtDate(S.decisions[p.id].data)}</small>${S.decisions[p.id].stato === "rifiutata" ? ` <button class="iconbtn" data-undo="${esc(p.id)}">Rivaluta</button>` : ""}</div>`).join("")}</div></details>` : ""}`;
+    ${decided.length ? `<details class="ed-panel" style="margin-top:16px"><summary>Già valutate (${decided.length})</summary><div class="body">${decided.map((p) => `<div class="row" style="padding:4px 0;border-bottom:1px solid var(--bd)"><span class="pill ${S.decisions[p.id].stato === "accettata" ? "ok" : ""}">${S.decisions[p.id].stato}</span> <span style="flex:1">${esc((docById(p.patologia) || {}).titolo || (p.proposto && p.proposto.titolo) || p.patologia)} – ${esc(p.titolo || "nuova patologia")}</span> <small class="muted">${fmtDate(S.decisions[p.id].data)}</small>${S.decisions[p.id].stato === "rifiutata" ? ` <button class="iconbtn" data-undo="${esc(p.id)}">Rivaluta</button>` : ""}</div>`).join("")}</div></details>` : ""}`;
   const sel = () => $$("input[data-pid]:checked", v).map((c) => c.dataset.pid);
   const refreshBtns = () => { const n = sel().length; if ($("#acc")) { $("#acc").disabled = $("#rej").disabled = !n; $("#acc").textContent = `✓ Sì, applica selezionate (${n})`; } };
   v.addEventListener("change", (e) => { if (e.target.dataset.pid) refreshBtns(); });
@@ -723,10 +753,18 @@ function viewUpdates(v) {
   };
   if ($("#rej")) $("#rej").onclick = async () => { for (const id of sel()) await setDecision(id, { stato: "rifiutata", data: today() }); updateBadge(); viewUpdates(v); };
   $$("[data-undo]", v).forEach((b) => (b.onclick = async () => { await setDecision(b.dataset.undo, null); updateBadge(); viewUpdates(v); }));
+  $$("[data-prev]", v).forEach((b) => (b.onclick = () => { const p = S.feed.proposte.find((x) => x.id === b.dataset.prev); const box = b.nextElementSibling; box.className = "preview-wrap"; box.innerHTML = `<div class="scaler">${brochureHTML(p.proposto, true)}</div>`; afterImages(box).then(() => { fitPanels(box); scalePreviews(); }); scalePreviews(); b.remove(); }));
   if (!canPublish()) { $$("input[data-pid]", v).forEach((c) => (c.disabled = true)); const sa = $(".sticky-actions", v); if (sa) sa.innerHTML = `<span class="muted">Solo l’amministratrice può applicare o scartare gli aggiornamenti.</span>`; $$("[data-undo]", v).forEach((b) => b.remove()); }
 }
 function updCard(p) {
   const c = check(p);
+  if (p.op === "nuova_patologia") { const d = p.proposto; return `<div class="upd"><input type="checkbox" data-pid="${esc(p.id)}" ${c.ok ? "" : "disabled"}>
+    <div><h4>${esc(d.titolo)}</h4><div class="row"><span class="pill">Nuova patologia</span>${d.categoria ? `<span class="pill">${esc(d.categoria)}</span>` : ""}${p.richiesta ? `<span class="pill ok">richiesta dai colleghi</span>` : `<span class="pill">suggerita</span>`}<span class="pill">${(d.esercizi || []).length} esercizi</span>${d.protocolli ? `<span class="pill">${d.protocolli.length} protocolli</span>` : ""}</div>
+    ${p.motivazione ? `<p class="why"><b>Perché:</b> ${esc(p.motivazione)}</p>` : ""}
+    ${(d.pannelli.cover || []).filter((b) => b.testo).slice(0, 1).map((b) => `<p class="why">${esc(b.testo).slice(0, 400)}</p>`).join("")}
+    ${(d.bibliografia || []).length ? `<ol class="fonti">${d.bibliografia.map((r) => `<li>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.testo)}</a>` : esc(r.testo)}</li>`).join("")}</ol>` : ""}
+    <button class="btn small light" data-prev="${esc(p.id)}">👁 Anteprima brochure</button><div class="prevbox"></div>
+    ${c.ok ? "" : `<p class="conflict">⚠ ${esc(c.why)}</p>`}</div></div>`; }
   return `<div class="upd"><input type="checkbox" data-pid="${esc(p.id)}" ${c.ok ? "" : "disabled"}>
     <div><h4>${esc(p.titolo)}</h4>
       <div class="row"><span class="pill">${OP_LABEL[p.op] || p.op}</span>${p.sezione ? `<span class="pill">${esc(p.sezione)}</span>` : ""}${p.evidenza ? `<span class="pill ok">Evidenza: ${esc(p.evidenza)}</span>` : ""}${p.complessita ? `<span class="pill">${esc(p.complessita)}</span>` : ""}</div>

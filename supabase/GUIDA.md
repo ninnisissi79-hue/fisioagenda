@@ -35,6 +35,9 @@ oppure, su un solo dispositivo: app → ⚙︎ Impostazioni → *Libreria condiv
 2. In home: “Il cloud è vuoto” → **Pubblica le brochure**.
 3. I colleghi si registrano e restano **in attesa**: in alto compare **👥 Nuovi utenti** → scegli **lettore** o **editor**.
 
+## Aggiornamento del database (se avevi già eseguito lo script)
+Quando arriva una nuova funzione che usa il database, basta **rieseguire tutto `schema.sql`** (SQL Editor → New query → incolla → Run): è sicuro, non cancella nulla.
+
 ## Chi può fare cosa
 | | Amministratrice | Editor | Lettore | In attesa |
 |---|---|---|---|---|

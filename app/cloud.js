@@ -40,6 +40,10 @@ const Cloud = {
   async listRequests(stato) { let q = this.sb.from("rehand_richieste").select("*").order("creato", { ascending: false }); if (stato) q = q.eq("stato", stato); const { data, error } = await q; if (error) throw error; return data; },
   async decideRequest(id, stato, commento) { const { error } = await this.sb.from("rehand_richieste").update({ stato, commento: commento || null, deciso_da: this.user.id, deciso_il: new Date().toISOString() }).eq("id", id); if (error) throw error; },
   async withdrawRequest(id) { const { error } = await this.sb.from("rehand_richieste").delete().eq("id", id); if (error) throw error; },
+  /* --- richieste di nuove patologie --- */
+  async requestPathology(patologia, dettagli) { const { error } = await this.sb.from("rehand_patologie_richieste").insert({ patologia, dettagli: dettagli || null, autore: this.user.id }); if (error) throw error; },
+  async listPathologyRequests() { const { data, error } = await this.sb.from("rehand_patologie_richieste").select("id,patologia,dettagli,creato,autore").order("creato", { ascending: false }); if (error) throw error; return data; },
+  async deletePathologyRequest(id) { const { error } = await this.sb.from("rehand_patologie_richieste").delete().eq("id", id); if (error) throw error; },
   /* --- utenti --- */
   async listProfiles() { const { data, error } = await this.sb.from("rehand_profili").select("*").order("creato"); if (error) throw error; return data; },
   async setRole(id, ruolo) { const { error } = await this.sb.from("rehand_profili").update({ ruolo }).eq("id", id); if (error) throw error; },
