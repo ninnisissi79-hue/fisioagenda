@@ -189,7 +189,7 @@ function one(o) {
   }
   let [x0, y0, x1, y1] = BB; BB = null;
   const pad = 6; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
-  let w = x1 - x0, h = y1 - y0; const side = Math.max(w, h, 120);
+  let w = x1 - x0, h = y1 - y0; const side = Math.max(w, h, 205); // scala fissa: la mano ha sempre la stessa grandezza
   x0 -= (side - w) / 2; y0 -= (side - h) / 2; w = h = side;
   if (o.specchiata) body = `<g transform="translate(${f(2 * x0 + w)},0) scale(-1,1)">${body}</g>`;
   return `<svg viewBox="${f(x0)} ${f(y0)} ${f(w)} ${f(h)}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${(o.label || "").replace(/"/g, "")}">${DEFS}${body}</svg>`;

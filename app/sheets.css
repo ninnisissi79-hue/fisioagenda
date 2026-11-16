@@ -131,3 +131,27 @@
 .bk-tip h4{margin:0 0 1mm;color:#21731c;font-size:11pt}
 .bk-tip ul{margin:0;padding-left:5mm}
 .bk-tip li{margin-bottom:.6mm}
+
+/* ===== figure tutte della stessa grandezza ===== */
+.ill.seq{flex-wrap:wrap;gap:1.5mm}
+.ill.seq figure{flex:0 0 auto;max-width:none}
+/* brochure: 22 mm (figure automatiche, disegni nei blocchi, tutore) */
+.sheet .auto-fig .ill.one,.sheet .blk-ill .ill.one{width:22mm;margin:0 auto}
+.sheet .auto-fig .ill.seq figure,.sheet .blk-ill .ill.seq figure,.sheet .auto-fig.seq .ill.seq figure{width:22mm;max-width:22mm;font-size:6pt}
+.box-ortesi .ort-ill{width:22mm}
+/* opuscolo: 30 mm, da sole o in sequenza */
+.ex{grid-template-columns:32mm 1fr}
+.ex .ph{width:52mm;height:52mm}
+.ex .ill-ph{width:32mm;height:32mm;background:none}
+.ex .ill-ph .ill{width:30mm}
+.ex.seqx{grid-template-columns:1fr}
+.ex .strip .ill.seq{justify-content:flex-start}
+.ex .strip .ill.seq figure{width:30mm;max-width:30mm;font-size:8pt}
+.ex:has(.ph:not(.ill-ph)){grid-template-columns:52mm 1fr}
+/* versione compatta: tutte a 24 mm */
+.ex.compact{grid-template-columns:26mm 1fr}
+.ex.compact .ill-ph{width:26mm;height:26mm}
+.ex.compact .ill-ph .ill{width:24mm}
+.ex.compact .strip .ill.seq figure{width:24mm;max-width:24mm}
+.ex.compact:has(.ph:not(.ill-ph)){grid-template-columns:38mm 1fr}
+.cover-ill{width:40mm}
