@@ -3,7 +3,7 @@
    ("chiavi" = parole che devono comparire nell'opuscolo; "sempre" = adatti a tutti).
    Contenuti di buona pratica clinica, prudenti: in caso di indicazioni diverse prevalgono quelle del curante. */
 window.APPROFONDIMENTI = [
-  { id: "allarme", sempre: true, titolo: "Quando chiamare subito il centro",
+  { id: "allarme", sempre: true, escludi: ["frattura-radio-distale"], titolo: "Quando chiamare subito il centro",
     testo: "Contattaci senza aspettare il controllo se le dita diventano fredde, bianche o violacee, se il formicolio aumenta, se il dolore cresce invece di calare, se compare febbre o la ferita si arrossa, si scalda o perde liquido, oppure se improvvisamente non riesci più a muovere un dito come prima." },
   { id: "dolore-esercizi", chiavi: "esercizi|esercizio|mobilizzazione", titolo: "Quanto dolore è accettabile durante gli esercizi",
     testo: "Un leggero fastidio o una sensazione di tensione sono normali (fino a 3 su una scala da 0 a 10) se passano entro 30–60 minuti. Se il dolore è più forte, dura a lungo o aumenta il giorno dopo, riduci ampiezza e ripetizioni e parlane con il fisioterapista. Non forzare mai il movimento con l’altra mano se non ti è stato insegnato." },
@@ -25,7 +25,7 @@ window.APPROFONDIMENTI = [
     testo: "Durante il sonno tendiamo a tenere il polso e le dita piegati, posizione che può aumentare dolore, formicolio e rigidità. Se ti è stata data un’ortesi notturna, indossala ogni notte. Appoggia la mano su un cuscino accanto a te e cerca di non dormire sopra il braccio o con il polso piegato sotto il viso." },
   { id: "ergonomia", chiavi: "presa|ergonom|ripetitiv|smartphone|lavoro", titolo: "Proteggere la mano nella vita di tutti i giorni",
     testo: "Preferisci impugnature grandi e morbide (penne spesse, manici imbottiti), usa entrambe le mani per sollevare e tieni gli oggetti vicini al corpo. Alterna le attività ripetitive con brevi pause ogni 30–45 minuti ed evita prese strette e prolungate o torsioni forzate, come strizzare panni o svitare barattoli duri." },
-  { id: "ritorno", chiavi: "ritorno|lavor|attività quotidiane|sport", titolo: "Tornare a guidare, lavorare e fare sport",
+  { id: "ritorno", escludi: ["frattura-radio-distale"], chiavi: "ritorno|lavor|attività quotidiane|sport", titolo: "Tornare a guidare, lavorare e fare sport",
     testo: "Il ritorno alle attività va concordato con il medico e il terapista. Per guidare devi poter tenere e girare il volante in sicurezza e usare tutti i comandi senza dolore. Al lavoro e nello sport aumenta il carico gradualmente: prima attività leggere, poi più impegnative. Un aumento del dolore il giorno dopo è il segnale che sei andato troppo veloce." },
   { id: "desensibilizzazione", chiavi: "sensib|desensibil|formicol", titolo: "Se la zona è troppo sensibile",
     testo: "Dopo un intervento o una lesione la pelle può essere molto sensibile al tocco. Tocca e strofina la zona più volte al giorno con materiali diversi, dal più morbido (cotone, seta) al più ruvido (spugna, asciugamano), per pochi minuti. Se il fastidio diminuisce, passa al materiale successivo: il sistema nervoso si riabitua gradualmente." },
