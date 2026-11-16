@@ -67,6 +67,7 @@ function lato(o) {
   const ix = fingerChains.indice; const nail = pt(ix.pts[3], ix.endAng + 180, 6);
   s += `<line x1="${f(nail[0])}" y1="${f(nail[1])}" x2="${f(ix.pts[3][0])}" y2="${f(ix.pts[3][1])}" stroke="#f9e1d0" stroke-width="5" stroke-linecap="round" transform="translate(${f(Math.cos(rad(ix.endAng + 90)) * 3)},${f(Math.sin(rad(ix.endAng + 90)) * 3)})"/>`;
   // oggetti
+  if (o.oggetto === "bottiglia") { const c = pt(M, handAng - 90, 20); bb([c[0] - 13, c[1] - 40]); bb([c[0] + 13, c[1] + 34]); s = `<rect x="${f(c[0] - 12)}" y="${f(c[1] - 38)}" width="24" height="70" rx="7" fill="#9fd3ee" stroke="#4a8db3" stroke-width="2"/><rect x="${f(c[0] - 6)}" y="${f(c[1] - 48)}" width="12" height="12" rx="2" fill="#4a8db3"/>` + s; }
   if (o.oggetto === "pallina") { const c = pt(M, handAng - 90, 24); bb([c[0], c[1] - 4], 18); s += `<circle cx="${f(c[0])}" cy="${f(c[1] - 4)}" r="17" fill="#ff9f43" stroke="#b86b1d" stroke-width="2"/>`; }
   // tutore
   if (o.tutore) s += splintSide(o.tutore, { forearmEnd, W, M, ix, handAng, fingerChains });
@@ -151,6 +152,7 @@ function fronte(o) {
   // oggetti
   if (o.oggetto === "moneta" && th.verso) s += `<ellipse cx="${f(tp[3][0])}" cy="${f(tp[3][1] - 2)}" rx="7" ry="3.5" fill="#f5c542" stroke="#a07c12" stroke-width="1.4"/>`;
   if (o.oggetto === "elastico") { const a = tips.indice, b = tips.mignolo; s += `<path d="M${f(a[0] - 4)},${f(a[1] + 14)} Q${f((a[0] + b[0]) / 2)},${f(Math.min(a[1], b[1]) + 4)} ${f(b[0] + 4)},${f(b[1] + 14)}" stroke="#2e9d4a" stroke-width="4" fill="none" stroke-linecap="round"/>`; }
+  if (o.oggetto === "pallina-rot") { const c = P(44, 2); s += `<circle cx="${f(c[0])}" cy="${f(c[1])}" r="12" fill="#ff9f43" stroke="#b86b1d" stroke-width="2"/>`; s += arrowArc(c, 22, -150, 120, "#1d4f9c"); }
   if (o.oggetto === "pallina") { const c = P(48, 2); s += `<circle cx="${f(c[0])}" cy="${f(c[1])}" r="20" fill="#ff9f43" stroke="#b86b1d" stroke-width="2" opacity=".95"/>`; }
   if (o.oggetto === "cicatrice") { const a = P(22, -2), b = P(50, 2); s += `<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="#b5544a" stroke-width="2.4" stroke-dasharray="1 3" stroke-linecap="round"/>`; s += arrowArc(pt(a, ax, 14), 9, 0, 300, "#2e9d4a"); }
   // tutore
@@ -229,7 +231,8 @@ const LIB = {
   "pinch-moneta": { nome: "Pinza pollice-indice su piccoli oggetti", pose: [Object.assign(P.opposizione("indice"), { oggetto: "moneta", label: "Prendi la moneta" })] },
   "pollice-abd": { nome: "Pollice: allontana e avvicina", pose: [L({ v: "fronte", pollice: { abd: 15 } }, "Vicino"), L({ v: "fronte", pollice: { abd: 65 }, frecce: [{ tipo: "pollice" }] }, "Lontano")] },
   "pollice-flex": { nome: "Pollice: piegare e stendere", pose: [L({ v: "fronte", pollice: { abd: 35 } }, "Steso"), L(P.opposizione("mignolo"), "Verso il mignolo")] },
-  "pallina": { nome: "Stringere una pallina morbida", pose: [L({ v: "lato", mcp: 40, pip: 50, dip: 30, oggetto: "pallina" }, "Stringi")] },
+  "rotazione-pallina": { nome: "Rotazione di una pallina nel palmo (senza stringere)", pose: [L({ v: "fronte", oggetto: "pallina-rot", mcp: 15, pip: 20 }, "Fai ruotare, non stringere")] },
+  "pallina": { nome: "Rotazione di una pallina nel palmo (senza stringere)", pose: [L({ v: "fronte", oggetto: "pallina-rot", mcp: 15, pip: 20 }, "Fai ruotare, non stringere")] },
   "elastico": { nome: "Elastico intorno alle dita: apri", pose: [L({ v: "fronte", oggetto: "elastico" }, "Chiuse"), L({ v: "fronte", oggetto: "elastico", ventaglio: true, frecce: [{ tipo: "apertura" }] }, "Apri")] },
   "cicatrice": { nome: "Massaggio della cicatrice", pose: [L({ v: "fronte", oggetto: "cicatrice" }, "Massaggio circolare")] },
   "elevazione": { nome: "Mano sollevata", pose: [L({ v: "lato", frecce: [{ tipo: "linea", da: [60, 200], a: [60, 120] }] }, "Sopra il cuore")] },
@@ -248,7 +251,7 @@ const LIB = {
   "tutore-polso": { nome: "Tutore di polso", pose: [L({ v: "fronte", tutore: { tipo: "polso" } }, "Polso in posizione neutra")] },
   "mano-tavolo": { nome: "Mano appoggiata sul tavolo", pose: [L({ v: "fronte", tavolo: true }, "Mano appoggiata")] },
   "carico-tfcc": { nome: "Carico progressivo sul palmo", pose: [L({ v: "lato", orient: "orizzontale", tavolo: true, polso: 60, frecce: [{ tipo: "linea", da: [60, 40], a: [60, 90] }] }, "Spingi piano")] },
-  "presa-bottiglia": { nome: "Presa cilindrica (bicchiere/bottiglia)", pose: [L({ v: "lato", mcp: 45, pip: 60, dip: 35, pollice: { abd: 35, mf: 10, ip: 10 }, oggetto: "pallina" }, "Presa morbida")] },
+  "presa-bottiglia": { nome: "Presa cilindrica (bicchiere/bottiglia)", pose: [L({ v: "lato", mcp: 45, pip: 60, dip: 35, pollice: { abd: 35, mf: 10, ip: 10 }, oggetto: "bottiglia" }, "Presa delicata")] },
   "lateralita": { nome: "Destra o sinistra? (riconoscimento)", pose: [L({ v: "fronte", dita: { indice: { mcp: 40, pip: 40 } } }, "Destra?"), L({ v: "fronte", specchiata: true, pollice: { abd: 60 } }, "Sinistra?"), L({ v: "lato", mcp: 85, specchiata: true }, "Destra?")] },
   "immaginazione": { nome: "Immaginare il movimento", pose: [L({ v: "fronte" }, "Guarda"), L({ v: "fronte", ventaglio: true, pollice: { abd: 55 } }, "Immagina di aprire")] },
   "specchio": { nome: "Terapia allo specchio", pose: [L({ v: "fronte", specchio: true, tavolo: true }, "La mano sana davanti allo specchio"), L({ v: "fronte", specchio: true, tavolo: true, ventaglio: true, pollice: { abd: 55 } }, "Muovila e guarda il riflesso")] },

@@ -111,6 +111,18 @@ async function syncFromCloud() {
   } catch (e) { S.syncError = e.message; }
   renderNav(); updateBadge();
 }
+async function runMigrations() {
+  for (const d of S.docs.slice()) {
+    for (const m of window.REHAND_MIGRAZIONI || []) {
+      if ((d.migrazioni || []).includes(m.id)) continue;
+      const changed = m.apply(d);
+      d.migrazioni = (d.migrazioni || []).concat(m.id);
+      if (changed) { d.storico = d.storico || []; d.storico.push({ data: today(), testo: m.nota, fonte: "" }); d.versione = (d.versione || 1) + 1; d.aggiornato = today(); }
+      await saveDoc(d);
+      if (MODE() === "admin") { try { await C().pushDoc(d); } catch (e) { console.warn(e); } }
+    }
+  }
+}
 function renderNav() {
   const n = $("#topnav"); if (!n) return;
   const m = MODE();
@@ -147,6 +159,7 @@ async function init() {
   renderNav();
   if (C().user && !C().ruolo) { try { await C()._setUser(C().user); C().error = ""; } catch (e) { C().error = e.message; } }
   if (C().user && C().ruolo) await syncFromCloud();
+  await runMigrations();
   window.addEventListener("hashchange", route);
   document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go === "home" ? "" : g.dataset.go); } });
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.installEvt = e; });
@@ -457,7 +470,8 @@ const CONSIGLI = [
   [/^(ventaglio|elastico)/, "Apri le dita lentamente, tieni un attimo la posizione e torna con controllo."],
   [/^(opposizione|pinch)/, "Forma una “O” rotonda: le punte delle dita si toccano senza schiacciare."],
   [/^pollice/, "Muovi solo il pollice: il resto della mano rimane appoggiato e rilassato."],
-  [/^(pallina|presa)/, "Stringi per 3–5 secondi e rilascia lentamente; all’inizio usa una pallina morbida."],
+  [/^(rotazione-pallina|pallina)/, "Fai ruotare la pallina con le dita tenendo la mano rilassata: non va mai stretta."],
+  [/^presa/, "Impugna l’oggetto con delicatezza, senza stringere forte."],
   [/^cicatrice/, "Solo a ferita chiusa: crema neutra, pressione decisa ma sopportabile, piccoli cerchi."],
   [/^elevazione/, "La mano deve stare più in alto del cuore, sostenuta da un cuscino."],
   [/^blocking/, "Tieni ben ferma con l’altra mano la parte sotto: deve muoversi solo l’articolazione indicata."],
