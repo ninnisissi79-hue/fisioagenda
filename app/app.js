@@ -97,8 +97,10 @@ async function checkFeed(silent) {
     S.feed = await r.json();
     await DB.set("feedCache", S.feed);
   } catch (e) {
-    S.feed = (await DB.get("feedCache")) || S.feed;
-    S.feedError = "Non riesco a scaricare gli aggiornamenti (" + e.message + "). Mostro l’ultimo elenco salvato.";
+    const cached = await DB.get("feedCache"); const local = window.FEED_LOCALE;
+    // aperta dal disco (doppio clic su index.html): usa la copia allegata all'app
+    S.feed = [cached, local].filter(Boolean).sort((a, b) => String(b.generato).localeCompare(String(a.generato)))[0] || S.feed;
+    if (location.protocol !== "file:") S.feedError = "Non riesco a scaricare gli aggiornamenti (" + e.message + "). Mostro l’ultimo elenco salvato.";
   }
   updateBadge();
   const n = pending().length;
