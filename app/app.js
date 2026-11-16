@@ -339,7 +339,7 @@ function viewDoc(v, doc, tab) {
 function tabBrochure(body, doc) {
   body.innerHTML = `<div id="ovf"></div><div class="preview-wrap"><div class="scaler">${brochureHTML(doc, true)}</div></div>
   <p class="muted" style="font-size:13px">Pagina 1 = esterno (copertina a destra), pagina 2 = interno. Stampa <b>fronte-retro, capovolgi sul lato corto</b>, poi piega in tre. Il testo si rimpicciolisce da solo per stare nelle ante; se un’anta è bordata di rosso il testo è troppo lungo: accorcialo o spostane una sezione.</p>`;
-  afterImages(body).then(() => { const o = fitPanels(body); $("#ovf").innerHTML = o.length ? `<div class="warnbox">⚠️ Testo troppo lungo in: <b>${o.map((k) => PANEL_NAMES[k]).join(", ")}</b>. Vai su “Modifica testi” per accorciare o spostare una sezione.</div>` : ""; scalePreviews(); });
+  afterImages(body).then(() => { const o = fitPanels(body, doc); $("#ovf").innerHTML = o.length ? `<div class="warnbox">⚠️ Testo troppo lungo in: <b>${o.map((k) => PANEL_NAMES[k]).join(", ")}</b>. Vai su “Modifica testi” per accorciare o spostare una sezione.</div>` : ""; scalePreviews(); });
   scalePreviews();
 }
 function tabBooklet(body, doc) {
@@ -367,12 +367,18 @@ function brochureHTML(doc, preview) {
   const marks = (xs) => xs.map((x) => `<i class="fold" style="left:${x}mm"></i><i class="fold b" style="left:${x}mm"></i>`).join("");
   return `<div class="sheet land out">${P("e1")}${P("e2")}${P("cover", coverHead)}${marks([97, 197])}</div><div class="sheet land in">${P("i1")}${P("i2")}${P("i3")}${marks([100, 200])}</div>`;
 }
+/* disegno del tutore per patologia (se il blocco non ne ha uno proprio) */
+const ORT_DIS = { "dito-a-scatto": "tutore-mf", "de-quervain": "spica", "tunnel-carpale": "tutore-polso", "tendini-estensori": "tutore-ifd",
+  "tendini-flessori:kleinert": "kleinert", "tendini-flessori": "tutore-dorsale", "tfcc": "tutore-polso", "rizoartrosi": "spica", "frattura-radio-distale": "tutore-polso",
+  "frattura-scafoide": "spica", "rigidita-ifp": "tutore-ifp", "rigidita-mf": "tutore-flessione-mf", "dupuytren": "tutore-ifp" };
+const ortDis = (b, doc) => b.disegno || ORT_DIS[doc.id + ":" + (doc.protocollo || "")] || ORT_DIS[doc.id] || "";
 function blockHTML(b, doc, preview) {
   const cls = "blk" + (preview && b._nuovo ? " nuovo" : "");
   const h = b.titolo ? `<h3>${esc(b.titolo)}</h3>` : "";
   if (b.tipo === "ortesi") {
     const c = b.campi || {}; const rows = [["Quale", c.tipo], ["Quando", c.quando], ["Quanto", c.quanto], ["Per quanto tempo", c.durata], ["Note", c.note]].filter((r) => r[1]);
-    return `<div class="${cls} box-ortesi">${h}<table>${rows.map((r) => `<tr><td>${r[0]}</td><td>${esc(r[1])}</td></tr>`).join("")}</table></div>`;
+    const od = ortDis(b, doc);
+    return `<div class="${cls} box-ortesi">${od ? `<div class="ort-ill">${ill(od)}</div>` : ""}${h}<table>${rows.map((r) => `<tr><td>${r[0]}</td><td>${esc(r[1])}</td></tr>`).join("")}</table></div>`;
   }
   if (b.tipo === "personalizzate") { const t = b.paz || []; return `<div class="${cls} box-pers">${h}${t.map((x) => `<p class="paz">${esc(x)}</p>`).join("")}${'<div class="line"></div>'.repeat(t.length ? Math.max(1, (b.righe || 5) - t.length) : b.righe || 5)}</div>`; }
   if (b.tipo === "contatti") return `<div class="${cls} box-contatti">${h}${S.settings.contatti.map((c) => `<p><b>${esc(c.nome)}</b>Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`;
@@ -388,15 +394,43 @@ function blockHTML(b, doc, preview) {
 function qrSvg(text) {
   try { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }); } catch { return ""; }
 }
-/* riduce il carattere di ogni anta finché il testo ci sta */
-function fitPanels(root) {
+/* riduce il carattere di ogni anta finché il testo ci sta (parte da un corpo pieno) */
+function fitPanels(root, doc) {
   const over = [];
+  if (doc) enrichPanels(root, doc);
   $$(".panel", root).forEach((p) => {
-    let fs = 9.5; p.style.fontSize = fs + "pt"; p.classList.remove("overflow");
+    let fs = 11.5; p.style.fontSize = fs + "pt"; p.classList.remove("overflow");
     while (p.scrollHeight > p.clientHeight + 1 && fs > 6.75) { fs -= 0.25; p.style.fontSize = fs + "pt"; }
     if (p.scrollHeight > p.clientHeight + 1) { p.classList.add("overflow"); over.push(p.dataset.panel); }
   });
   return over;
+}
+/* spazio libero in fondo a un’anta (px) */
+function freeSpace(p) {
+  const cs = getComputedStyle(p); let bottom = parseFloat(cs.paddingTop);
+  [...p.children].forEach((c) => { if (getComputedStyle(c).position !== "absolute") bottom = Math.max(bottom, c.offsetTop + c.offsetHeight + parseFloat(getComputedStyle(c).marginBottom || 0)); });
+  return p.clientHeight - parseFloat(cs.paddingBottom) - bottom;
+}
+/* aggiunge i disegni degli esercizi dove le ante hanno spazio vuoto */
+function enrichPanels(root, doc) {
+  $$(".auto-fig", root).forEach((x) => x.remove());
+  const MM = 3.78; const seen = new Set();
+  const cand = (doc.esercizi || []).filter((e) => vis(e, doc) && e.disegno && !e.foto).filter((e) => { const k = JSON.stringify(e.disegno); if (seen.has(k)) return false; seen.add(k); return true; });
+  let ci = 0;
+  for (const p of $$(".panel", root)) {
+    p.style.fontSize = "11pt";
+    if (p.dataset.panel === "cover") continue;
+    while (p.scrollHeight > p.clientHeight + 1 && parseFloat(p.style.fontSize) > 6.75) p.style.fontSize = parseFloat(p.style.fontSize) - 0.25 + "pt";
+    let guard = 0;
+    while (ci < cand.length && guard++ < 4 && freeSpace(p) > 34 * MM) {
+      const e = cand[ci]; const seq = Array.isArray(window.RH_ILL.risolvi(e.disegno)) && window.RH_ILL.risolvi(e.disegno).length > 1;
+      const fig = document.createElement("div"); fig.className = "blk auto-fig" + (seq ? " seq" : "");
+      fig.innerHTML = `${ill(e.disegno)}<p class="cap">${esc(e.nome)}</p>`;
+      p.insertBefore(fig, p.querySelector(".footer-agg"));
+      if (p.scrollHeight > p.clientHeight + 1) { fig.remove(); break; }
+      ci++;
+    }
+  }
 }
 
 /* ---------- opuscolo esercizi A4 */
@@ -411,12 +445,33 @@ async function buildBooklet(doc, target, preview) {
   };
   let body = newPage();
   const fits = () => body.scrollHeight <= body.clientHeight + 1;
+  // consigli della patologia, usati per riempire gli spazi vuoti a fine pagina
+  const tips = []; const tipSeen = new Set();
+  const TIPRX = /fare|evitare|regol|consigl|educazion|allarm|attenzion|ricorda|prevenzion|important|proteggi|ogni giorno|ritmo|gonfiore|edema|primi giorni|da subito|post-operatorio/i;
+  const NOTIP = /sintom|chirurg|opzion|zone|intervento|quando si opera|cos[’']?è|cosa sono|trattamenti$|segni da|cosa si nota|perch/i;
+  const pushTips = (ok) => PANEL_ORDER.forEach((k) => (doc.pannelli[k] || []).filter((b) => vis(b, doc) && !b.tipo && b.punti && b.punti.length && ok(b.titolo || "")).forEach((b) => b.punti.forEach((t) => { if (!tipSeen.has(t)) { tipSeen.add(t); tips.push(t); } })));
+  pushTips((t) => TIPRX.test(t)); pushTips((t) => !NOTIP.test(t));
+  (s.regoleEsercizi || []).forEach((t) => { if (!tipSeen.has(t)) tips.push(t); });
+  let tipI = 0;
+  const usedH = () => { let m = 0; [...body.children].forEach((c) => (m = Math.max(m, c.offsetTop - body.offsetTop + c.offsetHeight))); return m; };
+  const fillGap = () => {
+    if (body.clientHeight - usedH() < body.clientHeight * 0.1 || tipI >= tips.length) return;
+    const box = document.createElement("div"); box.className = "bk-tip"; box.innerHTML = `<h4>💡 Ricorda</h4><ul></ul>`; body.appendChild(box);
+    const ul = $("ul", box); let added = 0;
+    while (tipI < tips.length) { const li = document.createElement("li"); li.textContent = tips[tipI]; ul.appendChild(li); if (!fits()) { li.remove(); break; } tipI++; added++; }
+    if (!added) box.remove();
+  };
   const add = (html, keepWithNext) => {
     const t = document.createElement("div"); t.innerHTML = html; const el = t.firstElementChild;
     body.appendChild(el);
-    if (!fits() && body.children.length > 1) { body.removeChild(el); body = newPage(); body.appendChild(el); }
+    if (!fits() && body.children.length > 1) {
+      if (el.classList.contains("ex")) { el.classList.add("compact"); if (fits()) return el; el.classList.remove("compact"); }
+      body.removeChild(el); fillGap(); body = newPage(); body.appendChild(el);
+    }
     return el;
   };
+  const faseInfo = (f) => { const d = (x) => (String(x || "").match(/\d+\s*[–-]\s*\d+/) || [""])[0].replace(/\s/g, "").replace("-", "–"); const k = d(f);
+    return PANEL_ORDER.flatMap((x) => doc.pannelli[x] || []).find((b) => vis(b, doc) && b.titolo && (norm(b.titolo) === norm(f) || (k && d(b.titolo) === k)) && (b.testo || b.punti)); };
   const intro = (doc.pannelli.cover || []).find((b) => b.testo);
   const ort = PANEL_ORDER.flatMap((k) => doc.pannelli[k] || []).find((b) => b.tipo === "ortesi" && vis(b, doc));
   const oc = (ort && ort.campi) || {};
@@ -427,7 +482,8 @@ async function buildBooklet(doc, target, preview) {
   await afterImages(target);
   let fase = null, n = 0, pendingHead = null;
   for (const e of doc.esercizi.filter((x) => vis(x, doc))) {
-    if (e.fase !== fase) { fase = e.fase; pendingHead = add(`<div class="bk-fase">${esc(fase || "Esercizi")}</div>`); }
+    if (e.fase !== fase) { fase = e.fase; const fi = faseInfo(fase); const ob = fi ? (fi.testo || "") + (fi.punti && fi.punti.length ? (fi.testo ? " " : "Obiettivi: ") + fi.punti.slice(0, 4).join(" · ") : "") : "";
+      pendingHead = add(`<div class="bk-fase">${esc(fase || "Esercizi")}${ob ? `<small>${esc(ob.length > 260 ? ob.slice(0, 257) + "…" : ob)}</small>` : ""}</div>`); }
     n++;
     const hasFoto = !!e.foto;
     const dis = !hasFoto && e.disegno ? window.RH_ILL.risolvi(e.disegno) : null;
@@ -444,10 +500,14 @@ async function buildBooklet(doc, target, preview) {
     if (pendingHead && el.parentElement !== before && pendingHead.parentElement === before) { before.removeChild(pendingHead); body.insertBefore(pendingHead, el); }
     pendingHead = null;
   }
+  if (doc.bibliografia && doc.bibliografia.length) add(`<div class="bk-refs"><b>Riferimenti bibliografici</b><ol>${doc.bibliografia.map((r) => `<li>${esc(r.testo)}</li>`).join("")}</ol></div>`);
+  fillGap();
   add(`<div class="bk-notes"><h4>Note del fisioterapista</h4>${(doc._pazNote || []).map((x) => `<p class="paz">${esc(x)}</p>`).join("")}${'<div class="line"></div>'.repeat(doc._pazNote && doc._pazNote.length ? 2 : 4)}
     <table class="bk-diary"><tr><th>Diario esercizi – settimana</th>${["L", "M", "M", "G", "V", "S", "D"].map((g) => `<th>${g}</th>`).join("")}</tr>${'<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(3)}</table></div>`);
   add(`<div class="bk-notes"><h4>Contatti</h4>${s.contatti.map((c) => `<p style="margin:0 0 1mm"><b>${esc(c.nome)}</b> – Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`);
-  if (doc.bibliografia && doc.bibliografia.length) add(`<div class="bk-refs"><b>Riferimenti bibliografici</b><ol>${doc.bibliografia.map((r) => `<li>${esc(r.testo)}</li>`).join("")}</ol></div>`);
+  // ultima pagina: se avanza spazio, il diario si allunga con altre settimane
+  const diary = $(".bk-diary", pages[pages.length - 1]);
+  if (diary) for (let k = 0; k < 14 && fits(); k++) { const tr = diary.insertRow(-1); tr.innerHTML = "<td></td>".repeat(8); if (!fits()) { tr.remove(); break; } }
   pages.forEach((p, i) => ($(".pn", p).textContent = `Pag. ${i + 1} di ${pages.length}`));
   return pages.length;
 }
@@ -458,7 +518,7 @@ async function printDoc(doc, kind) {
   root.innerHTML = "";
   const land = kind === "pieghevole";
   $("#page-style").textContent = `@page{size:A4 ${land ? "landscape" : "portrait"};margin:0}`;
-  if (land) { root.innerHTML = brochureHTML(doc, false); await afterImages(root); const o = fitPanels(root); if (o.length && !confirm("Attenzione: in alcune ante il testo è troppo lungo e verrà tagliato:\n" + o.map((k) => "• " + PANEL_NAMES[k]).join("\n") + "\n\nStampare comunque?")) { root.innerHTML = ""; return; } }
+  if (land) { root.innerHTML = brochureHTML(doc, false); await afterImages(root); const o = fitPanels(root, doc); if (o.length && !confirm("Attenzione: in alcune ante il testo è troppo lungo e verrà tagliato:\n" + o.map((k) => "• " + PANEL_NAMES[k]).join("\n") + "\n\nStampare comunque?")) { root.innerHTML = ""; return; } }
   else await buildBooklet(doc, root, false);
   await afterImages(root);
   const oldTitle = document.title;
@@ -540,7 +600,7 @@ function tabPatient(body, doc) {
     <div class="row" style="margin-top:12px"><button class="btn" id="pz-pb">🖨 Stampa pieghevole</button><button class="btn" id="pz-pe">🖨 Stampa esercizi</button><button class="btn red small" id="pz-reset">Azzera</button></div>
   </div><div class="paz-prev"><div class="tabs" style="margin-bottom:6px"><button class="on" data-pv="b">Pieghevole</button><button data-pv="e">Esercizi</button></div><div class="preview-wrap"><div class="scaler" id="pz-sc"></div></div></div></div>`;
   let which = "b", t;
-  const draw = async () => { const d = personalize(doc, P); const sc = $("#pz-sc"); if (which === "b") { sc.innerHTML = brochureHTML(d, false); await afterImages(sc); fitPanels(sc); } else await buildBooklet(d, sc, false); scalePreviews(); };
+  const draw = async () => { const d = personalize(doc, P); const sc = $("#pz-sc"); if (which === "b") { sc.innerHTML = brochureHTML(d, false); await afterImages(sc); fitPanels(sc, d); } else await buildBooklet(d, sc, false); scalePreviews(); };
   const upd = () => { clearTimeout(t); t = setTimeout(draw, 250); };
   const onEdit = (e) => {
     const el = e.target;
@@ -768,7 +828,7 @@ function viewUpdates(v) {
   };
   if ($("#rej")) $("#rej").onclick = async () => { for (const id of sel()) await setDecision(id, { stato: "rifiutata", data: today() }); updateBadge(); viewUpdates(v); };
   $$("[data-undo]", v).forEach((b) => (b.onclick = async () => { await setDecision(b.dataset.undo, null); updateBadge(); viewUpdates(v); }));
-  $$("[data-prev]", v).forEach((b) => (b.onclick = () => { const p = S.feed.proposte.find((x) => x.id === b.dataset.prev); const box = b.nextElementSibling; box.className = "preview-wrap"; box.innerHTML = `<div class="scaler">${brochureHTML(p.proposto, true)}</div>`; afterImages(box).then(() => { fitPanels(box); scalePreviews(); }); scalePreviews(); b.remove(); }));
+  $$("[data-prev]", v).forEach((b) => (b.onclick = () => { const p = S.feed.proposte.find((x) => x.id === b.dataset.prev); const box = b.nextElementSibling; box.className = "preview-wrap"; box.innerHTML = `<div class="scaler">${brochureHTML(p.proposto, true)}</div>`; afterImages(box).then(() => { fitPanels(box, p.proposto); scalePreviews(); }); scalePreviews(); b.remove(); }));
   if (!canPublish()) { $$("input[data-pid]", v).forEach((c) => (c.disabled = true)); const sa = $(".sticky-actions", v); if (sa) sa.innerHTML = `<span class="muted">Solo l’amministratrice può applicare o scartare gli aggiornamenti.</span>`; $$("[data-undo]", v).forEach((b) => b.remove()); }
 }
 function updCard(p) {
@@ -952,7 +1012,7 @@ async function viewRequests(v) {
     try { await saveDoc(d); await C().pushDoc(d); await C().decideRequest(r.id, "approvata", commento); toast("Pubblicato ✓"); viewRequests(v); } catch (e) { alert(e.message); }
   }));
   $$("[data-no]", v).forEach((b) => (b.onclick = async () => { const commento = prompt("Motivo del rifiuto (lo vedrà l’editor):", ""); if (commento === null) return; try { await C().decideRequest(+b.dataset.no, "rifiutata", commento); viewRequests(v); } catch (e) { alert(e.message); } }));
-  $$("[data-see]", v).forEach((b) => (b.onclick = () => { const r = byId(b.dataset.see); const w = document.createElement("div"); w.className = "preview-wrap"; w.innerHTML = `<div class="scaler">${brochureHTML(r.dati, true)}</div>`; b.closest(".upd").appendChild(w); afterImages(w).then(() => { fitPanels(w); scalePreviews(); }); scalePreviews(); b.remove(); }));
+  $$("[data-see]", v).forEach((b) => (b.onclick = () => { const r = byId(b.dataset.see); const w = document.createElement("div"); w.className = "preview-wrap"; w.innerHTML = `<div class="scaler">${brochureHTML(r.dati, true)}</div>`; b.closest(".upd").appendChild(w); afterImages(w).then(() => { fitPanels(w, r.dati); scalePreviews(); }); scalePreviews(); b.remove(); }));
 }
 
 /* ------------------------------------------------------------------ UTENTI (admin) */
