@@ -25,7 +25,7 @@ const Cloud = {
     if (error) throw error;
     this.ruolo = data || "in_attesa";
   },
-  async signIn(email, password) { const { data, error } = await this.sb.auth.signInWithPassword({ email, password }); if (error) throw error; await this._setUser(data.user); },
+  async signIn(email, password) { const { data, error } = await this.sb.auth.signInWithPassword({ email, password }); if (error) throw new Error(error.message === "Invalid login credentials" ? "Email o password non corrette (o email non ancora confermata)." : error.message); this.user = data.user; this.email = data.user.email; await this._setUser(data.user); },
   async signUp(email, password) { const { data, error } = await this.sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href.split("#")[0] } }); if (error) throw error; if (data.session) await this._setUser(data.user); return !!data.session; },
   async resetPassword(email) { const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: location.href.split("#")[0] }); if (error) throw error; },
   async signOut() { await this.sb.auth.signOut(); this.user = null; this.ruolo = null; },

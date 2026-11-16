@@ -68,7 +68,8 @@ const ill = (d) => (window.RH_ILL && d ? window.RH_ILL.disegno(window.RH_ILL.ris
 async function saveDoc(doc) { await DB.put(doc); const i = S.docs.findIndex((d) => d.id === doc.id); if (i >= 0) S.docs[i] = doc; else S.docs.push(doc); }
 /* ruoli: locale (nessun cloud) · ospite (cloud senza accesso) · admin · editor · lettore */
 const C = () => window.Cloud || { enabled: false };
-const MODE = () => (!C().enabled ? "locale" : !C().user ? "ospite" : C().ruolo || "lettore");
+const MODE = () => (!C().enabled ? "locale" : !C().user ? "ospite" : C().ruolo || "errore");
+const cloudErrText = () => { const e = (C().error || "") + ""; return /rehand_registrati|function|schema cache|does not exist|PGRST/i.test(e) ? "Le tabelle RE-HAND non risultano nel progetto Supabase: lo script schema.sql va eseguito in hand-lab (SQL Editor → Run). Dettaglio: " + e : e || "errore sconosciuto"; };
 const canEdit = () => ["locale", "admin", "editor"].includes(MODE());
 const canPublish = () => ["locale", "admin"].includes(MODE());
 const RUOLI = { admin: "Amministratrice/ore", editor: "Editor (propone modifiche)", lettore: "Lettore (solo lettura)", in_attesa: "In attesa di approvazione" };
@@ -116,7 +117,7 @@ function renderNav() {
   n.innerHTML = `${m === "admin" ? `<button class="btn" data-go="richieste">📨 Richieste ${S.reqPending ? `<span class="badge">${S.reqPending}</span>` : ""}</button>` : ""}
     <button class="btn btn-update" data-go="aggiorna">⟳ Aggiorna <span class="badge" id="upd-badge" hidden>0</span></button>
     ${m === "admin" && S.userPending ? `<button class="btn" data-go="utenti">👥 Nuovi utenti <span class="badge">${S.userPending}</span></button>` : ""}
-    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore", in_attesa: "In attesa" }[m] || "")}</button>` : ""}
+    ${C().enabled ? `<button class="btn ghost" data-go="account" title="Account">${m === "ospite" ? "🔑 Accedi" : m === "errore" ? "⚠ Errore" : "👤 " + ({ admin: "Admin", editor: "Editor", lettore: "Lettore", in_attesa: "In attesa" }[m] || "")}</button>` : ""}
     <button class="btn ghost" data-go="impostazioni" title="Impostazioni">⚙︎</button>`;
   updateBadge();
 }
@@ -133,10 +134,19 @@ async function init() {
     for (const d of window.SEED_DOCS) { const cur = docById(d.id); if (!cur || ((cur.versione || 1) === 1 && (d.versione || 1) >= 1 && (cur.storico || []).length <= 1)) await saveDoc(clone(d)); }
     await DB.set("seedVersion", window.SEED_VERSION);
   }
+  // completa sempre gli opuscoli originali con disegni e campi nuovi (senza toccare i testi modificati)
+  for (const sd of window.SEED_DOCS) {
+    const cur = docById(sd.id); if (!cur) { await saveDoc(clone(sd)); continue; }
+    let ch = false;
+    if (!cur.disegno && sd.disegno) { cur.disegno = sd.disegno; ch = true; }
+    (cur.esercizi || []).forEach((e) => { const se = sd.esercizi.find((x) => x.id === e.id); if (se && se.disegno && !e.disegno) { e.disegno = se.disegno; ch = true; } });
+    if (ch) await saveDoc(cur);
+  }
   applyTheme();
   if (window.Cloud) { await window.Cloud.init(); if (window.Cloud.sb) window.Cloud.sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") go("account/nuova-password"); }); }
   renderNav();
-  if (C().user) await syncFromCloud();
+  if (C().user && !C().ruolo) { try { await C()._setUser(C().user); C().error = ""; } catch (e) { C().error = e.message; } }
+  if (C().user && C().ruolo) await syncFromCloud();
   window.addEventListener("hashchange", route);
   document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go === "home" ? "" : g.dataset.go); } });
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.installEvt = e; });
@@ -198,6 +208,7 @@ function viewHome(v) {
       <input class="search" id="q" placeholder="Cerca patologia…" autocomplete="off">
       <select id="cat" class="search" style="flex:0 0 auto;min-width:150px"><option value="">Tutte le categorie</option>${cats.map((c) => `<option>${esc(c)}</option>`).join("")}</select>
     </div>
+    ${MODE() === "errore" ? `<div class="warnbox" style="background:#fdecea;border-color:#f3b6af">⚠ <b>Collegamento a RE-HAND non riuscito.</b> ${esc(cloudErrText())}<div class="row" style="margin-top:8px"><button class="btn small" id="retry">⟳ Riprova</button><button class="btn small red" id="logout2">Esci</button></div></div>` : ""}
     ${S.syncError ? `<div class="warnbox">⚠ Cloud non raggiungibile (${esc(S.syncError)}): lavori sulla copia salvata su questo dispositivo.</div>` : ""}
     ${MODE() === "admin" && S.cloudEmpty ? `<div class="warnbox" style="background:#e7f6e5;border-color:#a9dca3">☁️ Il cloud è vuoto. <button class="btn small green" id="upall">Pubblica le ${S.docs.length} brochure, le impostazioni e le decisioni</button></div>` : ""}
     ${MODE() === "admin" && !S.cloudEmpty && S.unpublished && S.unpublished.length ? `<div class="warnbox">🆕 ${S.unpublished.length} opuscoli presenti nell’app non sono ancora nel cloud (${S.unpublished.map((id) => esc((docById(id) || {}).titolo || id)).join(", ")}). <button class="btn small green" id="upnew">Pubblica</button></div>` : ""}
@@ -222,6 +233,8 @@ function viewHome(v) {
   $("#q").oninput = draw; $("#cat").onchange = draw; draw();
   $("#list").onclick = (e) => { const c = e.target.closest(".card"); if (c) go("doc/" + c.dataset.id); };
   const pubAll = async (ids) => { try { for (const id of ids) await C().pushDoc(docById(id)); await C().pushSettings(S.settings); for (const [k, d] of Object.entries(S.decisions)) await C().pushDecision(k, d); toast("Pubblicato sul cloud ✓"); await syncFromCloud(); viewHome(v); } catch (e) { alert("Errore: " + e.message); } };
+  if ($("#retry")) $("#retry").onclick = () => location.reload();
+  if ($("#logout2")) $("#logout2").onclick = async () => { await C().signOut(); location.reload(); };
   if ($("#upall")) $("#upall").onclick = () => pubAll(S.docs.map((d) => d.id));
   if ($("#upnew")) $("#upnew").onclick = () => pubAll(S.unpublished);
   if ($("#new")) $("#new").onclick = async () => {
@@ -814,12 +827,14 @@ async function viewAccount(v, sub) {
       <button class="btn ghost small" id="lg-guest" style="color:var(--blu)">Continua senza accesso (sola lettura)</button>`;
     const msg = (t) => ($("#lg-msg").textContent = t);
     const done = async () => { await syncFromCloud(); toast("Benvenuta/o " + C().email); go(""); route(); };
-    $("#lg-in").onclick = async () => { try { msg("Accesso…"); await C().signIn($("#lg-mail").value.trim(), $("#lg-pw").value); await done(); } catch (e) { msg("⚠ " + e.message); } };
-    $("#lg-up").onclick = async () => { try { msg("Registrazione…"); const ok = await C().signUp($("#lg-mail").value.trim(), $("#lg-pw").value); if (ok) await done(); else msg("Controlla la tua email e clicca il link di conferma, poi accedi."); } catch (e) { msg("⚠ " + e.message); } };
+    const fail = (e) => { C().error = e.message; msg("⚠ " + (C().user ? cloudErrText() : e.message)); };
+    $("#lg-in").onclick = async () => { try { msg("Accesso…"); await C().signIn($("#lg-mail").value.trim(), $("#lg-pw").value); await done(); } catch (e) { fail(e); } };
+    $("#lg-up").onclick = async () => { try { msg("Registrazione…"); const ok = await C().signUp($("#lg-mail").value.trim(), $("#lg-pw").value); if (ok) await done(); else msg("Controlla la tua email e clicca il link di conferma, poi torna qui e premi Accedi."); } catch (e) { fail(e); } };
     $("#lg-reset").onclick = async (e) => { e.preventDefault(); try { await C().resetPassword($("#lg-mail").value.trim()); msg("Ti abbiamo mandato un’email per reimpostare la password."); } catch (er) { msg("⚠ " + er.message); } };
     $("#lg-guest").onclick = () => { S.guestOk = true; go(""); route(); };
     return;
   }
+  if (MODE() === "errore") { v.innerHTML = `<h1>Collegamento non riuscito</h1><div class="warnbox" style="background:#fdecea;border-color:#f3b6af">${esc(cloudErrText())}</div><p>Sei entrata come <b>${esc(C().email)}</b>.</p><div class="row"><button class="btn" id="rl">⟳ Riprova</button><button class="btn red" id="out">Esci</button></div>`; $("#rl").onclick = () => location.reload(); $("#out").onclick = async () => { await C().signOut(); location.reload(); }; return; }
   if (MODE() === "in_attesa") { v.innerHTML = `<h1>Account in attesa</h1><div class="ed-panel" style="padding:16px"><p>Ciao <b>${esc(C().email)}</b>, la tua registrazione è arrivata. L’amministratrice deve abilitarti: appena lo fa, ricarica la pagina.</p><div class="row"><button class="btn" id="rl">⟳ Ricarica</button><button class="btn red" id="out">Esci</button></div></div>`; $("#rl").onclick = () => location.reload(); $("#out").onclick = async () => { await C().signOut(); location.reload(); }; return; }
   v.innerHTML = `<h1>Il mio account</h1>
     <div class="ed-panel" style="padding:14px"><p style="margin:0">${esc(C().email)} · <b>${esc(RUOLI[C().ruolo] || C().ruolo)}</b></p>
