@@ -861,7 +861,7 @@ async function viewAccount(v, sub) {
         <p style="margin:10px 0 0"><a href="#" id="lg-reset">Password dimenticata?</a></p>
         <p id="lg-msg" class="muted" style="font-size:13px"></p>
       </div>
-      <p class="muted" style="font-size:13px">Il primo utente che si registra diventa amministratore. Gli altri restano in attesa finché l’amministratrice non li abilita. Se usi già un’altra app dello stesso progetto, accedi con le stesse credenziali.</p>
+      <p class="muted" style="font-size:13px">Il primo utente che si registra diventa amministratore. Gli altri restano in attesa finché l’amministratrice non li abilita.<br><b>Se l’amministratrice ti ha creato l’account, premi “Accedi”</b> con l’email e la password che ti ha dato.</p>
       <button class="btn ghost small" id="lg-guest" style="color:var(--blu)">Continua senza accesso (sola lettura)</button>`;
     const msg = (t) => ($("#lg-msg").textContent = t);
     const done = async () => { await syncFromCloud(); toast("Benvenuta/o " + C().email); go(""); route(); };

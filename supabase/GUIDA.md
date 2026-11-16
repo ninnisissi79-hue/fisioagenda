@@ -33,7 +33,10 @@ oppure, su un solo dispositivo: app → ⚙︎ Impostazioni → *Libreria condiv
    - Se arriva un’email di conferma, clicca il link e poi torna nell’app e accedi.
    - **Il primo che entra in RE-HAND diventa amministratore**: entra tu per prima.
 2. In home: “Il cloud è vuoto” → **Pubblica le brochure**.
-3. I colleghi si registrano e restano **in attesa**: in alto compare **👥 Nuovi utenti** → scegli **lettore** o **editor**.
+3. **Aggiungere un collega** (nel progetto le registrazioni dall’app sono chiuse):
+   - Supabase → Authentication → **Users → Add user → Create new user** → email + password, ✅ *Auto Confirm User*;
+   - il collega apre l’app e preme **Accedi** (non “Registrati”) → resta **in attesa**;
+   - a te compare in alto **👥 Nuovi utenti** → scegli **lettore** o **editor** → il collega preme **⟳ Ricarica**.
 
 ## Aggiornamento del database (se avevi già eseguito lo script)
 Quando arriva una nuova funzione che usa il database, basta **rieseguire tutto `schema.sql`** (SQL Editor → New query → incolla → Run): è sicuro, non cancella nulla.
