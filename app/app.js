@@ -414,6 +414,8 @@ function fitPanels(root, doc) {
   $$(".panel", root).forEach((p) => {
     let fs = 11.5; p.style.fontSize = fs + "pt"; p.classList.remove("overflow");
     while (p.scrollHeight > p.clientHeight + 1 && fs > 6.75) { fs -= 0.25; p.style.fontSize = fs + "pt"; }
+    // se non entra, prima si toglie il disegno del tutore, poi si segnala
+    if (p.scrollHeight > p.clientHeight + 1 && p.querySelector(".ort-ill")) { $$(".ort-ill", p).forEach((x) => x.parentNode.removeChild(x)); fs = 9.5; p.style.fontSize = fs + "pt"; while (p.scrollHeight > p.clientHeight + 1 && fs > 6.75) { fs -= 0.25; p.style.fontSize = fs + "pt"; } }
     if (p.scrollHeight > p.clientHeight + 1) { p.classList.add("overflow"); over.push(p.dataset.panel); }
   });
   return over;
@@ -581,7 +583,7 @@ async function buildBooklet(doc, target, preview) {
   add(`<div class="bk-notes"><h4>Contatti</h4>${s.contatti.map((c) => `<p style="margin:0 0 1mm"><b>${esc(c.nome)}</b> – Tel. ${esc(c.tel)}${c.orari ? " – " + esc(c.orari) : ""}</p>`).join("")}</div>`);
   // ultima pagina: se avanza spazio, il diario si allunga con altre settimane
   const diary = $(".bk-diary", pages[pages.length - 1]);
-  if (diary) for (let k = 0; k < 14 && fits(); k++) { const tr = diary.insertRow(-1); tr.innerHTML = "<td></td>".repeat(8); if (!fits()) { tr.remove(); break; } }
+  if (diary) for (let k = 0; k < 40 && fits(); k++) { const tr = diary.insertRow(-1); tr.innerHTML = "<td></td>".repeat(8); if (!fits()) { tr.remove(); break; } }
   pages.forEach((p, i) => ($(".pn", p).textContent = `Pag. ${i + 1} di ${pages.length}`));
   return pages.length;
 }

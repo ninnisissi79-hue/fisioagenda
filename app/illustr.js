@@ -261,6 +261,7 @@ const LIB = {
   "blocking-mf": { nome: "Pugno con nocche piegate (MF + IF)", pose: [L({ v: "lato", mcp: 85, evid: "mf" }, "Nocche piegate"), L({ v: "lato", mcp: 90, pip: 95, dip: 60, evid: "mf" }, "Chiudi il pugno")] },
   "tutore-flessione-mf": { nome: "Ortesi di flessione MF", pose: [L({ v: "lato", mcp: 65, tutore: { solo: "mano", lato: "volare" }, evid: "mf" }, "Nocche tenute piegate")] },
   "zona-mf": { nome: "Zona: nocche (MF)", pose: [{ v: "lato", evid: "mf", mcp: 20 }] },
+  "neurodinamica-mediano": { nome: "Scorrimento del nervo mediano (braccio teso di lato)", pose: [L({ v: "lato", orient: "orizzontale", polso: 45 }, "Braccio teso, polso su"), L({ v: "lato", orient: "orizzontale", polso: -35 }, "Polso giù, poi torna")] },
   "zona-a1": { nome: "Zona: puleggia A1", pose: [{ v: "fronte", evid: "a1", dito: "anulare" }] },
   "zona-dq": { nome: "Zona: primo compartimento (De Quervain)", pose: [{ v: "fronte", evid: "dq" }] },
   "zona-tfcc": { nome: "Zona: TFCC (lato ulnare del polso)", pose: [{ v: "fronte", evid: "tfcc" }] },
