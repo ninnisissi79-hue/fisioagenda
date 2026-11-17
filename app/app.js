@@ -340,10 +340,12 @@ function viewDoc(v, doc, tab) {
     <div class="toolbar doc-actions">
       <button class="btn" id="p-broch">🖨 Pieghevole</button>
       <button class="btn" id="p-ex">🖨 Esercizi</button>
+      <button class="btn green" id="pdf-broch">📄 PDF pieghevole</button>
+      <button class="btn green" id="pdf-ex">📄 PDF esercizi</button>
     </div>
     <div class="toolbar doc-more">
       ${canEdit() ? `<button class="btn ghost small" id="dup" style="color:var(--blu)">Duplica</button>` : ""}
-      <button class="btn ghost small" id="exp" style="color:var(--blu)">Esporta</button>
+      ${canPublish() ? `<button class="btn ghost small" id="exp" style="color:var(--blu)" title="File tecnico per copia di sicurezza o per passarlo a un’altra installazione">Copia di sicurezza (.json)</button>` : ""}
       ${canPublish() ? `<button class="btn red small" id="del">Elimina</button>` : ""}
     </div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? "on" : ""}">${l}</button>`).join("")}</div>
@@ -358,7 +360,9 @@ function viewDoc(v, doc, tab) {
   if ($("#annulla")) $("#annulla").onclick = async () => { if (!confirm("Annullare tutte le tue modifiche a questa brochure?")) return; await revertLocal(doc.id); go("doc/" + doc.id); route(); };
   $("#p-broch").onclick = () => printDoc(doc, "pieghevole");
   $("#p-ex").onclick = () => printDoc(doc, "esercizi");
-  $("#exp").onclick = () => download(`${doc.id}.json`, JSON.stringify(doc, null, 1));
+  $("#pdf-broch").onclick = () => exportPDF(doc, "pieghevole");
+  $("#pdf-ex").onclick = () => exportPDF(doc, "esercizi");
+  if ($("#exp")) $("#exp").onclick = () => download(`${doc.id}.json`, JSON.stringify(doc, null, 1));
   if ($("#dup")) $("#dup").onclick = async () => { const t = prompt("Nome della copia", doc.titolo + " (copia)"); if (!t) return; const d = clone(doc); d.titolo = t; d.id = uniqueId(slug(t)); d.storico = [{ data: today(), testo: `Creato come copia di “${doc.titolo}”.`, fonte: "" }]; delete d._modificheLocali; await commit(d); go("doc/" + d.id + "/testi"); };
   if ($("#del")) $("#del").onclick = async () => { if (!confirm(`Eliminare definitivamente “${doc.titolo}”?\n(Consiglio: prima usa “Esporta” per tenerne una copia.)`)) return; if (MODE() === "admin") { try { await C().deleteDoc(doc.id); } catch (e) { return alert(e.message); } } await DB.del(doc.id); S.docs = S.docs.filter((d) => d.id !== doc.id); go(""); };
   const body = $("#tabbody");
@@ -626,6 +630,45 @@ async function printDoc(doc, kind) {
   setTimeout(() => window.print(), 50);
 }
 
+/* ---------- PDF vero (A4, alta qualità), pronto da condividere su WhatsApp o email */
+const loadScript = (src) => new Promise((ok, ko) => { if (document.querySelector(`script[data-lazy="${src}"]`)) return ok(); const e = document.createElement("script"); e.src = src; e.dataset.lazy = src; e.onload = ok; e.onerror = () => ko(new Error("Non riesco a caricare il generatore di PDF: controlla la connessione e riprova.")); document.head.appendChild(e); });
+function pdfOverlay(html) { let o = $("#pdf-ov"); if (!o) { o = document.createElement("div"); o.id = "pdf-ov"; document.body.appendChild(o); } o.innerHTML = `<div class="pdf-box">${html}</div>`; return o; }
+function pdfClose() { const o = $("#pdf-ov"); if (o) o.parentNode.removeChild(o); }
+async function exportPDF(doc, kind, suffix) {
+  const land = kind === "pieghevole";
+  pdfOverlay(`<div class="spin"></div><b>Preparo il PDF…</b><p class="muted" id="pdf-st">Impagino le pagine in A4</p>`);
+  const root = $("#print-root");
+  try {
+    await Promise.all([loadScript("vendor/html2canvas.min.js"), loadScript("vendor/jspdf.umd.min.js")]);
+    root.innerHTML = ""; root.classList.add("pdf-render");
+    if (land) { root.innerHTML = brochureHTML(doc, false); await afterImages(root); fitPanels(root, doc); } else await buildBooklet(doc, root, false);
+    await afterImages(root);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: land ? "landscape" : "portrait", unit: "mm", format: "a4", compress: true });
+    const sheets = $$(".sheet", root);
+    for (let i = 0; i < sheets.length; i++) {
+      const st = $("#pdf-st"); if (st) st.textContent = `Pagina ${i + 1} di ${sheets.length}`;
+      const c = await window.html2canvas(sheets[i], { scale: 2.3, backgroundColor: "#ffffff", logging: false, useCORS: true });
+      if (i) pdf.addPage("a4", land ? "landscape" : "portrait");
+      pdf.addImage(c.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, land ? 297 : 210, land ? 210 : 297, undefined, "FAST");
+    }
+    pdf.setProperties({ title: doc.titolo, subject: land ? "Pieghevole A4" : "Esercizi A4", creator: "RE-HAND" });
+    const name = `${doc.id}_${land ? "pieghevole" : "esercizi"}${suffix ? "_" + suffix : ""}_${doc.aggiornato || today()}.pdf`;
+    const blob = pdf.output("blob");
+    const file = new File([blob], name, { type: "application/pdf" });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    pdfOverlay(`<b style="font-size:18px">✅ PDF pronto</b><p class="muted">${esc(doc.titolo)} · ${land ? "pieghevole A4 fronte-retro" : `opuscolo esercizi A4, ${sheets.length} pagine`}</p>
+      <div class="row" style="justify-content:center;margin-top:10px">${canShare ? `<button class="btn green" id="pdf-share">📤 Invia (WhatsApp, email…)</button>` : ""}
+      <button class="btn ${canShare ? "light" : "green"}" id="pdf-open">⤓ Apri / salva</button><button class="btn ghost" id="pdf-close">Chiudi</button></div>`);
+    const url = URL.createObjectURL(blob); window.__lastPdf = { name, size: blob.size, pages: sheets.length };
+    const close = () => { pdfClose(); setTimeout(() => URL.revokeObjectURL(url), 60000); };
+    if (canShare) $("#pdf-share").onclick = async () => { try { await navigator.share({ files: [file], title: doc.titolo }); close(); } catch (e) { if (e.name !== "AbortError") alert("Condivisione non riuscita: " + e.message); } };
+    $("#pdf-open").onclick = () => { const a = document.createElement("a"); a.href = url; a.download = name; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.parentNode.removeChild(a); };
+    $("#pdf-close").onclick = close;
+  } catch (e) { console.warn(e); pdfClose(); alert("Non sono riuscito a creare il PDF: " + e.message); }
+  finally { root.innerHTML = ""; root.classList.toggle("pdf-render", false); }
+}
 const protoBoxes = (item, path, doc) => !doc.protocolli || !doc.protocolli.length ? "" : `<div class="f" style="font-size:12px;font-weight:600;color:var(--mut);margin-top:6px">Vale per il protocollo: ${doc.protocolli.map((p) => `<label style="font-weight:400;margin-right:10px;white-space:nowrap"><input type="checkbox" data-proto="${path}" value="${esc(p.id)}" ${!item.protocolli || item.protocolli.includes(p.id) ? "checked" : ""}> ${esc(p.nome)}</label>`).join("")}</div>`;
 async function onProtoBox(e, doc) {
   const el = e.target; if (!el.dataset || !el.dataset.proto) return false;
@@ -695,7 +738,7 @@ function tabPatient(body, doc) {
     ${ort ? `<h3 style="margin:14px 0 4px;font-size:15px">Ortesi per questo paziente</h3>${[["tipo", "Quale"], ["quando", "Quando"], ["quanto", "Quanto"], ["durata", "Per quanto tempo"], ["note", "Note"]].map(([k, l]) => `<label class="f">${l}<input data-ort="${k}" value="${esc((P.ortesi || {})[k] || "")}"></label>`).join("")}` : ""}
     <h3 style="margin:14px 0 4px;font-size:15px">Esercizi da consegnare</h3>
     <div class="paz-ex">${exs.map((e) => `<div class="row" style="align-items:flex-start;gap:6px;border-bottom:1px solid var(--bd);padding:5px 0"><input type="checkbox" data-ex="${esc(e.id)}" ${P.escludi[e.id] ? "" : "checked"} style="margin-top:4px"><div style="flex:1"><b style="font-size:14px">${esc(e.nome)}</b><br><input data-dose="${esc(e.id)}" value="${esc(P.dosi[e.id] || e.dosaggio || "")}" style="width:100%;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;font-size:13px" placeholder="ripetizioni / volte al giorno"></div></div>`).join("")}</div>
-    <div class="row" style="margin-top:12px"><button class="btn" id="pz-pb">🖨 Stampa pieghevole</button><button class="btn" id="pz-pe">🖨 Stampa esercizi</button><button class="btn red small" id="pz-reset">Azzera</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="pz-pb">🖨 Stampa pieghevole</button><button class="btn" id="pz-pe">🖨 Stampa esercizi</button><button class="btn green" id="pz-fb">📄 PDF pieghevole</button><button class="btn green" id="pz-fe">📄 PDF esercizi</button><button class="btn red small" id="pz-reset">Azzera</button></div>
   </div><div class="paz-prev"><div class="tabs" style="margin-bottom:6px"><button class="on" data-pv="b">Pieghevole</button><button data-pv="e">Esercizi</button></div><div class="preview-wrap"><div class="scaler" id="pz-sc"></div></div></div></div>`;
   let which = "b", t;
   const draw = async () => { const d = personalize(doc, P); const sc = $("#pz-sc"); if (which === "b") { sc.innerHTML = brochureHTML(d, false); await afterImages(sc); fitPanels(sc, d); } else await buildBooklet(d, sc, false); scalePreviews(); };
@@ -711,6 +754,8 @@ function tabPatient(body, doc) {
   $$("[data-pv]", body).forEach((b) => (b.onclick = () => { which = b.dataset.pv; $$("[data-pv]", body).forEach((x) => x.classList.toggle("on", x === b)); draw(); }));
   $("#pz-pb").onclick = () => printDoc(personalize(doc, P), "pieghevole");
   $("#pz-pe").onclick = () => printDoc(personalize(doc, P), "esercizi");
+  $("#pz-fb").onclick = () => exportPDF(personalize(doc, P), "pieghevole", "paziente");
+  $("#pz-fe").onclick = () => exportPDF(personalize(doc, P), "esercizi", "paziente");
   $("#pz-reset").onclick = () => { delete S.paz[doc.id]; tabPatient(body, doc); };
   draw();
 }

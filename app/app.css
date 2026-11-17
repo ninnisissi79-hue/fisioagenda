@@ -144,3 +144,12 @@ label.f textarea{min-height:60px;resize:vertical}
   .diff{grid-template-columns:1fr}
   .ed-panel > summary{padding:10px 12px}
 }
+
+/* esportazione PDF */
+#print-root.pdf-render{position:fixed;left:0;top:0;z-index:-1}
+#pdf-ov{position:fixed;inset:0;background:rgba(20,35,55,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+#pdf-ov .pdf-box{background:#fff;border-radius:16px;padding:24px 22px;max-width:420px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#pdf-ov .spin{width:38px;height:38px;border:4px solid #d6e2f2;border-top-color:#1d4f9c;border-radius:50%;margin:0 auto 12px;animation:pdfspin .8s linear infinite}
+@keyframes pdfspin{to{transform:rotate(360deg)}}
+#print-root.pdf-render .sheet *{hyphens:manual!important;-webkit-hyphens:manual!important}
+#print-root.pdf-render .sheet p,#print-root.pdf-render .sheet li{text-align:left!important}
