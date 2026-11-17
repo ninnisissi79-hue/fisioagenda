@@ -136,6 +136,7 @@ function renderNav() {
 function applyTheme() { document.documentElement.style.setProperty("--blu", S.settings.colore || "#1d4f9c"); document.documentElement.style.setProperty("--verde", S.settings.colore2 || "#3aa635"); }
 
 async function init() {
+  const recupero = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
   await DB.open();
   S.settings = Object.assign(clone(window.DEFAULT_SETTINGS), (await DB.get("settings")) || {});
   if (!S.settings.regoleEsercizi) S.settings.regoleEsercizi = ["Esegui gli esercizi lentamente e senza provocare dolore.", "Tempi e ripetizioni possono essere personalizzati dal tuo fisioterapista.", "Contatta il centro se compaiono dolore forte, gonfiore marcato o formicolii nuovi."];
@@ -160,6 +161,7 @@ async function init() {
   if (C().user && !C().ruolo) { try { await C()._setUser(C().user); C().error = ""; } catch (e) { C().error = e.message; } }
   if (C().user && C().ruolo) await syncFromCloud();
   await runMigrations();
+  if (recupero && C().user) location.hash = "#/account/nuova-password";
   window.addEventListener("hashchange", route);
   document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go === "home" ? "" : g.dataset.go); } });
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.installEvt = e; });
@@ -201,14 +203,14 @@ function route() {
   const parts = location.hash.replace(/^#\/?/, "").split("/");
   const v = $("#view");
   window.scrollTo(0, 0);
-  if (MODE() === "in_attesa" && parts[0] !== "impostazioni") return viewAccount(v);
+  if (MODE() === "in_attesa" && parts[0] !== "impostazioni") return viewAccount(v, parts[0] === "account" ? parts[1] : undefined);
   if (parts[0] === "doc" && docById(parts[1])) return viewDoc(v, docById(parts[1]), parts[2] || "pieghevole");
   if (parts[0] === "aggiorna") return viewUpdates(v);
   if (parts[0] === "impostazioni") return viewSettings(v);
   if (parts[0] === "account") return viewAccount(v, parts[1]);
   if (parts[0] === "richieste" && MODE() === "admin") return viewRequests(v);
   if (parts[0] === "utenti" && MODE() === "admin") return viewUsers(v);
-  if ((MODE() === "ospite" && !S.guestOk) || MODE() === "in_attesa") return viewAccount(v);
+  if ((MODE() === "ospite" && !S.guestOk) || MODE() === "in_attesa") return viewAccount(v, parts[0] === "account" ? parts[1] : undefined);
   return viewHome(v);
 }
 
@@ -999,8 +1001,8 @@ async function revertLocal(id) {
 async function viewAccount(v, sub) {
   if (!C().enabled) { v.innerHTML = `<h1>Account</h1><p>La libreria condivisa non è collegata: vai in ⚙︎ Impostazioni.</p>`; return; }
   if (sub === "nuova-password") {
-    v.innerHTML = `<h1>Nuova password</h1><div class="ed-panel" style="padding:14px;max-width:420px"><label class="f">Nuova password<input id="np" type="password" autocomplete="new-password"></label><button class="btn" id="npok" style="margin-top:10px">Salva</button></div>`;
-    $("#npok").onclick = async () => { const { error } = await C().sb.auth.updateUser({ password: $("#np").value }); if (error) return alert(error.message); toast("Password aggiornata"); go(""); };
+    v.innerHTML = `<h1>Scegli la tua password</h1><div class="ed-panel" style="padding:14px;max-width:420px"><p class="muted" style="margin-top:0">Almeno 6 caratteri. Ricordala: servirà per entrare con “Accedi”.</p><label class="f">Nuova password<input id="np" type="password" autocomplete="new-password"></label><label class="f">Ripeti la password<input id="np2" type="password" autocomplete="new-password"></label><button class="btn" id="npok" style="margin-top:10px">Salva ed entra</button></div>`;
+    $("#npok").onclick = async () => { const a = $("#np").value, b = $("#np2").value; if (a.length < 6) return alert("La password deve avere almeno 6 caratteri."); if (a !== b) return alert("Le due password non coincidono."); const { error } = await C().sb.auth.updateUser({ password: a }); if (error) return alert(error.message); toast("Password salvata ✓"); location.hash = "#/"; location.reload(); };
     return;
   }
   if (!C().user) {
@@ -1019,7 +1021,7 @@ async function viewAccount(v, sub) {
     const fail = (e) => { C().error = e.message; msg("⚠ " + (C().user ? cloudErrText() : e.message)); };
     $("#lg-in").onclick = async () => { try { msg("Accesso…"); await C().signIn($("#lg-mail").value.trim(), $("#lg-pw").value); await done(); } catch (e) { fail(e); } };
     $("#lg-up").onclick = async () => { try { msg("Registrazione…"); const ok = await C().signUp($("#lg-mail").value.trim(), $("#lg-pw").value); if (ok) await done(); else msg("Controlla la tua email e clicca il link di conferma, poi torna qui e premi Accedi."); } catch (e) { fail(e); } };
-    $("#lg-reset").onclick = async (e) => { e.preventDefault(); try { await C().resetPassword($("#lg-mail").value.trim()); msg("Ti abbiamo mandato un’email per reimpostare la password."); } catch (er) { msg("⚠ " + er.message); } };
+    $("#lg-reset").onclick = async (e) => { e.preventDefault(); if (!$("#lg-mail").value.trim()) { msg("Scrivi prima la tua email qui sopra, poi premi di nuovo “Password dimenticata?”."); return; } try { await C().resetPassword($("#lg-mail").value.trim()); msg("📧 Ti abbiamo mandato un’email: aprila su questo dispositivo, tocca il link e scegli la tua password."); } catch (er) { msg("⚠ " + er.message); } };
     $("#lg-guest").onclick = () => { S.guestOk = true; go(""); route(); };
     return;
   }
