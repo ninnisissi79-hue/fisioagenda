@@ -13,8 +13,11 @@ const Cloud = {
     if (!this.enabled) return;
     try {
       this.sb = window.supabase.createClient(c.url, c.key, { auth: { persistSession: true, autoRefreshToken: true } });
-      const { data } = await this.sb.auth.getSession();
-      if (data && data.session) await this._setUser(data.session.user);
+      const { data } = await Promise.race([this.sb.auth.getSession(), new Promise((r) => setTimeout(() => r({ data: null }), 4000))]);
+      if (data && data.session) {
+        const u = data.session.user; this.user = u; this.email = u.email || "";
+        try { const c = JSON.parse(localStorage.getItem("rehand-ruolo") || "null"); if (c && c.id === u.id) this.ruolo = c.ruolo; } catch {}
+      }
     } catch (e) { this.error = e.message; }
   },
   async _setUser(u) {
@@ -24,6 +27,7 @@ const Cloud = {
     const { data, error } = await this.sb.rpc("rehand_registrati");
     if (error) throw error;
     this.ruolo = data || "in_attesa";
+    try { localStorage.setItem("rehand-ruolo", JSON.stringify({ id: u.id, ruolo: this.ruolo })); } catch {}
   },
   async signIn(email, password) { const { data, error } = await this.sb.auth.signInWithPassword({ email, password }); if (error) { const c = error.code || error.error_code || ""; throw new Error(
       /not_confirmed/.test(c) || /not confirmed/i.test(error.message) ? "Il tuo account non è ancora confermato. Premi “Password dimenticata?”: ti arriverà un’email, scegli la password e sarai dentro."
@@ -31,7 +35,7 @@ const Cloud = {
       : error.message); } this.user = data.user; this.email = data.user.email; await this._setUser(data.user); },
   async signUp(email, password) { const { data, error } = await this.sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href.split("#")[0] } }); if (error) throw new Error(/signups? not allowed/i.test(error.message) ? "Le registrazioni dall’app sono chiuse: chiedi all’amministratrice di crearti l’account, poi premi “Accedi”." : error.message); if (data.session) await this._setUser(data.user); return !!data.session; },
   async resetPassword(email) { const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: location.href.split("#")[0] }); if (error) throw error; },
-  async signOut() { await this.sb.auth.signOut(); this.user = null; this.ruolo = null; },
+  async signOut() { try { localStorage.removeItem("rehand-ruolo"); } catch {} await this.sb.auth.signOut(); this.user = null; this.ruolo = null; },
   isAdmin() { return this.ruolo === "admin"; },
   /* --- opuscoli --- */
   async pullDocs() { const { data, error } = await this.sb.from("rehand_opuscoli").select("id,dati,versione,aggiornato"); if (error) throw error; return data.map((r) => r.dati); },

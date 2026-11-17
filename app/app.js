@@ -111,17 +111,31 @@ async function syncFromCloud() {
   } catch (e) { S.syncError = e.message; }
   renderNav(); updateBadge();
 }
-async function runMigrations() {
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("connessione lenta: riprovo più tardi")), ms))]);
+/* applica le modifiche di contenuto; l'amministratrice pubblica una sola volta ogni opuscolo cambiato */
+async function runMigrations(publish) {
+  const touched = [];
   for (const d of S.docs.slice()) {
+    let t = false;
     for (const m of window.REHAND_MIGRAZIONI || []) {
       if ((d.migrazioni || []).includes(m.id)) continue;
-      const changed = m.apply(d);
-      d.migrazioni = (d.migrazioni || []).concat(m.id);
+      let changed = false;
+      try { changed = m.apply(d); } catch (e) { console.warn("migrazione", m.id, d.id, e); }
+      d.migrazioni = (d.migrazioni || []).concat(m.id); t = true;
       if (changed) { d.storico = d.storico || []; d.storico.push({ data: today(), testo: m.nota, fonte: "" }); d.versione = (d.versione || 1) + 1; d.aggiornato = today(); }
-      await saveDoc(d);
-      if (MODE() === "admin") { try { await C().pushDoc(d); } catch (e) { console.warn(e); } }
     }
+    if (t) { await saveDoc(d); touched.push(d.id); }
   }
+  if (publish && MODE() === "admin") for (const id of touched) { try { await withTimeout(C().pushDoc(docById(id)), 15000); } catch (e) { console.warn(e); } }
+  return touched.length;
+}
+/* ridisegna la pagina dopo la sincronizzazione, senza disturbare chi sta scrivendo */
+function refreshView() {
+  renderNav(); updateBadge();
+  const h = location.hash;
+  if (/\/(testi|esercizi|paziente)$/.test(h) || /impostazioni|nuova-password/.test(h)) return;
+  if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  route();
 }
 function renderNav() {
   const n = $("#topnav"); if (!n) return;
@@ -156,19 +170,25 @@ async function init() {
     if (ch) await saveDoc(cur);
   }
   applyTheme();
-  if (window.Cloud) { await window.Cloud.init(); if (window.Cloud.sb) window.Cloud.sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") go("account/nuova-password"); }); }
-  renderNav();
-  if (C().user && !C().ruolo) { try { await C()._setUser(C().user); C().error = ""; } catch (e) { C().error = e.message; } }
-  if (C().user && C().ruolo) await syncFromCloud();
-  await runMigrations();
+  await runMigrations(false); // solo sul dispositivo: veloce
+  if (window.Cloud) { try { await window.Cloud.init(); } catch (e) { console.warn(e); } if (window.Cloud.sb) window.Cloud.sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") go("account/nuova-password"); }); }
   if (recupero && C().user) location.hash = "#/account/nuova-password";
+  renderNav();
   window.addEventListener("hashchange", route);
   document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go === "home" ? "" : g.dataset.go); } });
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); S.installEvt = e; });
   window.addEventListener("resize", () => { clearTimeout(init._r); init._r = setTimeout(scalePreviews, 120); });
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
-  route();
-  checkFeed(true);
+  route(); // la schermata compare subito con i dati salvati sul dispositivo
+  // poi, in sottofondo: ruolo aggiornato, brochure dal cloud, modifiche da pubblicare
+  (async () => {
+    if (C().user) {
+      try { await withTimeout(C()._setUser(C().user), 10000); C().error = ""; } catch (e) { if (!C().ruolo) C().error = e.message; }
+      if (C().ruolo) { try { await withTimeout(syncFromCloud(), 20000); } catch (e) { S.syncError = e.message; } await runMigrations(true); }
+      refreshView();
+    }
+    checkFeed(true);
+  })();
 }
 function go(h) { location.hash = "#/" + h; }
 
