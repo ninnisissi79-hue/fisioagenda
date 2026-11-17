@@ -827,13 +827,34 @@ function tabEditExercises(body, doc) {
   body.addEventListener("change", async (e) => { if (await onProtoBox(e, doc)) return; const di = e.target.dataset.dis; if (di != null && e.target.value !== "__custom") { doc.esercizi[+di].disegno = e.target.value; return rerender(); } const i = e.target.dataset.photo; if (i != null && e.target.files[0]) { doc.esercizi[+i].foto = await imageToDataUrl(e.target.files[0], 900); rerender(); } });
 }
 
+/* ---------- ricerca delle evidenze: PubMed (revisioni sistematiche, meta-analisi, RCT), PEDro, Cochrane */
+const TERMINI = { "dito-a-scatto": "trigger finger", "de-quervain": "de Quervain tenosynovitis", "tunnel-carpale": "carpal tunnel syndrome",
+  "tendini-estensori": "extensor tendon injury hand", "edema-cicatrice-dolore": "hand surgery postoperative edema OR scar", "tendini-flessori": "flexor tendon repair",
+  "tfcc": "triangular fibrocartilage complex", "rizoartrosi": "thumb carpometacarpal osteoarthritis", "frattura-radio-distale": "distal radius fracture",
+  "frattura-scafoide": "scaphoid fracture", "rigidita-ifp": "proximal interphalangeal joint stiffness OR volar plate injury", "dupuytren": "Dupuytren",
+  "crps": "complex regional pain syndrome", "rigidita-mf": "metacarpophalangeal joint stiffness" };
+const termine = (doc) => doc.ricerca || TERMINI[doc.id] || doc.titolo.replace(/^Riabilitazione\s*[–-]\s*/i, "");
+const RIAB = "(rehabilitation OR therapy OR orthosis OR splint* OR exercise*)";
+function linkEvidenze(doc) {
+  const t = termine(doc); const q = encodeURIComponent(`(${t}) AND ${RIAB}`);
+  const pm = "https://pubmed.ncbi.nlm.nih.gov/?sort=date&term=" + q;
+  return `<div class="ed-panel" style="padding:12px 14px"><b>🔎 Cerca le evidenze per “${esc(t)}”</b>
+    <div class="row" style="margin-top:8px">
+      <a class="btn small" target="_blank" rel="noopener" href="${pm}&filter=pubt.systematicreview&filter=pubt.meta-analysis">PubMed · revisioni sistematiche e meta-analisi</a>
+      <a class="btn small light" target="_blank" rel="noopener" href="${pm}&filter=pubt.randomizedcontrolledtrial">PubMed · RCT</a>
+      <a class="btn small light" target="_blank" rel="noopener" href="https://www.cochranelibrary.com/search?searchBy=1&searchText=${encodeURIComponent(t)}">Cochrane</a>
+      <a class="btn small light" target="_blank" rel="noopener" href="https://search.pedro.org.au/search" data-copy="${esc(t)}">PEDro</a>
+    </div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">Su PEDro il termine di ricerca viene copiato: incollalo nel campo “Abstract & Title” e filtra per “systematic review” o per punteggio PEDro ≥ 6.</p></div>`;
+}
 /* ---------- storico e fonti */
 function tabHistory(body, doc) {
   const st = (doc.storico || []).slice().reverse();
-  body.innerHTML = `<h2>Cosa è cambiato</h2><ul class="hist">${st.map((h) => `<li><span class="d">${fmtDate(h.data)}</span>${esc(h.testo)}${h.fonte ? `<br><small class="muted">Fonte: ${esc(h.fonte)}</small>` : ""}</li>`).join("") || "<li>Nessuna modifica registrata.</li>"}</ul>
+  body.innerHTML = `${linkEvidenze(doc)}<h2>Cosa è cambiato</h2><ul class="hist">${st.map((h) => `<li><span class="d">${fmtDate(h.data)}</span>${esc(h.testo)}${h.fonte ? `<br><small class="muted">Fonte: ${esc(h.fonte)}</small>` : ""}</li>`).join("") || "<li>Nessuna modifica registrata.</li>"}</ul>
     <h2>Riferimenti bibliografici</h2>
     <p class="muted" style="font-size:13px">Vengono aggiunti in automatico quando accetti un aggiornamento e stampati in fondo all’opuscolo esercizi. Uno per riga; il link (se presente) va alla fine.</p>
     <label class="f"><textarea id="bib" rows="6">${esc((doc.bibliografia || []).map((r) => r.testo + (r.url ? " " + r.url : "")).join("\n"))}</textarea></label>`;
+  $$("[data-copy]", body).forEach((a) => (a.onclick = () => { try { navigator.clipboard.writeText(a.dataset.copy); toast("Termine copiato: incollalo su PEDro"); } catch {} }));
   $("#bib").oninput = (e) => { doc.bibliografia = lines(e.target.value).map((l) => { const m = l.match(/\s(https?:\/\/\S+)$/); return m ? { testo: l.slice(0, m.index).trim(), url: m[1] } : { testo: l, url: "" }; }); autosave(doc); };
 }
 
@@ -883,6 +904,7 @@ function apply(p) {
   doc.aggiornato = t;
   return doc;
 }
+const tipoFonte = (f) => f.tipo ? `<span class="pill" style="margin-right:4px">${esc(f.tipo)}${f.pedro ? " · PEDro " + esc(f.pedro) + "/10" : ""}</span>` : "";
 function citation(f) { return [f.autori, f.anno ? `(${f.anno})` : "", f.titolo, f.rivista].filter(Boolean).join(". ").replace(/([.?!])\./g, "$1"); }
 function showVal(v) {
   if (v == null || v === "") return "<i class='muted'>(niente)</i>";
@@ -943,7 +965,7 @@ function updCard(p) {
       <div class="row"><span class="pill">${OP_LABEL[p.op] || p.op}</span>${p.sezione ? `<span class="pill">${esc(p.sezione)}</span>` : ""}${p.evidenza ? `<span class="pill ok">Evidenza: ${esc(p.evidenza)}</span>` : ""}${p.complessita ? `<span class="pill">${esc(p.complessita)}</span>` : ""}</div>
       <div class="diff"><div class="old"><small>Ora c’è scritto</small><div class="t">${showVal(p.attuale)}</div></div><div class="new"><small>Diventerebbe</small>${showVal(p.proposto)}</div></div>
       ${p.motivazione ? `<p class="why"><b>Perché:</b> ${esc(p.motivazione)}</p>` : ""}
-      ${p.fonti && p.fonti.length ? `<ol class="fonti">${p.fonti.map((f) => `<li>${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(citation(f))}</a>` : esc(citation(f))}</li>`).join("")}</ol>` : ""}
+      ${p.fonti && p.fonti.length ? `<ol class="fonti">${p.fonti.map((f) => `<li>${tipoFonte(f)}${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(citation(f))}</a>` : esc(citation(f))}</li>`).join("")}</ol>` : ""}
       ${c.ok ? "" : `<p class="conflict">⚠ Non applicabile in automatico: ${esc(c.why)}. Puoi copiare il testo proposto in “Modifica testi”.</p>`}
     </div></div>`;
 }
