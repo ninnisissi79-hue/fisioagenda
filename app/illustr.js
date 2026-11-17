@@ -3,7 +3,7 @@
    e lo stile è uniforme in tutti gli opuscoli. */
 (function () {
 "use strict";
-const SKIN = "#f3c9a8", SKIN2 = "#e7b48f", SKIN3 = "#d9a07a", LINE = "#7a4a2e", RED = "#e53935", SPLINT = "#4f8fd8", ARROW = "#1d4f9c";
+const SKIN = "#f6d3b7", SKIN2 = "#eec3a2", SKIN3 = "#d9a587", LINE = "#8a5638", RED = "#e53935", SPLINT = "#4f8fd8", ARROW = "#1d4f9c";
 const rad = (d) => (d * Math.PI) / 180;
 const pt = (p, ang, len) => [p[0] + Math.cos(rad(ang)) * len, p[1] + Math.sin(rad(ang)) * len];
 const f = (n) => Math.round(n * 10) / 10;
@@ -17,6 +17,59 @@ function seg(a, b, w, col, out = true) {
   s += `<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
   return s;
 }
+/* forma morbida di un dito/pollice: contorno affusolato con articolazioni arrotondate e punta tonda.
+   Il contorno è tracciato senza la base, così il dito “nasce” dalla mano senza una riga di taglio. */
+function limb(pts, ws, col, o = {}) {
+  const n = pts.length, lens = [], dirs = [];
+  for (let i = 0; i < n - 1; i++) { const dx = pts[i + 1][0] - pts[i][0], dy = pts[i + 1][1] - pts[i][1], l = Math.hypot(dx, dy); lens.push(l); dirs.push(l > 0.01 ? [dx / l, dy / l] : (dirs[i - 1] || [0, -1])); }
+  const r = (i) => (i <= 0 || i >= n - 1 ? 0 : Math.min(ws[i] * 0.6, lens[i - 1] * 0.45, lens[i] * 0.45));
+  const S = [];
+  const add = (p, w) => { const q = S[S.length - 1]; if (!q || Math.hypot(p[0] - q.p[0], p[1] - q.p[1]) > 0.4) S.push({ p, w }); };
+  for (let i = 0; i < n - 1; i++) {
+    const L = lens[i], d = dirs[i], r0 = r(i), r1 = r(i + 1);
+    const steps = Math.max(1, Math.ceil((L - r0 - r1) / 2));
+    for (let k = 0; k <= steps; k++) { const t = (r0 + (L - r0 - r1) * (k / steps)) / (L || 1); add([pts[i][0] + d[0] * L * t, pts[i][1] + d[1] * L * t], ws[i] + (ws[i + 1] - ws[i]) * t); }
+    if (r1 > 0) {
+      const J = pts[i + 1], a = [J[0] - d[0] * r1, J[1] - d[1] * r1], d2 = dirs[i + 1], b = [J[0] + d2[0] * r1, J[1] + d2[1] * r1];
+      for (let k = 1; k < 8; k++) { const t = k / 8, u = 1 - t; add([u * u * a[0] + 2 * u * t * J[0] + t * t * b[0], u * u * a[1] + 2 * u * t * J[1] + t * t * b[1]], ws[i + 1]); }
+    }
+  }
+  const N = S.map((s, k) => { const a = S[Math.max(0, k - 1)].p, b = S[Math.min(S.length - 1, k + 1)].p; const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; });
+  const Lf = S.map((s, k) => [s.p[0] + N[k][0] * s.w / 2, s.p[1] + N[k][1] * s.w / 2]);
+  const Rt = S.map((s, k) => [s.p[0] - N[k][0] * s.w / 2, s.p[1] - N[k][1] * s.w / 2]);
+  const e = S[S.length - 1], en = N[N.length - 1], a0 = Math.atan2(en[1], en[0]) * 180 / Math.PI, tip = [];
+  for (let k = 1; k < 12; k++) tip.push(pt(e.p, a0 - (180 * k) / 12, e.w / 2));
+  const outline = Lf.concat(tip, Rt.slice().reverse());
+  outline.forEach((q) => bb(q, 2));
+  const P2 = (q) => f(q[0]) + "," + f(q[1]);
+  const open = "M" + outline.map(P2).join(" L");
+  return `<path d="${open}" fill="none" stroke="${LINE}" stroke-width="${o.lw || 2.8}" stroke-linejoin="round" stroke-linecap="round"/><path d="${open} Z" fill="${col}"/>`;
+}
+/* forma chiusa morbida (palmo) per punti: curva di Catmull-Rom */
+function blob(pts, col, stroke = true) {
+  const n = pts.length; let d = `M${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${f(c1[0])},${f(c1[1])} ${f(c2[0])},${f(c2[1])} ${f(p2[0])},${f(p2[1])}`;
+  }
+  pts.forEach((q) => bb(q, 2));
+  return stroke ? `<path d="${d}Z" fill="${col}" stroke="${LINE}" stroke-width="1.4" stroke-linejoin="round"/>` : `<path d="${d}Z" fill="${col}"/>`;
+}
+/* avambraccio: solo i due bordi, nessuna “fine” disegnata */
+function forearm(a, b, wa, wb, col, ends) {
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+  const a1 = pt(a, ang + 90, wa / 2), a2 = pt(a, ang - 90, wa / 2);
+  let b1 = pt(b, ang + 90, wb / 2), b2 = pt(b, ang - 90, wb / 2);
+  if (ends) { // estremi esatti sul bordo del palmo: niente gradini al polso
+    const d1 = Math.hypot(ends[0][0] - b1[0], ends[0][1] - b1[1]), d2 = Math.hypot(ends[1][0] - b1[0], ends[1][1] - b1[1]);
+    [b1, b2] = d1 < d2 ? ends : [ends[1], ends[0]];
+  }
+  [a1, a2, b1, b2].forEach((q) => bb(q, 2));
+  const P2 = (q) => f(q[0]) + "," + f(q[1]);
+  return `<polygon points="${[a1, b1, b2, a2].map(P2).join(" ")}" fill="${col}"/><path d="M${P2(a1)} L${P2(b1)} M${P2(a2)} L${P2(b2)}" stroke="${LINE}" stroke-width="1.4"/>`;
+}
+const crease = (p, ang, len, col) => { const a = pt(p, ang + 90, len / 2), b = pt(p, ang - 90, len / 2); return `<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="${col}" stroke-width="1.1" stroke-linecap="round"/>`; };
 function chain(start, ang0, lens, angs) { const pts = [start]; let a = ang0, p = start; lens.forEach((L, i) => { a -= angs[i] || 0; p = pt(p, a, L); pts.push(p); }); return { pts, endAng: a }; }
 function arrowArc(c, r, a1, a2, col = ARROW) {
   const p1 = pt(c, a1, r), p2 = pt(c, a2, r); [a1, (a1 + a2) / 2, a2].forEach((a) => bb(pt(c, a, r), 8)); const large = Math.abs(a2 - a1) > 180 ? 1 : 0; const sweep = a2 > a1 ? 1 : 0;
@@ -40,7 +93,7 @@ function lato(o) {
   const M = palm.pts[1];
   const def = { mcp: o.mcp || 0, pip: o.pip || 0, dip: o.dip || 0 };
   const fingers = [ // dal più lontano al più vicino: sfalsati verso il dorso per renderli distinguibili
-    { k: "mignolo", d: 10.5, ax: -9, sc: 0.8, col: "#d39a74" }, { k: "anulare", d: 7, ax: -3, sc: 0.94, col: SKIN3 },
+    { k: "mignolo", d: 10.5, ax: -9, sc: 0.8, col: "#e0ae8c" }, { k: "anulare", d: 7, ax: -3, sc: 0.94, col: "#e8bb9a" },
     { k: "medio", d: 3.5, ax: 0, sc: 1, col: SKIN2 }, { k: "indice", d: 0, ax: -2, sc: 0.95, col: SKIN }];
   const per = o.dita || {};
   const fingerChains = {};
@@ -52,20 +105,28 @@ function lato(o) {
     fingerChains[fi.k] = c;
     stack.push({ fi, c });
   });
-  // avambraccio e palmo
-  s += seg(forearmEnd, W, 34, SKIN2);
-  // pollice dietro alle dita (vista dal lato radiale, leggermente ruotata) così non copre il palmo
+  const U = (u, v) => pt(pt(W, handAng, u), handAng + 90, v); // v > 0 = dorso
+  const ws = (sc) => [15.5, 14, 12.8, 11.6].map((x) => x * (0.86 + sc * 0.14));
+  // dita più lontane (mignolo, anulare, medio): un po' più scure, sfalsate verso il dorso
+  stack.filter(({ fi }) => fi.k !== "indice").forEach(({ fi, c }) => (s += limb([pt(c.pts[0], handAng + 180, 8)].concat(c.pts.slice(1)), ws(fi.sc), fi.col)));
+  // pollice sul lato palmare: la base resta sotto l'eminenza thenar
   const th = o.pollice || {};
-  const tStart = pt(W, handAng, 16);
-  const tc = chain(pt(tStart, handAng - 90, 8), handAng - (th.abd != null ? th.abd : 18), [30, 22, 17], [0, th.mf || 10, th.ip || 10]);
-  for (let i = 0; i < 3; i++) s += seg(tc.pts[i], tc.pts[i + 1], [17, 13, 11][i], SKIN3);
-  s += seg(W, M, 30, SKIN2);
-  // dita posteriori poi indice
-  stack.forEach(({ fi, c }) => { const w = [14, 13, 12].map((x) => x * (0.85 + fi.sc * 0.15)); for (let i = 0; i < 3; i++) s += seg(c.pts[i], c.pts[i + 1], w[i], fi.col); });
-  s += seg(W, M, 27, SKIN, false);
-  // unghia indice
-  const ix = fingerChains.indice; const nail = pt(ix.pts[3], ix.endAng + 180, 6);
-  s += `<line x1="${f(nail[0])}" y1="${f(nail[1])}" x2="${f(ix.pts[3][0])}" y2="${f(ix.pts[3][1])}" stroke="#f9e1d0" stroke-width="5" stroke-linecap="round" transform="translate(${f(Math.cos(rad(ix.endAng + 90)) * 3)},${f(Math.sin(rad(ix.endAng + 90)) * 3)})"/>`;
+  const tc = chain(U(8, -8), handAng - (th.abd != null ? th.abd : 16), [32, 22, 17], [0, th.mf || 10, th.ip || 10]);
+  s += limb(tc.pts, [19, 15.5, 13.5, 12], SKIN2);
+  { const e = tc.pts[3], a = tc.endAng, n0 = pt(pt(e, a + 180, 7), a + 90, 3), n1 = pt(pt(e, a + 180, 1.2), a + 90, 2.6);
+    s += `<line x1="${f(n0[0])}" y1="${f(n0[1])}" x2="${f(n1[0])}" y2="${f(n1[1])}" stroke="#fbe9dd" stroke-width="3.4" stroke-linecap="round"/>`; }
+  // palmo con eminenza thenar sul lato palmare e nocca sul dorso
+  s += blob([U(10, 14.8), U(32, 15.3), U(54, 15.6), U(65, 12), U(68, 4), U(65, -5), U(57, -10), U(42, -14), U(26, -18.5), U(10, -17), U(-6, -14.6), U(-24, -13), U(-24, 13), U(-6, 14.6)], SKIN);
+  s += forearm(forearmEnd, W, 33, 29.2, SKIN, [U(-6, 14.6), U(-6, -14.6)]);
+  // indice (il più vicino): la base è coperta dal palmo
+  const ix = fingerChains.indice;
+  s += limb([pt(ix.pts[0], handAng + 180, 8)].concat(ix.pts.slice(1)), ws(0.95), SKIN);
+  s += `<polygon points="${[U(46, 13.6), U(60.5, 13.6), U(60.5, -11.5), U(46, -11.5)].map((q) => f(q[0]) + "," + f(q[1])).join(" ")}" fill="${SKIN}"/>`;
+  // pieghe dorsali sulle articolazioni dell'indice e unghia
+  const ang = (a, b) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+  [1, 2].forEach((j) => { const dA = (ang(ix.pts[j - 1], ix.pts[j]) + ang(ix.pts[j], ix.pts[j + 1])) / 2; const q = pt(ix.pts[j], dA + 90, 4.2); s += crease(q, dA + 90, 3.4, SKIN3); });
+  { const e = ix.pts[3], a = ix.endAng, n0 = pt(pt(e, a + 180, 7.5), a + 90, 3.2), n1 = pt(pt(e, a + 180, 1.2), a + 90, 2.8);
+    s += `<line x1="${f(n0[0])}" y1="${f(n0[1])}" x2="${f(n1[0])}" y2="${f(n1[1])}" stroke="#fbe9dd" stroke-width="3.6" stroke-linecap="round"/>`; }
   // oggetti
   if (o.oggetto === "bottiglia") { const c = pt(M, handAng - 90, 20); bb([c[0] - 13, c[1] - 40]); bb([c[0] + 13, c[1] + 34]); s = `<rect x="${f(c[0] - 12)}" y="${f(c[1] - 38)}" width="24" height="70" rx="7" fill="#9fd3ee" stroke="#4a8db3" stroke-width="2"/><rect x="${f(c[0] - 6)}" y="${f(c[1] - 48)}" width="12" height="12" rx="2" fill="#4a8db3"/>` + s; }
   if (o.oggetto === "pallina") { const c = pt(M, handAng - 90, 24); bb([c[0], c[1] - 4], 18); s += `<circle cx="${f(c[0])}" cy="${f(c[1] - 4)}" r="17" fill="#ff9f43" stroke="#b86b1d" stroke-width="2"/>`; }
@@ -105,7 +166,6 @@ function fronte(o) {
   const up = -90 + dev;
   if (o.tavolo) { const y = pt(W, up + 180 - dev, 42)[1] + 2; s += `<rect x="40" y="${f(y)}" width="140" height="8" rx="2" fill="#c8a27a"/>`; bb([40, y]); bb([180, y + 8]); }
   const fore = pt(W, up + 180 - dev, 42);
-  s += seg(fore, W, 50, SKIN2);
   // palmo come poligono
   const ax = up, px = up + 90; // px verso il mignolo
   const P = (u, v) => pt(pt(W, ax, u), px, v);
@@ -124,16 +184,19 @@ function fronte(o) {
     let p = base; const pts = [p];
     const cum = [a.mcp, a.mcp + a.pip, a.mcp + a.pip + a.dip];
     fd.L.forEach((L, i) => { p = pt(p, dir, L * pr(cum[i])); pts.push(p); });
-    let out = ""; for (let i = 0; i < 3; i++) out += seg(pts[i], pts[i + 1], fd.w - i, SKIN);
+    const w0 = fd.w + 0.5;
+    let out = limb([pt(base, dir + 180, 8)].concat(pts.slice(1)), [w0, w0 * 0.93, w0 * 0.86, w0 * 0.8], SKIN);
+    // pieghe palmari delle articolazioni (solo se il segmento si vede abbastanza)
+    [1, 2].forEach((j) => { if (Math.hypot(pts[j + 1][0] - pts[j][0], pts[j + 1][1] - pts[j][1]) > fd.L[j] * 0.55) out += crease(pts[j], dir, w0 * 0.5, SKIN3); });
     tips[fd.k] = pts[3];
     return out;
   };
   // dita dietro al palmo se flesse molto? disegniamo prima le dita, poi il palmo sopra la base
   fingersDef.forEach((fd) => (s += drawFinger(fd)));
-  s += poly(palmPts, SKIN);
+  s += blob([P(6, -24), P(18, -31), P(34, -34), P(52, -31), P(68, -28), P(78, -16), P(81, 0), P(78, 14), P(68, 28), P(50, 31.5), P(28, 31), P(10, 24.5), P(-6, 22.4), P(-20, 20), P(-20, -20), P(-6, -22.4)], SKIN);
+  s += forearm(fore, W, 48, 44.8, SKIN, [P(-6, 22.4), P(-6, -22.4)]);
   // pieghe palmari
   s += `<path d="M${f(P(52, -30)[0])},${f(P(52, -30)[1])} Q${f(P(58, 0)[0])},${f(P(58, 0)[1])} ${f(P(64, 28)[0])},${f(P(64, 28)[1])}" stroke="${SKIN3}" stroke-width="1.4" fill="none"/>`;
-  s += `<path d="M${f(P(40, -31)[0])},${f(P(40, -31)[1])} Q${f(P(28, -8)[0])},${f(P(28, -8)[1])} ${f(P(8, -6)[0])},${f(P(8, -6)[1])}" stroke="${SKIN3}" stroke-width="1.4" fill="none"/>`;
   // pollice (lato radiale = sinistra), 2 segmenti + metacarpo, con IK per l'opposizione
   const th = o.pollice || {}; const cmc = P(14, -24);
   let tp;
@@ -146,8 +209,10 @@ function fronte(o) {
   } else {
     const ab = th.abd != null ? th.abd : 35; const dir = ax - ab; tp = chain(cmc, dir, [34, 26, 18], [0, -(th.mf || 0) * 0.3, -(th.ip || 0) * 0.3]).pts;
   }
-  for (let i = 0; i < 3; i++) s += seg(tp[i], tp[i + 1], [21, 16, 14][i], SKIN);
-  s += seg(P(12, -20), P(30, -22), 18, SKIN, false);
+  s += limb(tp, [24, 18.5, 16.5, 14.5], SKIN);
+  { const dA = (Math.atan2(tp[3][1] - tp[2][1], tp[3][0] - tp[2][0]) * 180) / Math.PI; s += crease(tp[2], dA, 9, SKIN3); }
+  s += `<ellipse cx="${f(P(20, -18)[0])}" cy="${f(P(20, -18)[1])}" rx="13" ry="11" fill="${SKIN}"/>`;
+  { const a = P(26, -4), b = P(18, -16), c = P(14, -24); s += `<path d="M${f(a[0])},${f(a[1])} Q${f(b[0])},${f(b[1])} ${f(c[0])},${f(c[1])}" stroke="${SKIN3}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`; }
   if (o.oggetto === "tessuto") { const c = P(40, 4); bb(c, 26); s += `<rect x="${f(c[0] - 26)}" y="${f(c[1] - 16)}" width="52" height="32" rx="6" fill="#b9d7f0" opacity=".85" stroke="#5d8fbd" stroke-width="1.4"/><path d="M${f(c[0] - 20)},${f(c[1] - 6)} q10,-8 20,0 t20,0 M${f(c[0] - 20)},${f(c[1] + 6)} q10,-8 20,0 t20,0" stroke="#5d8fbd" stroke-width="1.4" fill="none"/>`; }
   // oggetti
   if (o.oggetto === "moneta" && th.verso) s += `<ellipse cx="${f(tp[3][0])}" cy="${f(tp[3][1] - 2)}" rx="7" ry="3.5" fill="#f5c542" stroke="#a07c12" stroke-width="1.4"/>`;
