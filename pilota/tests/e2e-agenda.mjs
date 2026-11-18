@@ -11,7 +11,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { ROOT, ensureUser, login, PASSWORD, psql, E, S } from './helpers.mjs';
 
-const PORT = 8095, RUN = Date.now().toString(36).slice(-4);
+const PORT = 8095, RUN = 'c' + (Date.now() % 10000);
 let step = 0;
 const ok = m => console.log(`✓ ${++step}. ${m}`);
 const q = sql => psql(sql);
@@ -91,6 +91,12 @@ try {
   await sp.waitForSelector('.drawer');
   assert.equal(await sp.$eval('.drawer input[data-bind="pd.q"]', e => e.value), 'Nuovo ' + RUN, 'il nome scritto nel tabulato');
   assert.equal(await sp.$eval('.drawer input[data-bind="pd.day"]', e => e.value), F[2]);
+  // anonimato: un nome e cognome non passa, serve il codice cartella
+  await sp.fill('.drawer input[data-bind="pd.q"]', 'Mario Bianchi');
+  await sp.waitForSelector('.drawer .form-warn:has-text("almeno una cifra")');
+  assert.ok(await sp.isDisabled('.modal button[data-act="pd-save"]'), 'con un nome non si salva');
+  await sp.fill('.drawer input[data-bind="pd.q"]', 'Nuovo ' + RUN);
+  await sp.waitForFunction(() => !document.querySelector('.drawer .form-warn'));
   await sp.fill('.drawer input[data-bind="pd.start"]', '');
   await sp.type('.drawer input[data-bind="pd.start"]', '12:20', { delay: 50 });
   await sp.press('.drawer input[data-bind="pd.start"]', 'Tab');

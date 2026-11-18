@@ -88,11 +88,11 @@
     }).join('');
     // righe vuote: si scrive il nome direttamente nel tabulato
     const tgn = A.ui.tgn || (A.ui.tgn = {});
-    const empty = can ? Array.from({ length: NEW_ROWS }, (_, i) => '<tr class="tg-new"><th class="tg-name"><input type="text" data-bind="tgn.n' + i + '" data-tg-new="' + i + '" value="' + esc(tgn['n' + i] || '') + '" placeholder="+ nuovo paziente" autocomplete="off" aria-label="Nome del nuovo paziente"></th>' +
+    const empty = can ? Array.from({ length: NEW_ROWS }, (_, i) => '<tr class="tg-new"><th class="tg-name"><input type="text" data-bind="tgn.n' + i + '" data-tg-new="' + i + '" value="' + esc(tgn['n' + i] || '') + '" placeholder="+ codice cartella" autocomplete="off" autocapitalize="characters" aria-label="Codice cartella del nuovo paziente"></th>' +
       days.map(d => '<td class="' + (E.weekday(d) >= 6 ? 'we' : '') + (d === A.today ? ' today' : '') + '">' + (d >= A.today ? '<button class="tg-empty" data-act="tg-newcell" data-i="' + i + '" data-th="' + thId + '" data-day="' + d + '" aria-label="Nuovo paziente dal ' + esc(E.fmtIt(d)) + '"></button>' : '') + '</td>').join('') + '</tr>').join('') : '';
     return '<div class="tg-wrap" data-tg-month="' + month + '"><table class="tg"><thead><tr><th class="tg-name tg-corner">' + rows.length + ' pazienti</th>' + head + '</tr></thead><tbody>' + body + empty + '</tbody></table></div>' +
       '<p class="small muted tg-legend"><span class="tg-chip done">3</span> fatta · <span class="tg-chip">3</span> in programma · <span class="tg-chip ass">A</span> assente · <span class="tg-chip given">3<sub>BR</sub></span> con un collega · ⁰⁷:⁴⁵ ora diversa dal solito. ' +
-      (can ? 'Tocca una casella per spostare, cambiare durata o collega, segnare l’assenza o cancellare; una casella vuota per aggiungere una seduta; il nome per il paziente; una riga vuota per un paziente nuovo.' : 'Consultazione.') + '</p>';
+      (can ? 'Tocca una casella per spostare, cambiare durata o collega, segnare l’assenza o cancellare; una casella vuota per aggiungere una seduta; il codice per il paziente; una riga vuota per un paziente nuovo (solo il codice cartella).' : 'Consultazione.') + '</p>';
   }
   FA.tabGrid = tabGrid;
   // il giorno di oggi in vista anche sul telefono
@@ -173,7 +173,7 @@
         (f.dur === 'altro' ? ' <input type="number" min="10" max="240" step="5" style="max-width:100px;display:inline-block" data-bind="ts.durOther" data-rerender value="' + esc(f.durOther) + '" placeholder="minuti">' : '') + '</div>';
       const m = f.dur === 'altro' ? Number(f.durOther) : Number(f.dur);
       f.chk = m ? E.checkSlot(A.ctx, a.therapist_id, a.day, a.start_time, E.fromMin(E.toMin(a.start_time) + m), { patientId: a.patient_id, ignoreId: a.id, cycleId: a.cycle_id }) : null;
-      h += checkLine(f, f.chk) + '<p class="small muted">Per tutte le sedute del paziente: tocca il suo nome nel tabulato.</p>';
+      h += checkLine(f, f.chk) + '<p class="small muted">Per tutte le sedute del paziente: tocca il suo codice nel tabulato.</p>';
     } else if (f.view === 'collega') {
       const ths = FA.activeTherapists().filter(t => E.skillLevel(A.ctx, t.id, c.category_id));
       h += '<div class="field"><label>Fisioterapista</label><select data-bind="ts.th" data-rerender>' + ths.map(t => FA.option(t.id, t.name + (t.id === c.therapist_id ? ' (titolare)' : ''), f.th)).join('') + '</select></div>' +
@@ -318,7 +318,7 @@
     if (!canE) return h + '<p class="muted">Consultazione.</p>';
     if (f.view === 'menu') {
       h += '<div class="act-grid">' +
-        '<button class="btn" data-act="tp-view" data-v="nome">Nome</button>' +
+        '<button class="btn" data-act="tp-view" data-v="nome">Codice cartella</button>' +
         '<button class="btn" data-act="tp-view" data-v="sedute">Numero di sedute</button>' +
         (next.length ? '<button class="btn" data-act="tp-view" data-v="ora">Cambia ora dal…</button>' +
           '<button class="btn" data-act="tp-view" data-v="durata">Durata delle sedute</button>' +
@@ -328,7 +328,7 @@
         '</div><div class="row small cyc-acts"><span class="muted">Ciclo:</span>' +
         (c.status === 'attivo' ? '<button class="btn link small" data-act="cy-suspend" data-id="' + c.id + '">Sospendi (anche per ticket)</button><button class="btn link small" data-act="cy-close" data-id="' + c.id + '">Concludi</button>' : '') +
         (c.status === 'sospeso' ? '<button class="btn link small" data-act="cy-resume" data-id="' + c.id + '">Riprendi</button>' : '') + '</div>';
-    } else if (f.view === 'nome') h += '<div class="field"><label>Nome</label><input type="text" data-bind="tp.name" value="' + esc(f.name) + '"></div>';
+    } else if (f.view === 'nome') h += '<div class="field"><label>Codice cartella</label><input type="text" data-bind="tp.name" value="' + esc(f.name) + '" placeholder="' + FA.CODE_HINT + '" autocapitalize="characters"><div class="help">Solo il codice, mai nome e cognome.</div></div>';
     else if (f.view === 'sedute') h += '<div class="grid2"><div class="field"><label>Sedute totali del ciclo</label><input type="number" min="1" max="60" data-bind="tp.planned" data-num data-rerender value="' + esc(f.planned) + '"></div>' +
       '<div class="field"><label>Già fatte</label><input type="number" min="0" max="59" data-bind="tp.done" data-num data-rerender value="' + esc(f.done) + '"></div></div>' +
       '<p class="small">Restano: <strong>' + Math.max(0, Number(f.planned) - Number(f.done)) + '</strong>. I numeri nel tabulato si aggiornano; la correzione resta nello storico.</p>';
@@ -359,7 +359,8 @@
   FA.actions['tp-save'] = async () => {
     const f = A.ui.tp, c = A.ctx.cyc.get(f.cyc), p = A.ctx.pat.get(c.patient_id);
     try {
-      if (f.view === 'nome') await FA.save('Nome', () => FA.rpc('update_patient', { p_id: p.id, p_version: p.version, p_name: f.name.trim(), p_note: p.note || '' }));
+      if (f.view === 'nome' && FA.codeError(f.name, p.id)) { FA.toast(FA.codeError(f.name, p.id), 'warn'); return; }
+      if (f.view === 'nome') await FA.save('Codice cartella', () => FA.rpc('update_patient', { p_id: p.id, p_version: p.version, p_name: f.name.trim(), p_note: p.note || '' }));
       else if (f.view === 'sedute') {
         const planned = Number(f.planned), done = Number(f.done);
         const extra = E.cycleCounts(A.ctx, c.id).effettuate - (c.prior_sessions || 0);

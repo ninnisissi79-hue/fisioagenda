@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { E, S, ensureUser, login, today, psql, expectError, ctxFor } from './helpers.mjs';
 
-const RUN = Date.now().toString(36).slice(-5);
+const RUN = 'c' + (Date.now() % 100000); // con una cifra: il paziente è un codice cartella
 let admin, seg, T0;
 const DAY = [{ kind: 'amb', start: '07:00', end: '12:00' }, { kind: 'pausa', start: '12:00', end: '12:20' }, { kind: 'amb', start: '12:20', end: '14:30' }];
 const WEEK = { 1: DAY, 2: DAY, 3: DAY, 4: DAY, 5: DAY, 6: [], 7: [] };
@@ -246,6 +246,21 @@ test('avvisi: al fisioterapista paziente nuovo o sostituzione (uno per operazion
   const byFisio = ch.find(m => m.user_name === 'Fisio Avvisi' && m.summary.includes('Nuovo'));
   assert.ok(byFisio); assert.equal(byFisio.by_therapist, A);
   assert.ok(!ch.some(m => m.user_name === 'Segreteria Agenda'), 'le modifiche della segreteria non accendono la spia gialla');
+});
+
+test('codice cartella al posto del nome: un nome viene rifiutato, un codice è un paziente solo', async () => {
+  const req = name => S.rpc(seg, 'create_request', { p: { patient_name: name, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+  await expectError(req('Mario Rossi'), 'FA_INPUT', /almeno una cifra/);
+  await expectError(req('Rossì 12'), 'FA_INPUT', /non valido/);
+  await expectError(req('2026/' + RUN + '-abcdefghijklm'), 'FA_INPUT', /20 caratteri/);
+  const code = '2026/' + RUN;
+  const r = await req('  ' + code + ' ');
+  assert.equal(q(`select name from patients p join cycles c on c.patient_id=p.id where c.id='${r.cycle_id}'`), code, 'spazi tolti');
+  await expectError(req(code.toLowerCase().replace('/', ' / ')), 'FA_INPUT', /Esiste già un paziente con il codice cartella/);
+  const pat = row(`select row_to_json(p) from patients p join cycles c on c.patient_id=p.id where c.id='${r.cycle_id}'`);
+  await expectError(S.rpc(seg, 'update_patient', { p_id: pat.id, p_version: pat.version, p_name: 'Bianchi', p_note: '' }), 'FA_INPUT', /almeno una cifra/);
+  await S.rpc(seg, 'update_patient', { p_id: pat.id, p_version: pat.version, p_name: code + 'B', p_note: '' });
+  assert.match(q(`select summary from audit_log where action='paziente' order by id desc limit 1`), /codice cartella cambiato in/);
 });
 
 test('svuota pazienti e sedute: solo coordinatore, con conferma scritta; fisioterapisti e orari restano', async () => {

@@ -76,12 +76,12 @@ try {
   await page.waitForTimeout(300);
   await page.selectOption('select[data-bind="ag.th"]', anna);
   await page.click('[data-act="ag-book"] >> nth=0');
-  await page.fill('.modal input[data-bind="qb.name"]', 'Paziente Prova');
+  await page.fill('.modal input[data-bind="qb.name"]', '2026/0001');
   await page.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
   await page.click('.modal button[data-act="seg"][data-val="5"]');
   await page.waitForSelector('.modal .form-note:has-text("Tutte le 5 sedute")');
   await page.click('.modal button:has-text("Conferma e salva")');
-  await page.waitForSelector('h2:has-text("Paziente Prova")', { timeout: 15000 });
+  await page.waitForSelector('h2:has-text("2026/0001")', { timeout: 15000 });
   ok('Paziente fittizio inserito e assegnato: occupa il suo posto per 5 sedute');
 
   // paziente con ciclo già in corso: 10 sedute di cui 3 già svolte -> se ne prenotano 7
@@ -89,7 +89,7 @@ try {
   await page.waitForTimeout(300);
   await page.selectOption('select[data-bind="ag.th"]', verdi);
   await page.click('[data-act="ag-book"] >> nth=-1');
-  await page.fill('.modal input[data-bind="qb.name"]', 'Paziente In Corso');
+  await page.fill('.modal input[data-bind="qb.name"]', '2026/0002');
   await page.dispatchEvent('.modal input[data-bind="qb.name"]', 'change');
   await page.selectOption('.modal select[data-bind="qb.request_type"]', 'continuazione');
   const started = E.addDays(day, -21);
@@ -100,7 +100,7 @@ try {
   let k = 0; for (let x = started; x < t0; x = E.addDays(x, 1)) if (E.weekday(x) === E.weekday(day) && psql(`select count(*) from closures where day='${x}'`) === '0') k++;
   await page.waitForSelector(`.modal .form-note:has-text("Tutte le ${10 - k} sedute")`, { timeout: 10000 });
   await page.click('.modal button:has-text("Conferma e salva")');
-  await page.waitForSelector('h2:has-text("Paziente In Corso")', { timeout: 15000 });
+  await page.waitForSelector('h2:has-text("2026/0002")', { timeout: 15000 });
   const sheet = await page.textContent('main');
   assert.match(sheet, new RegExp('Effettuate: ' + k + ' \\(di cui ' + k + ' prima dell’inserimento\\)'));
   assert.match(sheet, new RegExp('Programmate: ' + (10 - k)));
@@ -115,12 +115,12 @@ try {
   await page.fill('#abs-day', day);
   await page.click('button:has-text("Registra l’assenza e cerca i sostituti")');
   await page.waitForSelector('.subst', { timeout: 15000 });
-  assert.match(await page.textContent('.subst'), /Paziente Prova/);
+  assert.match(await page.textContent('.subst'), /2026\/0001/);
   assert.match(await page.textContent('.subst'), /Stesso orario con Verdi Marco/);
   await page.click('button:has-text("Rivedi e conferma")');
   await page.click('.modal button:has-text("Conferma e salva")');
   await page.waitForSelector('text=Esito del salvataggio', { timeout: 15000 });
-  assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id join patients p on p.id=a.patient_id where a.day='${day}' and p.name='Paziente Prova'`), 'Verdi Marco');
+  assert.equal(psql(`select t.name from appointments a join therapists t on t.id=a.therapist_id join patients p on p.id=a.patient_id where a.day='${day}' and p.name='2026/0001'`), 'Verdi Marco');
   assert.equal(psql(`select count(*) from appointments where therapist_id='${anna}' and day > '${day}'`), '4', 'il resto del ciclo resta a Rossi Anna');
   ok('Assenza di Rossi Anna: il paziente passa a Verdi Marco allo stesso orario solo per quel giorno');
   // collega "solo ambulatorio" inserito con lo schema di reparto: avviso e correzione
@@ -277,7 +277,7 @@ try {
   await page.waitForSelector(`.wk-free.act[data-day="${ed}"]`);
   await page.click(`.wk-free.act[data-day="${ed}"] >> nth=0`, { position: { x: 20, y: 4 } }); // in alto: inizio dello spazio libero
   await page.waitForSelector('.drawer');
-  await page.fill('.drawer input[data-bind="pd.q"]', 'Quarta Seduta');
+  await page.fill('.drawer input[data-bind="pd.q"]', '2026/0004');
   // alla quarta seduta di dieci: ne restano 7 (totale del ciclo nei dettagli)
   await page.fill('.drawer input[data-bind="pd.left"]', '7');
   await page.dispatchEvent('.drawer input[data-bind="pd.left"]', 'change');
@@ -291,13 +291,13 @@ try {
   assert.equal((await page.$$('.wk-ghost')).length >= 1, true, 'anteprima delle sedute sul calendario');
   await page.click('.drawer button[data-act="pd-save"]');
   await page.waitForSelector('.drawer', { state: 'detached', timeout: 15000 });
-  const qs = psql(`select c.prior_sessions||'/'||c.planned_sessions||'/'||count(a.*) from cycles c join patients p on p.id=c.patient_id join appointments a on a.cycle_id=c.id where p.name='Quarta Seduta' group by c.id`);
+  const qs = psql(`select c.prior_sessions||'/'||c.planned_sessions||'/'||count(a.*) from cycles c join patients p on p.id=c.patient_id join appointments a on a.cycle_id=c.id where p.name='2026/0004' group by c.id`);
   assert.equal(qs, '3/10/7');
-  assert.equal(psql(`select string_agg(distinct extract(isodow from a.day)::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta'`), '1,3,5');
+  assert.equal(psql(`select string_agg(distinct extract(isodow from a.day)::text, ',') from appointments a join patients p on p.id=a.patient_id where p.name='2026/0004'`), '1,3,5');
   ok('Paziente alla 4ª seduta di 10 inserito dal calendario (pannello laterale, anteprima): 3 già svolte, 7 programmate Lun-Mer-Ven');
   // orari diversi per giorno: dal mercoledì, solo i mercoledì alle 12:20 (dal nome del paziente nel tabulato)
   await page.evaluate(([g, d]) => { location.hash = '#/calendario/' + g + '/' + d + '/mese'; }, [gialli, ed]);
-  await page.click('.tg .tg-name button:has-text("Quarta Seduta")');
+  await page.click('.tg .tg-name button:has-text("2026/0004")');
   await page.click('.modal button:has-text("Cambia ora dal")');
   await page.fill('.modal input[data-bind="tp.time"]', '12.20'); await page.press('.modal input[data-bind="tp.time"]', 'Tab');
   await page.fill('.modal input[data-bind="tp.from"]', wed); await page.dispatchEvent('.modal input[data-bind="tp.from"]', 'change');
@@ -305,14 +305,14 @@ try {
   await page.uncheck('.modal input[data-bind="tp.wds"][value="5"]');
   await page.click('.modal button[data-act="tp-save"]');
   await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
-  assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and extract(isodow from a.day)=3`), '12:20');
-  assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta' and extract(isodow from a.day)=1`), '07:15');
+  assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='2026/0004' and extract(isodow from a.day)=3`), '12:20');
+  assert.equal(psql(`select string_agg(distinct to_char(a.start_time,'HH24:MI'), ',') from appointments a join patients p on p.id=a.patient_id where p.name='2026/0004' and extract(isodow from a.day)=1`), '07:15');
   ok('Dal nome del paziente: dal mercoledì in poi, solo i mercoledì alle 12:20 (scritto 12.20); lunedì e venerdì restano alle 7:15');
   // assenza dalla casella del tabulato, con una seduta aggiunta in fondo al ciclo
-  await page.click(`.tg tr:has(.tg-name:has-text("Quarta Seduta")) td:nth-child(${Number(ed.slice(8)) + 1}) button`);
+  await page.click(`.tg tr:has(.tg-name:has-text("2026/0004")) td:nth-child(${Number(ed.slice(8)) + 1}) button`);
   await page.click('.modal button[data-act="ts-absent"][data-rec="1"]');
   await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
-  assert.equal(psql(`select count(*) filter (where a.status='assente')||'/'||count(*) filter (where a.status='programmata') from appointments a join patients p on p.id=a.patient_id where p.name='Quarta Seduta'`), '1/7', 'l’assenza non scala: le 7 sedute restano tutte in programma');
+  assert.equal(psql(`select count(*) filter (where a.status='assente')||'/'||count(*) filter (where a.status='programmata') from appointments a join patients p on p.id=a.patient_id where p.name='2026/0004'`), '1/7', 'l’assenza non scala: le 7 sedute restano tutte in programma');
   ok('Dal tabulato: assenza del paziente con una seduta aggiunta in fondo, il conteggio resta giusto');
 
   // account di un fisioterapista: modifica solo il proprio calendario

@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { E, S, ensureUser, login, anon, ctxFor, today, workdays, psql, expectError } from './helpers.mjs';
 
-const RUN = Date.now().toString(36).slice(-5);
+const RUN = 'c' + (Date.now() % 100000); // con una cifra: il paziente è un codice cartella
 let admin, op1, op2, reader, T0;
 
 const WEEK = (() => {
@@ -93,8 +93,8 @@ test('due utenti prenotano lo stesso posto nello stesso momento: uno solo riesce
   const dates = weekly(d, 5);
   for (let round = 0; round < 3; round++) {
     const start = E.fromMin(8 * 60 + round * 30);
-    const r1 = await S.rpc(op1, 'create_request', { p: { patient_name: 'Conc1 ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
-    const r2 = await S.rpc(op2, 'create_request', { p: { patient_name: 'Conc2 ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+    const r1 = await S.rpc(op1, 'create_request', { p: { patient_name: 'Conc1-' + round + ' ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+    const r2 = await S.rpc(op2, 'create_request', { p: { patient_name: 'Conc2-' + round + ' ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
     const res = await Promise.allSettled([
       S.rpc(op1, 'book_cycle', { p_cycle: r1.cycle_id, p_version: 1, p_therapist: ids.A, p_start: start, p_weekdays: [E.weekday(d)], p_dates: dates }),
       S.rpc(op2, 'book_cycle', { p_cycle: r2.cycle_id, p_version: 1, p_therapist: ids.A, p_start: start, p_weekdays: [E.weekday(d)], p_dates: dates })
@@ -390,7 +390,7 @@ test('un posto futuro soltanto probabile non è prenotabile finché la conclusio
   assert.deepEqual(opts[0].dependsOn, [p.cycle_id]);
   await expectError(book(op2, { name: 'Troppo presto', cat: 'mano', th: ids.A, start: '13:00', dates: after }), 'FA_SLOT', /solo probabile/);
   await S.rpc(op1, 'update_cycle_info', { p_cycle: p.cycle_id, p_version: Number(psql(`select version from cycles where id='${p.cycle_id}'`)), p: { forecast: 'conclusione_confermata' } });
-  await book(op2, { name: 'Ora sì', cat: 'mano', th: ids.A, start: '13:00', dates: after });
+  await book(op2, { name: 'Ora si', cat: 'mano', th: ids.A, start: '13:00', dates: after });
 });
 
 test('aggiornamento visibile agli altri colleghi in tempo reale', async () => {
@@ -413,7 +413,7 @@ test('backup e ripristino da parte del coordinatore', async () => {
   const nAppt = before.appointments.length;
   assert.ok(nAppt > 100);
   assert.ok(!('slot' in before.appointments[0]));
-  const extra = await S.rpc(op1, 'create_request', { p: { patient_name: 'Dopo il backup ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
+  const extra = await S.rpc(op1, 'create_request', { p: { patient_name: 'Dopo backup ' + RUN, category_id: 'mano', duration: 30, planned_sessions: 5 } });
   await expectError(S.rpc(admin, 'admin_restore', { p: before, p_confirm: 'si' }), 'FA_INPUT', /RIPRISTINA/);
   await expectError(S.rpc(op1, 'admin_restore', { p: before, p_confirm: 'RIPRISTINA' }), 'FA_PERM');
   const counts = await S.rpc(admin, 'admin_restore', { p: before, p_confirm: 'RIPRISTINA' });

@@ -664,7 +664,7 @@
       const s = A.ui.log || {};
       const q = (s.q || '').toLowerCase();
       const rows = (s.rows || []).filter(r => !q || (r.summary + ' ' + r.user_name).toLowerCase().includes(q));
-      return '<h2>Storico delle modifiche</h2><div class="panel"><div class="row"><input type="text" style="max-width:360px" placeholder="Cerca (nome, paziente, azione…)" data-bind="log.q" data-rerender value="' + esc(s.q || '') + '">' +
+      return '<h2>Storico delle modifiche</h2><div class="panel"><div class="row"><input type="text" style="max-width:360px" placeholder="Cerca (codice cartella, fisioterapista, azione…)" data-bind="log.q" data-rerender value="' + esc(s.q || '') + '">' +
         '<button class="btn small" data-act="log-reload">Aggiorna</button><span class="muted small">Ultime ' + (s.rows ? s.rows.length : 0) + ' operazioni. Chi, cosa e quando.</span></div>' +
         (s.error ? FA.errBox(s.error) : '') + '<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Chi</th><th>Cosa</th></tr></thead><tbody>' +
         rows.map(r => '<tr><td class="nowrap small">' + esc(new Date(r.at).toLocaleString('it-IT')) + '</td><td>' + esc(r.user_name) + '</td><td>' + esc(r.summary) + '</td></tr>').join('') +

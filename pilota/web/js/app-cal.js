@@ -67,7 +67,7 @@
     let html = '<h2>Trova posto per un paziente</h2><div class="panel"><form data-submit="find-search">' +
       '<div class="field"><label>Paziente</label>' + FA.seg('find.mode', [['nuovo', 'Nuovo paziente'], ['attesa', 'Dalla lista d’attesa']], f.mode) + '</div>' +
       (f.mode === 'nuovo'
-        ? '<div class="field" style="max-width:420px"><label for="f-name">Nome (fittizio)</label><input id="f-name" type="text" data-bind="find.patient_name" value="' + esc(f.patient_name || '') + '" placeholder="es. Rossi M."><div class="help">Solo pazienti fittizi in questa versione pilota.</div></div>'
+        ? '<div class="field" style="max-width:420px"><label for="f-name">Codice cartella</label><input id="f-name" type="text" data-bind="find.patient_name" value="' + esc(f.patient_name || '') + '" placeholder="' + FA.CODE_HINT + '" autocapitalize="characters"><div class="help">Solo il codice cartella, mai nome e cognome.</div></div>'
         : '<div class="field"><label for="f-req">Richiesta in lista d’attesa</label><select id="f-req" data-bind="find.cycle_id" data-on="find-pick-request"><option value="">— scegli —</option>' +
           waiting.map(c => FA.option(c.id, '[' + c.priority + '] ' + FA.patName(c.patient_id) + ' · ' + FA.catName(c.category_id) + ' · ' + c.duration + ' min × ' + c.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
       '<div class="grid3">' +
@@ -133,7 +133,7 @@
   FA.actions['find-all'] = el => { const f = findState(); f.showAll = Object.assign({}, f.showAll, { [el.getAttribute('data-k')]: true }); FA.render(); };
   FA.actions['find-waitlist'] = async () => {
     const f = findState();
-    if (!(f.patient_name || '').trim()) { f.error = 'Scrivi il nome (fittizio) del paziente.'; FA.render(); return; }
+    if (FA.codeError(f.patient_name)) { f.error = FA.codeError(f.patient_name); FA.render(); return; }
     try {
       const r = await FA.save('Richiesta in lista d’attesa', () => FA.rpc('create_request', { p: reqPayload(f) }));
       A.ui.find = null; FA.go('attesa'); void r;
@@ -147,7 +147,7 @@
   FA.actions['find-book'] = el => {
     const f = findState();
     const o = f.results[Number(el.getAttribute('data-i'))];
-    if (f.mode === 'nuovo' && !(f.patient_name || '').trim()) { f.error = 'Scrivi il nome (fittizio) del paziente prima di prenotare.'; FA.render(); window.scrollTo(0, 0); return; }
+    if (f.mode === 'nuovo' && FA.codeError(f.patient_name)) { f.error = FA.codeError(f.patient_name); FA.render(); window.scrollTo(0, 0); return; }
     A.ui.bookErr = null;
     FA.openModal({
       title: 'Conferma prenotazione', live: true,
@@ -285,7 +285,7 @@
     const bad = checks.filter(x => x.chk);
     return '<p>Primo appuntamento: <strong>' + esc(FA.dayLabel(f.day)) + '</strong> con <strong>' + esc(FA.thName(f.th)) + '</strong>' + (f.end ? ' (spazio libero ' + esc(f.slotStart) + '–' + esc(f.end) + ')' : '') + '. Stesso orario e stesso collega per tutte le sedute; occupa solo la durata scelta.</p>' +
       '<div class="field"><label>Paziente</label>' + FA.seg('qb.mode', [['nuovo', 'Nuovo paziente (fittizio)'], ['attesa', 'Dalla lista d’attesa']], f.mode) + '</div>' +
-      (f.mode === 'nuovo' ? '<div class="field" style="max-width:420px"><label>Nome (fittizio)</label><input type="text" data-bind="qb.name" data-rerender value="' + esc(f.name) + '" placeholder="es. Bianchi L."></div>'
+      (f.mode === 'nuovo' ? '<div class="field" style="max-width:420px"><label>Codice cartella</label><input type="text" data-bind="qb.name" data-rerender value="' + esc(f.name) + '" placeholder="' + FA.CODE_HINT + '" autocapitalize="characters"></div>'
         : '<div class="field"><label>Richiesta</label><select data-bind="qb.cycle_id" data-rerender><option value="">— scegli —</option>' + waiting.map(c => FA.option(c.id, '[' + c.priority + '] ' + FA.patName(c.patient_id) + ' · ' + FA.catName(c.category_id) + ' · ' + c.duration + ' min × ' + c.planned_sessions, f.cycle_id)).join('') + '</select></div>') +
       '<div class="grid3"><div class="field"><label>Percorso (tra quelli di ' + esc(FA.thName(f.th)) + ')</label><select data-bind="qb.category_id" data-rerender' + (cyc ? ' disabled' : '') + '>' + cats.map(c => FA.option(c.id, c.name, f.category_id)).join('') + '</select></div>' +
       '<div class="field"><label>Priorità</label><select data-bind="qb.priority">' + E.PRIORITY_ORDER.map(p => FA.option(p, E.PRIORITY[p], f.priority)).join('') + '</select></div>' +
@@ -304,6 +304,7 @@
     const f = A.ui.qb;
     try {
       let cycleId = f.cycle_id, version;
+      if (f.mode === 'nuovo' && FA.codeError(f.name)) { f.error = FA.codeError(f.name); FA.render(); return; }
       if (f.mode === 'nuovo') {
         const r = await FA.save('Paziente e richiesta', () => FA.rpc('create_request', { p: { patient_name: f.name.trim(), category_id: f.category_id, priority: f.priority,
           request_type: f.request_type, duration: Number(f.duration), planned_sessions: Number(f.sessions),
@@ -538,7 +539,7 @@
     const canDel = a.status === 'programmata' || a.status === 'da_riprogrammare';
     const prior = fixPrior(am, a, cyc);
     return '<div class="panel"><div class="grid3">' +
-      '<div class="field"><label>Nome del paziente</label><input type="text" data-bind="am.fx.name" value="' + esc(f.name) + '"></div>' +
+      '<div class="field"><label>Codice cartella</label><input type="text" data-bind="am.fx.name" value="' + esc(f.name) + '" autocapitalize="characters"></div>' +
       (typeof n === 'number' ? '<div class="field"><label>Sedute che restano, compresa questa</label><div class="row"><input type="number" min="1" max="' + f.planned + '" style="max-width:80px" data-bind="am.fx.left" data-num data-rerender value="' + esc(f.left) + '"> su ' +
         '<select style="max-width:90px" data-bind="am.fx.planned" data-num data-rerender>' + [...new Set(E.SESSION_PRESETS.concat([Number(f.planned)]))].sort((x, y) => x - y).map(x => FA.option(x, x, f.planned)).join('') + '</select></div>' +
         '<div class="help">' + (prior == null ? '<span class="need-txt">Numero non possibile per questa seduta.</span>' : 'Totale del ciclo e sedute che restano si correggono qui; le altre sedute in agenda si rinumerano di conseguenza (la correzione resta nello storico).') + '</div></div>' : '<div></div>') +
@@ -574,7 +575,8 @@
     if (f.treatment.trim().toUpperCase() !== (cyc.treatment || '')) p.treatment = f.treatment.trim().toUpperCase();
     if (dur !== cyc.duration) p.duration = dur;
     try {
-      if (f.name.trim() && f.name.trim() !== pat.name) await FA.save('Nome del paziente', () => FA.rpc('update_patient', { p_id: pat.id, p_version: pat.version, p_name: f.name.trim(), p_note: pat.note || '' }));
+      if (f.name.trim() && f.name.trim() !== pat.name && FA.codeError(f.name, pat.id)) { FA.toast(FA.codeError(f.name, pat.id), 'warn'); return; }
+      if (f.name.trim() && f.name.trim() !== pat.name) await FA.save('Codice cartella', () => FA.rpc('update_patient', { p_id: pat.id, p_version: pat.version, p_name: f.name.trim(), p_note: pat.note || '' }));
       if (Object.keys(p).length) await FA.save('Ciclo corretto', () => FA.rpc('quick_edit_cycle', { p_cycle: cyc.id, p_version: A.ctx.cyc.get(cyc.id).version, p }));
       am.fx = null; am.mode = null; am.error = null; FA.renderModal();
     } catch (e) { am.error = e.message; FA.renderModal(); }
@@ -735,7 +737,7 @@
     const pats = (A.data.patients || []).filter(p => !q || p.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
     const cyclesBy = new Map();
     (A.data.cycles || []).forEach(c => { if (!cyclesBy.has(c.patient_id)) cyclesBy.set(c.patient_id, []); cyclesBy.get(c.patient_id).push(c); });
-    return '<div class="row between"><h2>Pazienti e cicli</h2><div class="row"><a class="btn primary small" href="#/trova">+ Nuovo paziente (trova posto)</a><a class="btn small" href="#/agenda">Prenota da un posto libero in agenda</a></div></div><div class="panel"><div class="field" style="max-width:420px"><label for="pq">Cerca per nome</label><input id="pq" type="text" data-bind="pq" data-rerender value="' + esc(A.ui.pq || '') + '" placeholder="es. Rossi"></div>' +
+    return '<div class="row between"><h2>Pazienti e cicli</h2><div class="row"><a class="btn primary small" href="#/trova">+ Nuovo paziente (trova posto)</a><a class="btn small" href="#/agenda">Prenota da un posto libero in agenda</a></div></div><div class="panel"><div class="field" style="max-width:420px"><label for="pq">Cerca per codice cartella</label><input id="pq" type="text" data-bind="pq" data-rerender value="' + esc(A.ui.pq || '') + '" placeholder="es. Rossi"></div>' +
       '<div class="table-wrap"><table><thead><tr><th>Paziente</th><th>Cicli</th><th>Prossima seduta</th></tr></thead><tbody>' +
       pats.slice(0, 300).map(p => {
         const cs = cyclesBy.get(p.id) || [];
@@ -798,7 +800,7 @@
     const p = A.ctx.pat.get(el.getAttribute('data-id'));
     A.ui.pe = { id: p.id, version: p.version, name: p.name, note: p.note };
     FA.openModal({ title: 'Dati del paziente (fittizio)',
-      body: () => '<div class="field"><label>Nome</label><input type="text" data-bind="pe.name" value="' + esc(A.ui.pe.name) + '"></div><div class="field"><label>Nota</label><input type="text" data-bind="pe.note" value="' + esc(A.ui.pe.note) + '"></div>' + FA.errBox(A.ui.pe.error),
+      body: () => '<div class="field"><label>Codice cartella</label><input type="text" data-bind="pe.name" value="' + esc(A.ui.pe.name) + '" autocapitalize="characters"></div><div class="field"><label>Nota</label><input type="text" data-bind="pe.note" value="' + esc(A.ui.pe.note) + '"><div class="help">Niente nomi né altri dati che identificano il paziente.</div></div>' + FA.errBox(A.ui.pe.error),
       foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="pat-save"' + FA.saveDisabled() + '>Salva</button>' });
   };
   FA.actions['pat-save'] = async () => {

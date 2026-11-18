@@ -141,7 +141,7 @@ begin
         v_count := v_count + 1;
         v_k := 1 + floor(random() * array_length(v_surn, 1))::int;
         insert into public.patients (name, note)
-        values (v_surn[least(v_k, array_length(v_surn, 1))] || ' ' || v_init[1 + floor(random() * array_length(v_init, 1))::int] || '.', 'Paziente fittizio')
+        values ('2026/' || lpad(v_count::text, 4, '0'), 'Paziente fittizio')
         returning id into v_pat;
         v_skills := st.spec; v_other := st.oth;
         v_cat := case when random() < 0.6 then v_skills[1 + floor(random() * array_length(v_skills, 1))::int]
@@ -182,7 +182,7 @@ begin
   -- lista d'attesa (richieste non ancora prenotate)
   for v_k in 1..14 loop
     insert into public.patients (name, note)
-    values (v_surn[1 + floor(random() * array_length(v_surn, 1))::int] || ' ' || v_init[1 + floor(random() * array_length(v_init, 1))::int] || '.', 'Paziente fittizio')
+    values ('2026/A' || lpad(v_k::text, 3, '0'), 'Paziente fittizio')
     returning id into v_pat;
     insert into public.cycles (patient_id, category_id, priority, request_type, duration, planned_sessions, weekdays, preference, created_at)
     values (v_pat, (array['mano','chir_mano','mano','orto','protesi','onco','ortesi','neuro','chir_mano','linf','spalla','rachide'])[1 + floor(random() * 12)::int],

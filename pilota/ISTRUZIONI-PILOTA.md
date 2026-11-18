@@ -58,14 +58,24 @@ Con questi due dati preparo il pacchetto del sito (`npm run build` con `FA_URL` 
 
 Se il database era stato installato con una versione precedente, esegui [`supabase/aggiornamento-database.sql`](supabase/aggiornamento-database.sql) (SQL Editor → New query → incolla → Run). Si può rieseguire senza problemi e non tocca i dati.
 
+## Pazienti solo con il codice cartella (anonimato)
+
+Ogni paziente si indica **solo con il suo codice cartella** (es. `2026/0153`), mai con nome e cognome: nel tabulato, negli avvisi, nello storico e nei backup compare solo il codice.
+
+- Il codice può avere lettere, cifre e `/ . - _`, al massimo 20 caratteri, e deve contenere **almeno una cifra**: se qualcuno scrive un nome (es. «Mario Rossi»), l'app lo rifiuta e lo spiega. Il controllo lo fa anche il server, quindi vale per tutti.
+- **Un codice = un paziente**: se il codice c'è già, l'app lo propone e non crea un doppione (maiuscole, minuscole e spazi non contano).
+- Nelle **note** non scrivere nomi né altri dati che permettono di riconoscere il paziente.
+- I pazienti già inseriti con il nome restano come sono: per ripartire puliti usa **Svuota pazienti e sedute** (vedi sotto), oppure cambia il codice dalla scheda del paziente (tocca il codice → **Codice cartella**).
+- Attenzione: il codice cartella permette comunque, a chi ha accesso alle cartelle, di risalire al paziente. Prima di usare il pilota con pazienti veri serve comunque la valutazione privacy indicata in fondo.
+
 ## Il tabulato del mese (come i fogli di carta)
 
 Ogni fisioterapista, appena entra, vede **Oggi**: i suoi pazienti del giorno con le sedute che restano. Dal menu **Tabulato** si apre il foglio del mese, pensato anche per il cellulare.
 
-- **Righe = pazienti** (nome, orario e giorni della settimana), **colonne = giorni**. Nella casella c'è il **numero che scende** come sulla carta: 10, 9, 8 … 1.
+- **Righe = pazienti** (codice cartella, orario e giorni della settimana), **colonne = giorni**. Nella casella c'è il **numero che scende** come sulla carta: 10, 9, 8 … 1.
 - **‹ ›** per andare ai mesi precedenti o successivi, senza limiti; **Oggi** per tornare al mese corrente. Toccando il numero di un giorno in alto si apre la **vista Giorno**.
 - Caselle **grigie** = sedute passate (contano da sole: **la presenza non si segna**). **A** = assente. **!** = da ricollocare. Un piccolo orario in alto = quella seduta è a un'ora diversa dal solito.
-- **Paziente nuovo:** scrivi il nome in una delle **righe vuote** in fondo e premi Invio (o tocca una casella della riga). Si apre la scheda già compilata: giorni della settimana, ora (si scrive a mano, es. 12:20), durata (30, 45, 60 o altro), numero di sedute. Le sedute si mettono da sole nei giorni scelti.
+- **Paziente nuovo:** scrivi il **codice cartella** in una delle **righe vuote** in fondo e premi Invio (o tocca una casella della riga). Si apre la scheda già compilata: giorni della settimana, ora (si scrive a mano, es. 12:20), durata (30, 45, 60 o altro), numero di sedute. Le sedute si mettono da sole nei giorni scelti.
 
 ### Toccare una casella (una seduta)
 
@@ -75,9 +85,9 @@ Pulsanti grandi, nessun trascinamento:
 - Dopo ogni modifica compare **Annulla** per qualche secondo.
 - Una casella vuota (giorno futuro) aggiunge una seduta a quel paziente.
 
-### Toccare il nome (il paziente)
+### Toccare il codice (il paziente)
 
-Nome · numero di sedute · **Cambia ora dal…** (anche solo per alcuni giorni della settimana) · durata · **passa a un collega dal…** · aggiungi altre sedute · togli le sedute future · **Sospendi** / **Riprendi** / **Concludi**.
+Codice cartella · numero di sedute · **Cambia ora dal…** (anche solo per alcuni giorni della settimana) · durata · **passa a un collega dal…** · aggiungi altre sedute · togli le sedute future · **Sospendi** / **Riprendi** / **Concludi**.
 
 Una seduta data a un collega resta nel tabulato del titolare con la **sigla del collega** e lo stesso numero; il collega la vede nel suo tabulato come paziente di un altro.
 
@@ -92,7 +102,7 @@ Ognuno cambia il **proprio** orario; segreteria, coordinatore e programmatore ca
 Quando **un'altra persona** (segreteria, coordinatore…) scrive nel tuo tabulato un **paziente nuovo**, oppure ti **affida un paziente di un collega** (per esempio perché è in malattia), compare un **riquadro rosso** in cima al tuo tabulato e alla pagina **Oggi**, più la campanella rossa in alto con il numero.
 
 - **Un avviso per ogni paziente** e per ogni volta: se te ne affidano tre, vedi tre avvisi.
-- In ogni avviso: nome del paziente, **le sedute** (giorno e ora), di chi è il paziente e perché (es. «paziente di Rossi, in malattia»), chi l'ha inserito e quando.
+- In ogni avviso: codice cartella del paziente, **le sedute** (giorno e ora), di chi è il paziente e perché (es. «paziente di Rossi, in malattia»), chi l'ha inserito e quando.
 - **Vedi** apre il tabulato del mese con il paziente evidenziato; **Visto** spegne l'avviso (con più avvisi c'è anche **Visti tutti**). Segreteria e coordinatore vedono che l'hai letto (✓✓).
 - Quello che scrivi tu nel tuo tabulato non ti manda avvisi; nemmeno spostare le sedute di un paziente che hai già, o una seduta che torna a te dopo una sostituzione.
 

@@ -9,7 +9,7 @@ import { ROOT, ensureUser, PASSWORD, psql, E } from './helpers.mjs';
 
 const PORT = 8091;
 const URL0 = process.env.E2E_URL || `http://localhost:${PORT}/`;
-const RUN = Date.now().toString(36).slice(-4);
+const RUN = 'c' + (Date.now() % 10000); // con una cifra: il paziente è un codice cartella
 let step = 0;
 const ok = msg => console.log(`✓ ${++step}. ${msg}`);
 

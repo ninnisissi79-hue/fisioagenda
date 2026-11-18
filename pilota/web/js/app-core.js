@@ -48,6 +48,17 @@
   FA.levelChip = l => l === 'specifica' ? '<span class="chip ok">★ competenza specifica</span>' : '<span class="chip grey">abilitato</span>';
   FA.thName = id => E.therapistName(A.ctx, id);
   FA.patName = id => E.patientName(A.ctx, id);
+  /** il paziente si indica solo con il CODICE CARTELLA (anonimato): stesse regole del server */
+  FA.codeKey = s => String(s || '').trim().replace(/\s+/g, '').toUpperCase();
+  FA.codeError = (s, exceptId) => {
+    const v = String(s || '').trim().replace(/\s+/g, ' ');
+    if (!v) return 'Scrivi il codice cartella del paziente.';
+    if (v.length > 20 || !/^[a-z0-9 /._-]+$/i.test(v)) return 'Codice cartella non valido: solo lettere, cifre e / . - _ (al massimo 20 caratteri).';
+    if (!/[0-9]/.test(v)) return 'Il codice cartella contiene almeno una cifra. Per l’anonimato non scrivere nomi e cognomi.';
+    const k = FA.codeKey(v), dup = ((A.data && A.data.patients) || []).find(p => p.id !== exceptId && FA.codeKey(p.name) === k);
+    return dup ? 'Il codice cartella ' + dup.name + ' c’è già: usa quel paziente.' : null;
+  };
+  FA.CODE_HINT = 'es. 2026/0153';
   FA.catName = id => E.categoryName(A.ctx, id);
   FA.dayLabel = d => E.WD_LONG[E.weekday(d)] + ' ' + E.fmtIt(d);
   FA.activeTherapists = () => [...A.ctx.th.values()].filter(t => t.active).sort((a, b) => (a.sort - b.sort) || a.name.localeCompare(b.name));
@@ -247,7 +258,7 @@
         '<div class="field"><label for="np2">Ripeti la password</label><input id="np2" type="password" autocomplete="new-password" data-bind="login.p2" required minlength="10"></div>' +
         FA.errBox(L.error) + '<button class="btn primary" type="submit"' + (L.busy ? ' disabled' : '') + '>Salva la password</button></form></div>';
     }
-    return '<div class="login panel"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso · solo pazienti fittizi</div></div></div>' +
+    return '<div class="login panel"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso · pazienti solo con codice cartella</div></div></div>' +
       (cfgOk ? '' : '<div class="form-error">Configurazione mancante: copia <code>config.example.js</code> in <code>config.js</code> e inserisci l’indirizzo e la chiave pubblica del progetto Supabase.</div>') +
       '<form data-submit="login"><div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="username" data-bind="login.email" value="' + esc(L.email || '') + '" required></div>' +
       '<div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" data-bind="login.password" required></div>' +
@@ -541,7 +552,7 @@
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
       '</div><nav class="nav">' + nav().map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
-      '<div class="pilot-banner">Versione pilota: <strong>solo pazienti fittizi</strong>, non inserire dati reali.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
+      '<div class="pilot-banner">Versione pilota: ogni paziente si indica <strong>solo con il codice cartella</strong>, mai con nome e cognome; nessun dato personale nelle note.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
         (A.me.edit_all_until && A.me.role === 'operatore' && A.me.base_role !== 'operatore' ? ' Sei <strong>autorizzato a gestire tutte le agende</strong> fino al ' + esc(E.fmtIt(A.me.edit_all_until)) + '.' : '') +
         (FA.isFisio() ? ' Puoi modificare <strong>il tuo tabulato</strong> e consultare quelli dei colleghi' + (A.me.therapist_id ? (A.ctx ? ' (' + esc(FA.thName(A.me.therapist_id)) + ')' : '') : ' — account non ancora collegato al tuo nome: chiedi al coordinatore') + '.' : '') + '</div>' +
       (A.online ? '' : '<div class="net-banner" role="alert">Connessione assente: puoi consultare i dati già caricati, ma nessuna modifica può essere salvata finché la connessione non torna.</div>') +

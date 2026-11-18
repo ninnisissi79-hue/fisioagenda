@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { E, S, ensureUser, login, today, workdays, psql, expectError } from './helpers.mjs';
 
-const RUN = Date.now().toString(36).slice(-5);
+const RUN = 'c' + (Date.now() % 100000); // con una cifra: il paziente è un codice cartella
 let admin, op1, T0;
 const DAY = [{ kind: 'amb', start: '07:00', end: '12:00' }, { kind: 'pausa', start: '12:00', end: '12:20' }, { kind: 'amb', start: '12:20', end: '14:30' }];
 const WEEK = { 1: DAY, 2: DAY, 3: DAY, 4: DAY, 5: DAY, 6: [], 7: [] };
@@ -81,10 +81,11 @@ test('importazione di un tabulato: numeri a ritroso, R, V, date passate solo pro
   const r2 = await S.rpc(op1, 'import_sheet', { p: again });
   assert.equal(r2.appointments, 0); assert.equal(r2.duplicates, 7); assert.equal(r2.visits, 0);
   assert.equal(q(`select count(*) from appointments where patient_id in ('${pat}','${fav}')`), '7');
-  // omonimo esplicito: nuovo paziente con lo stesso nome
-  const homo = { therapist_id: th, month: month(T0), from_date: T0, rows: [{ ref: 'h', target: 'nuovo', homonym: true, patient_name: 'Rossi ' + RUN, category_id: 'mano', planned: 10, prior: 9, duration: 30, weekdays: [2], start: '13:00', cells: [{ day: days(E.addDays(T0, 1), [2], 1)[0], number: 1 }] }] };
-  await S.rpc(op1, 'import_sheet', { p: homo });
-  assert.equal(q(`select count(*) from patients where name='Rossi ${RUN}'`), '2');
+  // codice cartella: un codice = un paziente, nessun «omonimo»
+  const homo = { therapist_id: th, month: month(T0), from_date: T0, rows: [{ ref: 'h', target: 'nuovo', homonym: true, patient_name: 'rossi  ' + RUN, category_id: 'mano', planned: 10, prior: 9, duration: 30, weekdays: [2], start: '13:00', cells: [{ day: days(E.addDays(T0, 1), [2], 1)[0], number: 1 }] }] };
+  const rh = await S.rpc(op1, 'import_sheet', { p: homo });
+  assert.match(rh.results[0].error, /Esiste già un paziente con il codice cartella/);
+  assert.equal(q(`select count(*) from patients where name='Rossi ${RUN}'`), '1');
 });
 
 test('importazione: ogni riga e ogni seduta si salvano per conto loro; gli avvisi si confermano, le sovrapposizioni no', async () => {
@@ -209,7 +210,7 @@ test('correzioni rapide dal calendario: elimina, numerazione, durata, sedute agg
   c2 = JSON.parse(q(`select row_to_json(c) from cycles c where id='${cyc.id}'`));
   const add = [{ day: fut[2], start: '09:00' }, { day: fut[3], start: '09:00' }, { day: days(E.addDays(fut[3], 1), [1, 2, 3, 4, 5], 1)[0], start: '09:00' }];
   // una seduta in più del previsto: il ciclo si allunga (nessun blocco)
-  let more = E.addDays(fut[3], 14); while (E.weekday(more) >= 6) more = E.addDays(more, 1);
+  const more = days(E.addDays(fut[3], 14), [1, 2, 3, 4, 5], 1)[0];
   const ra = await S.rpc(op1, 'add_cycle_slots', { p_cycle: cyc.id, p_version: c2.version, p_therapist: th, p_slots: add.concat([{ day: more, start: '09:00', minutes: 45 }]) });
   assert.equal(ra.extended, 1);
   assert.equal(q(`select planned_sessions from cycles where id='${cyc.id}'`), '11');

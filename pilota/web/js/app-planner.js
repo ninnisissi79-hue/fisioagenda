@@ -661,7 +661,7 @@
     // le sovrapposizioni bloccano; gli avvisi organizzativi (fuori orario, assenza…) si confermano
     f.hard = slots.filter(s => s.chk && FA.isHardConflict(s.chk)).length;
     f.warn = slots.filter(s => s.chk && !FA.isHardConflict(s.chk)).length;
-    const who = f.mode === 'attesa' ? !!f.cycle_id : f.patient_id ? true : !!f.q.trim();
+    const who = f.mode === 'attesa' ? !!f.cycle_id : f.patient_id ? true : !!f.q.trim() && !FA.codeError(f.q);
     f.okAll = slots.length === n && n > 0 && !f.hard && (!f.warn || !!f.force) && who && (!!c || !!f.category_id) && dur >= 10 && dur <= 240 && dur % 5 === 0;
   }
   /** paziente già in trattamento a cui si aggiunge una sola seduta */
@@ -704,7 +704,7 @@
     if (f.mode === 'attesa') {
       const waiting = (A.data.cycles || []).filter(x => x.status === 'in_attesa' && E.skillLevel(ctx, f.th, x.category_id));
       who = '<div class="field"><label>Dalla lista d’attesa</label><select data-bind="pd.cycle_id" data-on="pd-chg"><option value="">— scegli —</option>' + waiting.map(w => FA.option(w.id, '[' + w.priority + '] ' + FA.patName(w.patient_id) + ' · ' + FA.catName(w.category_id) + ' · ' + w.duration + '′ × ' + w.planned_sessions, f.cycle_id)).join('') + '</select>' +
-        '<button class="btn link small" data-act="pd-mode" data-m="nuovo">← scrivi un nome</button></div>';
+        '<button class="btn link small" data-act="pd-mode" data-m="nuovo">← scrivi un codice cartella</button></div>';
     } else if (sel) {
       who = '<div class="field"><label>Paziente</label><div class="row"><strong>' + esc(sel.name) + '</strong><button class="btn link small" data-act="pd-pick" data-id="">cambia</button></div>';
       if (c) {
@@ -717,10 +717,11 @@
     } else {
       const qn = window.FASheet.normName(f.q);
       const found = qn.length >= 2 ? (A.data.patients || []).filter(p => window.FASheet.normName(p.name).includes(qn)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 6) : [];
-      who = '<div class="field"><label>Paziente</label><input type="text" data-bind="pd.q" data-pd-search value="' + esc(f.q) + '" placeholder="Cognome e nome (fittizio) — cerca anche in archivio" autocomplete="off">' +
+      const qErr = f.q.trim() && !found.some(p => FA.codeKey(p.name) === FA.codeKey(f.q)) ? FA.codeError(f.q) : null;
+      who = '<div class="field"><label>Codice cartella del paziente</label><input type="text" data-bind="pd.q" data-pd-search value="' + esc(f.q) + '" placeholder="' + FA.CODE_HINT + ' — cerca anche in archivio" autocomplete="off" autocapitalize="characters">' +
         (found.length ? '<div class="pd-found">' + found.map(p => { const ac = activeCycleOf(p.id); const k = ac ? E.cycleCounts(ctx, ac.id) : null;
           return '<button class="btn small" data-act="pd-pick" data-id="' + p.id + '">' + esc(p.name) + (ac ? ' · in trattamento con ' + esc(FA.thName(ac.therapist_id)) + ' · restano ' + (ac.planned_sessions - k.effettuate) : ' · in archivio') + '</button>'; }).join('') + '</div>' : '') +
-        (f.q.trim() ? '<div class="help">' + (found.length ? 'Se non è nessuno di questi: ' : '') + 'paziente <strong>nuovo</strong> «' + esc(f.q.trim()) + '».</div>' : '') +
+        (f.q.trim() ? (qErr ? '<div class="form-warn small">' + esc(qErr) + '</div>' : '<div class="help">' + (found.length ? 'Se non è nessuno di questi: ' : '') + 'paziente <strong>nuovo</strong> «' + esc(f.q.trim()) + '».</div>') : '<div class="help">Solo il codice cartella, mai nome e cognome.</div>') +
         '</div>';
     }
     const active = c && c.status === 'attivo';
@@ -887,7 +888,7 @@
       .sort((a, b) => FA.patName(a.patient_id).localeCompare(FA.patName(b.patient_id)));
     const next = c => (ctx.byCycle.get(c.id) || []).find(a => a.status === 'programmata' && a.day >= A.today);
     return '<div class="row"><label class="inline-check small"><input type="checkbox" data-bind="pl.all" data-rerender' + (f.all ? ' checked' : '') + '> Tutti i fisioterapisti</label></div>' +
-      '<div class="field" style="margin-top:6px"><input type="text" data-bind="pl.q" data-rerender value="' + esc(f.q) + '" placeholder="Cerca per nome…"></div>' +
+      '<div class="field" style="margin-top:6px"><input type="text" data-bind="pl.q" data-rerender value="' + esc(f.q) + '" placeholder="Cerca per codice cartella…"></div>' +
       '<p class="small muted">' + list.length + ' pazienti' + (f.all ? '' : ' di ' + esc(FA.thName(f.th))) + '. “+ Seduta” aggiunge una seduta al <strong>suo</strong> ciclo (stessa anagrafica, stessa numerazione) nel calendario di ' + esc(FA.thName(f.th)) + '.</p>' +
       '<ul class="list pl-list">' + list.map(c => {
         const k = E.cycleCounts(ctx, c.id), n = next(c);
