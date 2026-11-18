@@ -511,26 +511,38 @@
   }
 
   /* ---------------- percorsi e chiusure ---------------- */
+  /** competenze e percorsi: l'amministratore (coordinatore, programmatore) li aggiunge e sceglie chi li tratta */
   function categoriesTab() {
-    const cats = [...A.ctx.cat.values()].sort((a, b) => a.sort - b.sort);
-    return '<div class="row between"><p class="muted">Percorsi (categorie organizzative modificabili).</p><button class="btn small primary" data-act="cat-edit" data-id=""' + adminOnly() + '>+ Nuovo percorso</button></div>' +
-      '<div class="table-wrap"><table><thead><tr><th>Codice</th><th>Nome</th><th>Ordine</th><th>Stato</th><th></th></tr></thead><tbody>' +
-      cats.map(c => '<tr><td><code>' + esc(c.id) + '</code></td><td>' + esc(c.name) + '</td><td>' + c.sort + '</td><td>' + (c.active ? '<span class="chip ok">attivo</span>' : '<span class="chip grey">non attivo</span>') + '</td>' +
+    const cats = [...A.ctx.cat.values()].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+    const n = (id, lvl) => (A.data.therapist_skills || []).filter(s => s.category_id === id && s.level === lvl && A.ctx.th.get(s.therapist_id) && A.ctx.th.get(s.therapist_id).active).length;
+    return '<div class="row between"><p class="muted" style="margin:0">Competenze e percorsi: servono a «Trova posto» e alle sostituzioni per proporre il collega giusto. ★ = competenza specifica (proposto per primo), A = abilitato.</p>' +
+      '<button class="btn small primary" data-act="cat-edit" data-id=""' + adminOnly() + '>+ Nuova competenza</button></div>' +
+      '<div class="table-wrap"><table><thead><tr><th>Competenza</th><th>Fisioterapisti</th><th>Stato</th><th></th></tr></thead><tbody>' +
+      cats.map(c => '<tr><td><strong>' + esc(c.name) + '</strong></td><td>★ ' + n(c.id, 'specifica') + ' · A ' + n(c.id, 'abilitato') + '</td><td>' + (c.active ? '<span class="chip ok">attiva</span>' : '<span class="chip grey">non attiva</span>') + '</td>' +
         '<td><button class="btn small" data-act="cat-edit" data-id="' + esc(c.id) + '"' + adminOnly() + '>Modifica</button></td></tr>').join('') + '</tbody></table></div>';
   }
   FA.actions['cat-edit'] = el => {
     const c = A.ctx.cat.get(el.getAttribute('data-id'));
-    A.ui.ce = { isNew: !c, id: c ? c.id : '', name: c ? c.name : '', active: c ? c.active : true, sort: c ? c.sort : 50 };
-    FA.openModal({ title: c ? 'Percorso' : 'Nuovo percorso',
-      body: () => '<div class="field"><label>Codice (breve, senza spazi)</label><input type="text" data-bind="ce.id" value="' + esc(A.ui.ce.id) + '"' + (A.ui.ce.isNew ? '' : ' disabled') + '></div>' +
-        '<div class="field"><label>Nome</label><input type="text" data-bind="ce.name" value="' + esc(A.ui.ce.name) + '"></div>' +
-        '<div class="grid2"><div class="field"><label>Ordine</label><input type="number" data-num data-bind="ce.sort" value="' + esc(A.ui.ce.sort) + '"></div>' +
-        '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="ce.active"' + (A.ui.ce.active ? ' checked' : '') + '> Attivo</label></div></div>' + FA.errBox(A.ui.ce.error),
-      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="cat-save"' + adminSave() + '>Salva</button>' });
+    const sk = {};
+    FA.allTherapists().filter(t => t.active).forEach(t => { sk[t.id] = c ? E.skillLevel(A.ctx, t.id, c.id) || '' : ''; });
+    A.ui.ce = { id: c ? c.id : '', name: c ? c.name : '', active: c ? c.active : true, sk, error: null };
+    FA.openModal({ title: c ? 'Competenza: ' + c.name : 'Nuova competenza', wide: true, sticky: true,
+      body: () => {
+        const f = A.ui.ce;
+        return '<div class="grid2"><div class="field"><label>Nome della competenza</label><input type="text" data-bind="ce.name" value="' + esc(f.name) + '" placeholder="es. Linfodrenaggio, Breast unit"></div>' +
+          '<div class="field"><label>&nbsp;</label><label class="inline-check"><input type="checkbox" data-bind="ce.active"' + (f.active ? ' checked' : '') + '> Attiva (si può scegliere per i pazienti)</label></div></div>' +
+          '<div class="row between" style="margin-top:6px"><h4 style="margin:0">Chi la tratta</h4><div class="row"><span class="small muted">Tutti:</span>' +
+          '<button class="btn small" data-act="ce-all" data-l="">–</button><button class="btn small" data-act="ce-all" data-l="abilitato">A</button><button class="btn small" data-act="ce-all" data-l="specifica">★</button></div></div>' +
+          '<ul class="list ce-list">' + FA.allTherapists().filter(t => t.active).map(t => '<li class="todo-item"><div><strong>' + esc(t.name) + '</strong></div>' +
+            FA.seg('ce.sk.' + t.id, [['', '– No'], ['abilitato', 'A abilitato'], ['specifica', '★ specifica']], f.sk[t.id]) + '</li>').join('') + '</ul>' + FA.errBox(f.error);
+      },
+      foot: () => '<button class="btn" data-act="close-modal">Annulla</button><button class="btn primary" data-act="cat-save"' + adminSave() + '>' + (A.saving ? 'Salvataggio…' : 'Salva') + '</button>' });
   };
+  FA.actions['ce-all'] = el => { const f = A.ui.ce, l = el.getAttribute('data-l'); Object.keys(f.sk).forEach(k => { f.sk[k] = l; }); FA.renderModal(); };
   FA.actions['cat-save'] = async () => {
     const f = A.ui.ce;
-    try { await FA.save('Percorso', () => FA.rpc('admin_save_category', { p_id: f.id.trim(), p_name: f.name, p_active: !!f.active, p_sort: Number(f.sort) || 0 })); FA.closeModal(); }
+    if (!f.name.trim()) { f.error = 'Scrivi il nome della competenza.'; FA.renderModal(); return; }
+    try { await FA.save('Competenza «' + f.name.trim() + '»', () => FA.rpc('admin_save_competence', { p_id: f.id || null, p_name: f.name, p_active: !!f.active, p_skills: f.sk })); FA.closeModal(); }
     catch (e) { f.error = e.message; FA.renderModal(); }
   };
   function closuresTab() {
@@ -643,14 +655,14 @@
   };
 
   /* ---------------- vista ---------------- */
-  const TABS = [['fisio', 'Fisioterapisti'], ['turni', 'Orari'], ['assenze', 'Ferie e assenze'], ['percorsi', 'Percorsi'], ['chiusure', 'Festività e chiusure'], ['utenti', 'Utenti e permessi'], ['backup', 'Backup']];
+  const TABS = [['fisio', 'Fisioterapisti'], ['turni', 'Orari'], ['assenze', 'Ferie e assenze'], ['percorsi', 'Competenze e percorsi'], ['chiusure', 'Festività e chiusure'], ['utenti', 'Utenti e permessi'], ['backup', 'Backup']];
   FA.actions['cfg-tab'] = el => { A.ui.cfgTab = el.getAttribute('data-t'); FA.render(); };
   FA.views.config = {
     render() {
       const t = A.ui.cfgTab || 'fisio';
       const body = { fisio: therapistsTab, turni: shiftsTab, assenze: absencesTab, percorsi: categoriesTab, chiusure: closuresTab, utenti: usersTab, backup: backupTab }[t]();
       const own = A.me.therapist_id && A.ctx.th.get(A.me.therapist_id);
-      return '<h2>Impostazioni</h2>' + (FA.isAdmin() ? '' : FA.isOffice() ? '<div class="form-note">Puoi aggiungere, modificare o togliere fisioterapisti, orari e assenze. Percorsi, festività, utenti e backup: coordinatore e programmatore.</div>'
+      return '<h2>Impostazioni</h2>' + (FA.isAdmin() ? '' : FA.isOffice() ? '<div class="form-note">Puoi aggiungere, modificare o togliere fisioterapisti, orari e assenze. Competenze e percorsi, festività, utenti e backup: coordinatore e programmatore.</div>'
           : '<div class="form-note">Consultazione. Il tuo orario lo cambi dal tuo tabulato: ' + (own ? '<button class="btn small" data-act="or-open" data-th="' + A.me.therapist_id + '">Il mio orario</button>' : '') + '</div>') +
         '<div class="tabs">' + TABS.filter(([k]) => FA.isAdmin() || (k !== 'utenti' && k !== 'backup')).map(([k, l]) => '<button class="' + (t === k ? 'on' : '') + '" data-act="cfg-tab" data-t="' + k + '">' + esc(l) + '</button>').join('') + '</div>' +
         '<div class="panel">' + body + '</div>';

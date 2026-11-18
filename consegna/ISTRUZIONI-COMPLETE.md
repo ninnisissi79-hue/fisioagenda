@@ -7,7 +7,7 @@ Questa cartella contiene tutto: le due demo che avevi online, il pilota condivis
 | `1-DEMO-prima-versione-netlify.zip` | La prima demo (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-demo** |
 | `2-DEMO-v3-semplice-netlify.zip` | La demo v3 “semplice” (dati fittizi, nessun server) | Progetto Netlify **fisioagenda-semplice-v3** |
 | `3-PILOTA-sito-netlify.zip` | Il pilota condiviso, **già collegato al vostro Supabase** (`cihywdeiyrawgcglxbcg`): tabulato mensile, spie, orari | Progetto Netlify **fisioagenda-pilota** (non serve modificare nulla) |
-| `4-PILOTA-database/` | `setup-completo.sql` (prima installazione), `aggiornamento-database.sql` (aggiornamento), `seed.sql` (dati di esempio fittizi, facoltativo) | Supabase → SQL Editor |
+| `4-PILOTA-database/` | `setup-completo.sql` (prima installazione), `aggiornamento-database.sql` (aggiornamento, non tocca i dati), `aggiornamento-e-svuota-pazienti.sql` (aggiornamento + cancella tutti i pazienti, una volta sola), `seed.sql` (dati di esempio fittizi, facoltativo) | Supabase → SQL Editor |
 | `5-TRASCRIZIONI-tabulati.zip` | Le trascrizioni dei tabulati di ottobre 2026 (solo archivio: l'importazione è stata tolta) | Non serve caricarle |
 | `6-PROGETTO-COMPLETO-codice.zip` | Tutto il codice del progetto | Copia di sicurezza |
 
@@ -95,7 +95,7 @@ Il pilota è l'app con archivio comune per tutti i colleghi: il tabulato mensile
 3. Comunica la password temporanea **di persona**; al primo accesso ognuno la cambia.
 
 ### 3.4 Fisioterapisti e orari
-**Impostazioni → Fisioterapisti** (coordinatore, segreteria, programmatore): aggiungi o togli i colleghi. L'orario di ognuno si cambia dal tabulato con il pulsante **Orario**.
+**Impostazioni → Fisioterapisti** (coordinatore, segreteria, programmatore): aggiungi o togli i colleghi. Le competenze (es. Linfodrenaggio, Breast unit) si gestiscono in **Impostazioni → Competenze e percorsi**. L'orario di ognuno si cambia dal tabulato con il pulsante **Orario**.
 
 ---
 
@@ -103,10 +103,12 @@ Il pilota è l'app con archivio comune per tutti i colleghi: il tabulato mensile
 
 > **Il vostro caso.** Il pacchetto `3-PILOTA-sito-netlify.zip` è già collegato al vostro database: **non** va estratto né modificato.
 
-1. Supabase → SQL Editor → **New query** → incolla **tutto** `4-PILOTA-database/aggiornamento-database.sql` → **Run**. Deve finire con “Success”. Si può rieseguire e non tocca i dati.
+1. Supabase → SQL Editor → **New query** → incolla **tutto** uno di questi due file → **Run**. Deve finire con “Success”.
+    - `4-PILOTA-database/aggiornamento-database.sql`: tutte le modifiche, **non tocca i dati**. Si può rieseguire quando vuoi.
+    - `4-PILOTA-database/aggiornamento-e-svuota-pazienti.sql`: le stesse modifiche **e in più cancella tutti i pazienti**, le loro sedute e lo storico che li riguarda (restano fisioterapisti, account, orari, ferie, competenze e festività). Da usare **una volta sola**, quando vuoi ripartire senza pazienti. Prima, per sicurezza: **Impostazioni → Backup → Scarica backup**.
 2. Netlify → progetto **fisioagenda-pilota** → **Deploys** → trascina **solo** `3-PILOTA-sito-netlify.zip`, così com’è (non `FisioAgenda-TUTTO.zip`: darebbe “Pagina non trovata”). Il link resta lo stesso.
 3. Apri l’app e premi **Ctrl+F5** (sul telefono: chiudi e riapri la pagina).
-4. Per ripartire da zero con i pazienti: **Impostazioni → Backup → Svuota pazienti e sedute** (vedi sotto).
+4. In seguito, per ripartire di nuovo da zero con i pazienti basta l’app: **Impostazioni → Backup → Svuota pazienti e sedute** (vedi sotto).
 
 ---
 
@@ -172,9 +174,18 @@ Quando **un'altra persona** (segreteria, coordinatore…) scrive nel tuo tabulat
 - **Impostazioni → Fisioterapisti**: aggiungere o togliere colleghi (anche la segreteria).
 - **Impostazioni → Utenti e permessi** (coordinatore/programmatore): ruolo di ognuno e, per un fisioterapista che fa le veci della segreteria, **«Agende dei colleghi fino al…»**: fino a quella data può modificare tutte le agende e vede le spie; dopo torna a vedere solo la sua.
 
+#### Competenze e percorsi (amministratore)
+
+**Impostazioni → Competenze e percorsi** (coordinatore e programmatore). Le competenze servono a «Trova posto» e alle sostituzioni per proporre il collega giusto. Ci sono già, tra le altre, **Linfodrenaggio** e **Breast unit**: all'inizio hanno le stesse competenze del Linfedema e si cambiano qui.
+
+- **+ Nuova competenza**: scrivi solo il **nome** (il codice interno si crea da solo).
+- Nella stessa finestra, per ogni fisioterapista scegli **– No**, **A abilitato** o **★ specifica** (proposto per primo). Con **Tutti: – / A / ★** li imposti tutti insieme, poi correggi i singoli. **Salva**: tutto in un passo.
+- **Modifica** su una competenza: cambi il nome, chi la tratta, oppure la togli dall'uso (non più **Attiva**) senza perdere nulla.
+- Nell'elenco vedi quanti la trattano (★ e A). Resta anche la **Tabella competenze** in Impostazioni → Fisioterapisti, per vedere tutto insieme.
+
 #### Svuotare pazienti e sedute (per ripartire da zero)
 
-**Impostazioni → Backup → Svuota pazienti e sedute** (coordinatore/programmatore): scrivi `SVUOTA` e conferma. Prima viene scaricato **in automatico** un file di backup (conservalo). Si cancellano **tutti i pazienti e tutte le sedute**; restano fisioterapisti, account, orari e ferie. Non si può annullare se non ripristinando quel backup.
+**Impostazioni → Backup → Svuota pazienti e sedute** (coordinatore/programmatore): scrivi `SVUOTA` e conferma. Prima viene scaricato **in automatico** un file di backup (conservalo). Si cancellano **tutti i pazienti e tutte le sedute**, con lo storico che li riguarda (così non restano vecchi nomi); restano fisioterapisti, account, orari e ferie. Non si può annullare se non ripristinando quel backup.
 
 Tolte in questa versione: l'**importazione dei tabulati da foto** e la **lista d'attesa**.
 

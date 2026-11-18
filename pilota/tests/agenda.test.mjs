@@ -273,4 +273,33 @@ test('svuota pazienti e sedute: solo coordinatore, con conferma scritta; fisiote
   assert.equal(q('select count(*) from therapists'), nTh);
   assert.ok(Number(q('select count(*) from shift_versions')) > 0);
   assert.match(q("select summary from audit_log where action='svuotamento' order by at desc limit 1"), /svuotato/);
+  // anonimato: nessuna traccia dei pazienti nello storico
+  assert.equal(q("select count(*) from audit_log where entity in ('patient','cycle','appointment','import') or action in ('prenotazione','spostamento','esito')"), '0');
+  assert.equal(q("select count(*) from row_changes where tbl in ('patients','cycles','appointments')"), '0');
+  assert.ok(Number(q("select count(*) from audit_log where entity='therapist'")) > 0, 'lo storico di fisioterapisti e orari resta');
+});
+
+test('percorsi Linfodrenaggio e Breast unit', async () => {
+  assert.equal(q("select string_agg(name, ',' order by sort) from categories where id in ('linfodrenaggio','breast_unit')"), 'Linfodrenaggio,Breast unit');
+});
+
+test('competenze: l’amministratore ne aggiunge una con il solo nome e sceglie chi la tratta', async () => {
+  const A = await therapist('Ca'), B = await therapist('Cb');
+  const name = 'Riabilitazione vestibolare ' + RUN;
+  await expectError(S.rpc(seg, 'admin_save_competence', { p_id: null, p_name: name, p_active: true, p_skills: {} }), 'FA_PERM');
+  const id = await S.rpc(admin, 'admin_save_competence', { p_id: null, p_name: name, p_active: true, p_skills: { [A]: 'specifica', [B]: 'abilitato' } });
+  assert.match(id, /^riabilitazione_vestibolare_c\d+$/, 'codice creato dal nome');
+  assert.equal(q(`select level from therapist_skills where therapist_id='${A}' and category_id='${id}'`), 'specifica');
+  assert.equal(q(`select level from therapist_skills where therapist_id='${B}' and category_id='${id}'`), 'abilitato');
+  await expectError(S.rpc(admin, 'admin_save_competence', { p_id: null, p_name: name.toUpperCase(), p_active: true, p_skills: {} }), 'FA_INPUT', /Esiste già/);
+  // modifica: B non la tratta più, A resta com'è; nome cambiato, stesso codice
+  await S.rpc(admin, 'admin_save_competence', { p_id: id, p_name: name + ' bis', p_active: true, p_skills: { [B]: '' } });
+  assert.equal(q(`select count(*) from therapist_skills where category_id='${id}'`), '1');
+  assert.equal(q(`select name from categories where id='${id}'`), name + ' bis');
+  assert.match(q(`select summary from audit_log where entity='category' and entity_id='${id}' order by id desc limit 1`), /1 con competenza specifica, 0 abilitati/);
+  // anche il programmatore può
+  await ensureUser('prog-ag@pilota.test', 'lettura', 'Programmatore Agenda');
+  await S.rpc(admin, 'admin_set_user', { p_user: q("select user_id from profiles where email='prog-ag@pilota.test'"), p_role: 'programmatore', p_active: true, p_full_name: 'Programmatore Agenda', p_therapist: null });
+  const prog = await login('prog-ag@pilota.test');
+  assert.ok(await S.rpc(prog, 'admin_save_competence', { p_id: null, p_name: 'Altra ' + RUN, p_active: true, p_skills: {} }));
 });

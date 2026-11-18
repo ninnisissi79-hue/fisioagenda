@@ -67,6 +67,24 @@ try {
   assert.ok(!(await page.$('text=Primi passi')), 'guida nascosta quando fisioterapisti e turni ci sono');
   assert.equal(psql('select count(*) from shift_versions'), '3');
   ok('Fisioterapisti inseriti (uno dalla scheda, due con l’inserimento rapido), competenze dalla tabella, turni da schema pronto');
+  {
+    // l'amministratore aggiunge una competenza con il solo nome e sceglie chi la tratta
+    await page.evaluate(() => { location.hash = '#/config'; });
+    await page.waitForSelector('.tabs'); await page.click('.tabs button:has-text("Competenze e percorsi")');
+    assert.match(await page.textContent('main'), /Linfodrenaggio/); assert.match(await page.textContent('main'), /Breast unit/);
+    await page.click('button:has-text("+ Nuova competenza")');
+    await page.fill('.modal input[data-bind="ce.name"]', 'Riabilitazione vestibolare');
+    const bianchi = psql("select id from therapists where name='Bianchi Luca'");
+    await page.click(`.modal button[data-path="ce.sk.${verdi}"][data-val="specifica"]`);
+    await page.click(`.modal button[data-path="ce.sk.${bianchi}"][data-val="abilitato"]`);
+    await page.click('.modal button[data-act="cat-save"]');
+    await page.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+    const cid = psql("select id from categories where name='Riabilitazione vestibolare'");
+    assert.equal(cid, 'riabilitazione_vestibolare');
+    assert.equal(psql(`select string_agg(t.name || '=' || s.level, ',' order by t.name) from therapist_skills s join therapists t on t.id=s.therapist_id where s.category_id='${cid}'`), 'Bianchi Luca=abilitato,Verdi Marco=specifica');
+    await page.waitForSelector('tr:has-text("Riabilitazione vestibolare"):has-text("★ 1 · A 1")');
+    ok('L’amministratore aggiunge una competenza (solo il nome) e sceglie in un passo chi la tratta: ★ specifica, A abilitato');
+  }
 
   // paziente fittizio dal posto libero in agenda
   let day = E.addDays(psql('select app.today()'), 1);

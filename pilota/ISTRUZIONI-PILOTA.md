@@ -56,7 +56,7 @@ Con questi due dati preparo il pacchetto del sito (`npm run build` con `FA_URL` 
 
 ## Aggiornare un database già installato
 
-Se il database era stato installato con una versione precedente, esegui [`supabase/aggiornamento-database.sql`](supabase/aggiornamento-database.sql) (SQL Editor → New query → incolla → Run). Si può rieseguire senza problemi e non tocca i dati.
+Se il database era stato installato con una versione precedente, esegui [`supabase/aggiornamento-database.sql`](supabase/aggiornamento-database.sql) (SQL Editor → New query → incolla → Run). Si può rieseguire senza problemi e non tocca i dati. Per aggiornare e insieme cancellare tutti i pazienti (una volta sola) c'è [`supabase/aggiornamento-e-svuota-pazienti.sql`](supabase/aggiornamento-e-svuota-pazienti.sql).
 
 ## Pazienti solo con il codice cartella (anonimato)
 
@@ -118,9 +118,18 @@ Quando **un'altra persona** (segreteria, coordinatore…) scrive nel tuo tabulat
 - **Impostazioni → Fisioterapisti**: aggiungere o togliere colleghi (anche la segreteria).
 - **Impostazioni → Utenti e permessi** (coordinatore/programmatore): ruolo di ognuno e, per un fisioterapista che fa le veci della segreteria, **«Agende dei colleghi fino al…»**: fino a quella data può modificare tutte le agende e vede le spie; dopo torna a vedere solo la sua.
 
+### Competenze e percorsi (amministratore)
+
+**Impostazioni → Competenze e percorsi** (coordinatore e programmatore). Le competenze servono a «Trova posto» e alle sostituzioni per proporre il collega giusto. Ci sono già, tra le altre, **Linfodrenaggio** e **Breast unit**: all'inizio hanno le stesse competenze del Linfedema e si cambiano qui.
+
+- **+ Nuova competenza**: scrivi solo il **nome** (il codice interno si crea da solo).
+- Nella stessa finestra, per ogni fisioterapista scegli **– No**, **A abilitato** o **★ specifica** (proposto per primo). Con **Tutti: – / A / ★** li imposti tutti insieme, poi correggi i singoli. **Salva**: tutto in un passo.
+- **Modifica** su una competenza: cambi il nome, chi la tratta, oppure la togli dall'uso (non più **Attiva**) senza perdere nulla.
+- Nell'elenco vedi quanti la trattano (★ e A). Resta anche la **Tabella competenze** in Impostazioni → Fisioterapisti, per vedere tutto insieme.
+
 ### Svuotare pazienti e sedute (per ripartire da zero)
 
-**Impostazioni → Backup → Svuota pazienti e sedute** (coordinatore/programmatore): scrivi `SVUOTA` e conferma. Prima viene scaricato **in automatico** un file di backup (conservalo). Si cancellano **tutti i pazienti e tutte le sedute**; restano fisioterapisti, account, orari e ferie. Non si può annullare se non ripristinando quel backup.
+**Impostazioni → Backup → Svuota pazienti e sedute** (coordinatore/programmatore): scrivi `SVUOTA` e conferma. Prima viene scaricato **in automatico** un file di backup (conservalo). Si cancellano **tutti i pazienti e tutte le sedute**, con lo storico che li riguarda (così non restano vecchi nomi); restano fisioterapisti, account, orari e ferie. Non si può annullare se non ripristinando quel backup.
 
 Tolte in questa versione: l'**importazione dei tabulati da foto** e la **lista d'attesa**.
 

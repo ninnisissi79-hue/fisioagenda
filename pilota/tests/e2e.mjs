@@ -251,7 +251,7 @@ try {
   const r = await pr.evaluate(async () => (await window.FA.state.sb.rpc('save_absence', { p: { therapist_id: '00000000-0000-0000-0000-000000000000', start_date: '2030-01-01', end_date: '2030-01-01' } })).error);
   assert.match(r.message, /sola consultazione/);
   await go(p1, '#/config');
-  assert.match(await text(p1, 'main'), /Percorsi, festivit/);
+  assert.match(await text(p1, 'main'), /Competenze e percorsi, festivit/);
   const r2 = await p1.evaluate(async () => (await window.FA.state.sb.rpc('admin_save_category', { p_id: 'x', p_name: 'x', p_active: true, p_sort: 1 })).error);
   assert.match(r2.message, /riservata al coordinatore/);
   ok('Sola consultazione e operatore: pulsanti disattivati e modifiche riservate rifiutate dal server');
