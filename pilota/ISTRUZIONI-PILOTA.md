@@ -58,6 +58,16 @@ Con questi due dati preparo il pacchetto del sito (`npm run build` con `FA_URL` 
 
 Se il database era stato installato con una versione precedente, esegui [`supabase/aggiornamento-database.sql`](supabase/aggiornamento-database.sql) (SQL Editor → New query → incolla → Run). Si può rieseguire senza problemi e non tocca i dati. Per aggiornare e insieme cancellare tutti i pazienti (una volta sola) c'è [`supabase/aggiornamento-e-svuota-pazienti.sql`](supabase/aggiornamento-e-svuota-pazienti.sql).
 
+## Installare l'app sul cellulare e sul PC
+
+FisioAgenda si può **installare come un'app**: icona sulla schermata Home o sul desktop, si apre a schermo intero (senza barra del browser) e **si aggiorna da sola** ogni volta che carichi un nuovo pacchetto su Netlify. Non serve nessuno store. Serve comunque la connessione a internet per vedere e salvare i dati.
+
+- **PC (Chrome o Edge):** apri il link e premi **📲 Installa app** in alto, oppure l'icona *Installa* nella barra dell'indirizzo. La trovi poi nel menu Start (puoi fissarla sulla barra delle applicazioni).
+- **Android (Chrome):** **📲 Installa app**, oppure menu **⋮ → Installa app**.
+- **iPhone / iPad (Safari):** tocca **Condividi** (quadrato con la freccia) **→ Aggiungi alla schermata Home**. Il pulsante «Installa l'app» nella pagina di accesso lo ricorda.
+- Senza rete l'app si apre comunque, ma mostra l'avviso di connessione assente e non salva nulla finché la rete non torna. I dati dei pazienti **non vengono salvati sul dispositivo**.
+- Su un computer condiviso premi sempre **Esci** alla fine.
+
 ## Pazienti solo con il codice cartella (anonimato)
 
 Ogni paziente si indica **solo con il suo codice cartella** (es. `2026/0153`), mai con nome e cognome: nel tabulato, negli avvisi, nello storico e nei backup compare solo il codice.

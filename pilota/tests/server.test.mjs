@@ -31,6 +31,16 @@ async function team(tag, defs) {
 }
 
 /** n date settimanali dallo stesso giorno, saltando le chiusure. */
+/** primo giorno feriale (lun–gio) da cui le settimane successive non incontrano festività: prove indipendenti dalla data */
+function quietDay(from, weeks) {
+  const closures = new Set(psql("select coalesce(string_agg(day::text, ','), '') from public.closures").split(',').filter(Boolean));
+  let d = from;
+  for (;;) {
+    const wd = E.weekday(d);
+    if (wd <= 4 && Array.from({ length: weeks + 1 }, (_, k) => E.addDays(d, 7 * k)).concat([E.addDays(d, 8)]).every(x => !closures.has(x))) return d;
+    d = E.addDays(d, 1);
+  }
+}
 function weekly(d0, n) {
   const closures = new Set(psql("select coalesce(string_agg(day::text, ','), '') from public.closures").split(',').filter(Boolean));
   const out = []; let d = d0;
@@ -330,7 +340,7 @@ test('chiusura anticipata: posti futuri liberati, storico e sedute effettuate co
 
 test('modifica di una sola seduta: il resto del ciclo non cambia', async () => {
   const ids = await team('one', { A: [['mano', 'specifica']], B: [['mano', 'abilitato']] });
-  const [d] = workdays(E.addDays(T0, 1), 1);
+  const d = quietDay(E.addDays(T0, 1), 5);
   const p = await book(op1, { name: 'Singola', cat: 'mano', th: ids.A, start: '10:30', dates: weekly(d, 5) });
   const before = psql(`select string_agg(id::text||therapist_id::text||day||start_time||version, ',' order by day) from appointments where cycle_id='${p.cycle_id}' and day <> '${E.addDays(d, 7)}'`);
   const a = apptOf(p.cycle_id, E.addDays(d, 7));
@@ -379,7 +389,7 @@ test('cambio di turno con decorrenza: storico conservato e appuntamenti incompat
 
 test('un posto futuro soltanto probabile non è prenotabile finché la conclusione non è confermata', async () => {
   const ids = await team('pro', { A: [['mano', 'specifica']] });
-  const [d] = workdays(E.addDays(T0, 1), 1);
+  const d = quietDay(E.addDays(T0, 1), 10);
   const p = await book(op1, { name: 'Probabile', cat: 'mano', th: ids.A, start: '13:00', dates: weekly(d, 5), forecast: 'probabile_conclusione' });
   const after = weekly(E.addDays(d, 35), 5);
   const ctx = await ctxFor(op1, T0);

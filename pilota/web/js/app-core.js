@@ -265,7 +265,8 @@
       FA.errBox(L.error) + (L.msg ? '<div class="form-note">' + esc(L.msg) + '</div>' : '') +
       '<div class="row between"><button class="btn primary" type="submit"' + (L.busy || !cfgOk ? ' disabled' : '') + '>' + (L.busy ? 'Accesso…' : 'Accedi') + '</button>' +
       '<button class="btn link" type="button" data-act="forgot">Password dimenticata?</button></div></form>' +
-      '<p class="muted small" style="margin-top:14px">Accesso riservato: gli account personali sono creati dal coordinatore. Non esiste una registrazione libera.</p></div>';
+      '<p class="muted small" style="margin-top:14px">Accesso riservato: gli account personali sono creati dal coordinatore. Non esiste una registrazione libera.</p>' +
+      (FA.isStandalone && !FA.isStandalone() ? '<button class="btn small" type="button" data-act="install-app" style="margin-top:4px">📲 ' + (FA.canInstall() ? 'Installa l’app su questo dispositivo' : 'Come installare l’app') + '</button>' : '') + '</div>';
   }
   FA.actions['forgot'] = async () => {
     const L = A.ui.login || {};
@@ -550,6 +551,7 @@
       '<span id="conn">' + connLabel() + '</span>' +
       alertPill() + (FA.isOffice() ? spie() : (n ? '<button class="todo-pill" data-act="go" data-view="dasistemare">⚠ Da sistemare: ' + n + '</button>' : '')) +
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +
+      (FA.canInstall && FA.canInstall() ? '<button data-act="install-app" title="Installa FisioAgenda come app su questo dispositivo">📲 Installa app</button>' : '') +
       '<button data-act="refresh" title="Ricarica i dati dal server">↻</button><button data-act="change-pw">Password</button><button data-act="logout">Esci</button></div>' +
       '</div><nav class="nav">' + nav().map(([k, l]) => '<a href="#/' + k + '" class="' + (A.view === k ? 'active' : '') + '">' + esc(l) + '</a>').join('') + '</nav></header>' +
       '<div class="pilot-banner">Versione pilota: ogni paziente si indica <strong>solo con il codice cartella</strong>, mai con nome e cognome; nessun dato personale nelle note.' + (FA.canEdit() ? '' : ' Il tuo profilo è di <strong>sola consultazione</strong>.') +
