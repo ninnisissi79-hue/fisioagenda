@@ -205,8 +205,8 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.displa
 
 /* =================== giornate tipo e squadra (inventate) =================== */
 const TYPES = { // orari descritti dal servizio (gruppo delle 7, gruppo delle 8, ortesi mano 12:20–14)
-  A: { n: 'Entrata 7 · amb 7:15 → reparti → amb 12:20', s: '7 · Amb·Rep·Amb', c: '#2a64b5', b: [['amb', 435, 555], ['rep', 570, 720], ['pausa', 720, 740], ['amb', 740, 800], ['doc', 800, 852]] },
-  a: { n: 'Entrata 7 · ortesi mano 12:20–14', s: '7 · Ortesi mano', c: '#2f8a4c', b: [['amb', 435, 555], ['rep', 570, 720], ['pausa', 720, 740], ['ort', 740, 840], ['doc', 840, 852]] },
+  A: { n: 'Entrata 7 · amb 7:15–8:45/9 → reparti → amb 12:20', s: '7 · Amb·Rep·Amb', c: '#2a64b5', b: [['amb', 435, 540], ['rep', 540, 720], ['pausa', 720, 740], ['amb', 740, 800], ['doc', 800, 852]] },
+  a: { n: 'Entrata 7 · ortesi mano 12:20–14', s: '7 · Ortesi mano', c: '#2f8a4c', b: [['amb', 435, 540], ['rep', 540, 720], ['pausa', 720, 740], ['ort', 740, 840], ['doc', 840, 852]] },
   B: { n: 'Entrata 8 · amb 8:15 → reparti → amb 12:40', s: '8 · Amb·Rep·Amb', c: '#14867a', b: [['amb', 495, 555], ['rep', 570, 740], ['pausa', 740, 760], ['amb', 760, 850], ['doc', 850, 912]] },
   b: { n: 'Entrata 8 · ortesi mano 12:20–14', s: '8 · Ortesi mano', c: '#5a8f2a', b: [['amb', 495, 555], ['rep', 570, 720], ['pausa', 720, 740], ['ort', 740, 840], ['doc', 840, 912]] },
   S: { n: 'Segreteria (orari da decidere)', s: 'Segreteria', c: '#7b4bb3', b: [['seg', 480, 852]] },
