@@ -51,6 +51,25 @@ const Cloud = {
   async requestPathology(patologia, dettagli) { const { error } = await this.sb.from("rehand_patologie_richieste").insert({ patologia, dettagli: dettagli || null, autore: this.user.id }); if (error) throw error; },
   async listPathologyRequests() { const { data, error } = await this.sb.from("rehand_patologie_richieste").select("id,patologia,dettagli,creato,autore").order("creato", { ascending: false }); if (error) throw error; return data; },
   async deletePathologyRequest(id) { const { error } = await this.sb.from("rehand_patologie_richieste").delete().eq("id", id); if (error) throw error; },
+  /* --- PDF per il paziente (QR): archivio pubblico con indirizzi segreti, cancellati dopo 30 giorni --- */
+  async uploadPdf(blob, name) {
+    const id = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
+    const path = `${new Date().toISOString().slice(0, 10)}/${id}/${name}`;
+    const st = this.sb.storage.from("rehand-pdf");
+    const { error } = await st.upload(path, blob, { contentType: "application/pdf", cacheControl: "3600", upsert: false });
+    if (error) throw error;
+    return st.getPublicUrl(path).data.publicUrl;
+  },
+  async cleanOldPdfs(days) {
+    const st = this.sb.storage.from("rehand-pdf"); const limite = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+    const { data: giorni, error } = await st.list("", { limit: 1000 }); if (error) throw error;
+    for (const g of giorni || []) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(g.name) || g.name >= limite) continue;
+      const { data: cartelle } = await st.list(g.name, { limit: 1000 }); const paths = [];
+      for (const c of cartelle || []) { const { data: files } = await st.list(`${g.name}/${c.name}`, { limit: 100 }); (files || []).forEach((f) => paths.push(`${g.name}/${c.name}/${f.name}`)); }
+      if (paths.length) await st.remove(paths);
+    }
+  },
   /* --- utenti --- */
   async listProfiles() { const { data, error } = await this.sb.from("rehand_profili").select("*").order("creato"); if (error) throw error; return data; },
   async setRole(id, ruolo) { const { error } = await this.sb.from("rehand_profili").update({ ruolo }).eq("id", id); if (error) throw error; },

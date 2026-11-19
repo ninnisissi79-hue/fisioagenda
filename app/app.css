@@ -153,3 +153,6 @@ label.f textarea{min-height:60px;resize:vertical}
 @keyframes pdfspin{to{transform:rotate(360deg)}}
 #print-root.pdf-render .sheet *{hyphens:manual!important;-webkit-hyphens:manual!important}
 #print-root.pdf-render .sheet p,#print-root.pdf-render .sheet li{text-align:left!important}
+#pdf-ov.qr-mode{background:rgba(255,255,255,.97)}
+#pdf-ov .qr-big{width:min(78vw,340px);margin:0 auto 14px;padding:12px;background:#fff;border:2px solid #1d4f9c;border-radius:14px}
+#pdf-ov .qr-big svg{display:block;width:100%;height:auto}
