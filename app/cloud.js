@@ -51,7 +51,7 @@ const Cloud = {
   async requestPathology(patologia, dettagli) { const { error } = await this.sb.from("rehand_patologie_richieste").insert({ patologia, dettagli: dettagli || null, autore: this.user.id }); if (error) throw error; },
   async listPathologyRequests() { const { data, error } = await this.sb.from("rehand_patologie_richieste").select("id,patologia,dettagli,creato,autore").order("creato", { ascending: false }); if (error) throw error; return data; },
   async deletePathologyRequest(id) { const { error } = await this.sb.from("rehand_patologie_richieste").delete().eq("id", id); if (error) throw error; },
-  /* --- PDF per il paziente (QR): archivio pubblico con indirizzi segreti, cancellati dopo 30 giorni --- */
+  /* --- PDF per il paziente (QR): archivio pubblico con indirizzi segreti, cancellati dopo 2 mesi --- */
   async uploadPdf(blob, name) {
     const id = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
     const path = `${new Date().toISOString().slice(0, 10)}/${id}/${name}`;

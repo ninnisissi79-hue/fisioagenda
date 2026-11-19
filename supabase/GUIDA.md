@@ -54,4 +54,4 @@ Quando arriva una nuova funzione che usa il database, basta **rieseguire tutto `
 Ogni modifica pubblicata salva la versione precedente (tabella `rehand_revisioni`).
 
 ## QR per il paziente (una volta sola)
-Per attivare il pulsante "📱 QR per il paziente" apri Supabase → SQL Editor, incolla il contenuto di `supabase/qr-pdf.sql` e premi Run. I PDF restano online 30 giorni con un indirizzo segreto, poi l’app li cancella.
+Per attivare il pulsante "📱 QR per il paziente" apri Supabase → SQL Editor, incolla il contenuto di `supabase/qr-pdf.sql` e premi Run. I PDF restano online 2 mesi con un indirizzo segreto, poi l’app li cancella.

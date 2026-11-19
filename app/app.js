@@ -689,7 +689,7 @@ async function qrPaziente(doc) {
 }
 function canUseQR() {
   if (C().enabled && C().user && ["admin", "editor", "lettore"].includes(C().ruolo)) return true;
-  alert("Per mostrare il QR al paziente devi aver fatto l’accesso a RE-HAND (il PDF viene messo online per 30 giorni con un indirizzo segreto).");
+  alert("Per mostrare il QR al paziente devi aver fatto l’accesso a RE-HAND (il PDF viene messo online per 2 mesi con un indirizzo segreto).");
   return false;
 }
 async function showPdfQR(doc, blob, titolo) {
@@ -703,12 +703,12 @@ async function showPdfQR(doc, blob, titolo) {
     alert(setup ? (MODE() === "admin" ? "Manca l’archivio dei PDF su Supabase. Va attivato una volta sola: apri Supabase → SQL Editor e incolla il contenuto del file supabase/qr-pdf.sql (te l’ha preparato Claude), poi premi Run." : "Il QR non è ancora attivo: chiedi all’amministratrice di attivare l’archivio dei PDF su Supabase.") : "Non riesco a mettere online il PDF: " + e.message);
     return;
   }
-  C().cleanOldPdfs(30).catch((e) => console.warn("pulizia PDF", e));
+  C().cleanOldPdfs(61).catch((e) => console.warn("pulizia PDF", e));
   window.__lastQR = url;
   const o = pdfOverlay(`<div class="qr-big">${qrSvg(url)}</div>
     <b style="font-size:19px">Inquadra con la fotocamera del telefono</b>
     <p style="margin:6px 0 2px">${esc(titolo)}</p>
-    <p class="muted" style="font-size:13px;margin:0 0 10px">Si apre il PDF: poi <b>Condividi → Salva in File</b> (iPhone) o <b>Scarica</b> (Android). Il link resta attivo 30 giorni.</p>
+    <p class="muted" style="font-size:13px;margin:0 0 10px">Si apre il PDF: poi <b>Condividi → Salva in File</b> (iPhone) o <b>Scarica</b> (Android). Il link resta attivo 2 mesi.</p>
     <div class="row" style="justify-content:center"><button class="btn light" id="qr-copy">🔗 Copia link</button><button class="btn" id="qr-close">Fatto</button></div>`);
   o.classList.add("qr-mode");
   $("#qr-copy").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Link copiato"); } catch { prompt("Copia il link:", url); } };

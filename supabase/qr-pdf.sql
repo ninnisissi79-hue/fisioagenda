@@ -1,6 +1,6 @@
 -- RE-HAND · Archivio dei PDF per il QR del paziente (da eseguire UNA volta nel SQL Editor di Supabase).
 -- Crea il contenitore "rehand-pdf": i PDF si aprono solo conoscendo l'indirizzo segreto (contenuto nel QR),
--- nessuno può elencarli; possono caricarli solo gli utenti RE-HAND abilitati. L'app cancella i file dopo 30 giorni.
+-- nessuno può elencarli; possono caricarli solo gli utenti RE-HAND abilitati. L'app cancella i file dopo 2 mesi.
 -- Non tocca nient'altro del progetto (né le altre app né le impostazioni di accesso).
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
