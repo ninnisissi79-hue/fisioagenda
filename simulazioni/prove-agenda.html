@@ -141,7 +141,7 @@ aside textarea{width:100%;min-height:90px;border:1px solid var(--line);border-ra
   <header class="top">
     <div>
       <h1>Prove agenda FisioAgenda</h1>
-      <p>Simulazione con <strong>dati inventati</strong> (pazienti solo con codice cartella). Prova i due modi di lavorare sul calendario, poi le altre schermate. Il cronometro a destra misura quanto ci metti. Nulla viene salvato: «Ricomincia» rimette tutto com'era.</p>
+      <p>Simulazione con i <strong>cognomi dei colleghi</strong> e <strong>pazienti inventati</strong> (solo codice cartella). <strong>Orari e competenze dei colleghi sono di esempio</strong>: dimmi quelli veri e li sistemo. Prova i due modi di lavorare sul calendario, poi le altre schermate. Il cronometro a destra misura quanto ci metti. Nulla viene salvato: «Ricomincia» rimette tutto com'era.</p>
     </div>
     <div class="stats" id="stats"></div>
   </header>
@@ -203,13 +203,13 @@ const TYPES = {
   P: { n: 'Pomeriggio ambulatorio', s: 'Pomeriggio', c: '#c46a1d', b: [['amb', 780, 1080]] },
 };
 const KIND = { amb: 'Ambulatorio', rep: 'Reparto', seg: 'Segreteria', ort: 'Ortesi', pausa: 'Pausa' };
-const TEAM = [
-  ['Barbieri A.', 'EEEEE', ['Ortopedia', 'Spalla']], ['Colombo L.', 'ESESE', ['Mano', 'Ortopedia']], ['De Luca M.', 'SESEE', ['Rachide', 'Neuro']],
-  ['Ferri G.', 'MMMMM', ['Neuro', 'Ortopedia']], ['Galli S.', 'MRMRM', ['Linfodrenaggio', 'Breast unit']], ['Greco P.', 'HHHHH', ['Mano']],
-  ['Leone F.', 'HOHOH', ['Mano', 'Ortesi']], ['Longo R.', 'MMMMM', ['Ortopedia', 'Rachide']], ['Marchetti E.', 'OOOOO', ['Ortesi', 'Mano']],
-  ['Mariani C.', 'MMMMR', ['Pavimento pelvico', 'Rachide']], ['Martini D.', 'PPPPP', ['Ortopedia', 'Spalla']], ['Moretti V.', 'RMRMR', ['Neuro']],
-  ['Pellegrini I.', 'MMMMM', ['Breast unit', 'Linfodrenaggio']], ['Rinaldi T.', 'EEPPE', ['Spalla', 'Ortopedia']], ['Rizzo B.', 'MRMMM', ['Rachide', 'Ortopedia']],
-  ['Santoro N.', 'RRMMM', ['Neuro', 'Pavimento pelvico']], ['Testa O.', 'SSSSS', ['Ortopedia', 'Rachide']], ['Vitale U.', 'MMMRM', ['Linfodrenaggio', 'Ortopedia']],
+const TEAM = [ // cognomi dei colleghi (dai tabulati di ottobre); orari e competenze sono DI ESEMPIO
+  ['Barile', 'EEEEE', ['Ortopedia post-chirurgica', 'Spalla']], ['Battistel', 'ESESE', ['Mano', 'Chirurgia della mano']], ['Bizzo', 'SESEE', ['Rachide', 'Neurologico']],
+  ['Bozano', 'MMMMM', ['Neurologico', 'Mieloleso']], ['Cantarella', 'MRMRM', ['Linfodrenaggio', 'Breast unit', 'Linfedema']], ['Caprioli', 'HHHHH', ['Mano', 'Chirurgia della mano']],
+  ['Dotta', 'HOHOH', ['Chirurgia della mano', 'Ambulatorio ortesi']], ['Gelfiori', 'MMMMM', ['Protesi anca / ginocchio', 'Ortopedia post-chirurgica']], ['Ghiso', 'OOOOO', ['Ambulatorio ortesi', 'Mano']],
+  ['Guidetti', 'MMMMR', ['Pavimento pelvico', 'Rachide']], ['Mazzucco', 'PPPPP', ['Ortopedia post-chirurgica', 'Spalla']], ['Nicolino', 'RMRMR', ['Neurologico', 'Bambino']],
+  ['Novara', 'MMMMM', ['Breast unit', 'Oncologico', 'Linfodrenaggio']], ['Perato', 'EEPPE', ['Spalla', 'Protesi anca / ginocchio']], ['Ponte', 'MRMMM', ['Rachide', 'Ortopedia post-chirurgica']],
+  ['Ramognino', 'RRMMM', ['Neurologico', 'Pavimento pelvico']], ['Zunini', 'SSSSS', ['Riabilitazione respiratoria', 'Rachide']], ['Collega 18', 'MMMRM', ['Linfedema', 'Linfodrenaggio', 'Oncologico']],
 ];
 const COMPS = [...new Set(TEAM.flatMap(t => t[2]))].sort();
 
@@ -388,8 +388,8 @@ function buildTasks() {
     settimana: mk('t3', 'B', '2026/9102'),
     inserisci: [{ id: 'I1', k: 'ins', txt: 'Inserisci gli 8 pazienti dell’esempio: «Copia l’esempio», incolla nella tabella (Ctrl+V), «Inserisci tutto», poi correggi le righe rosse.' }],
     orari: [
-      { id: 'O1', k: 'orario', txt: 'Dal <b>' + fD(nm) + '</b> il giovedì di <b>Longo R.</b> diventa «Solo reparto»: cambialo e sistema i suoi pazienti del giovedì.' },
-      { id: 'O2', k: 'ferie', txt: '<b>Galli S.</b> è in ferie dal <b>' + fD(fer1) + '</b> al <b>' + fD(fer2) + '</b>: segnalo e trova un collega per i pazienti <b>INAIL</b>.' },
+      { id: 'O1', k: 'orario', txt: 'Dal <b>' + fD(nm) + '</b> il giovedì di <b>' + thBy('t7').name + '</b> diventa «Solo reparto»: cambialo e sistema i suoi pazienti del giovedì.' },
+      { id: 'O2', k: 'ferie', txt: '<b>' + thBy('t4').name + '</b> è in ferie dal <b>' + fD(fer1) + '</b> al <b>' + fD(fer2) + '</b>: segnalo e trova un collega per i pazienti <b>INAIL</b>.' },
     ],
     'fine-ciclo': [
       { id: 'F1', k: 'fine', txt: (near[0] ? 'Il fisioterapista è sicuro che <b>' + near[0].code + '</b> non continua: segnalo e trova il suo posto tra i «Posti che si liberano».' : 'Segna un fine ciclo sicuro.') },
@@ -453,7 +453,7 @@ function viewSheet(m) {
     days.map(d => '<th class="' + (d === TODAY ? 'today' : '') + '" title="' + fD(d) + '">' + WDL[wdOf(d)] + '<br>' + (+d.slice(8)) + '</th>').join('') + '</tr></thead><tbody>';
   for (const c of rows) {
     const miss = c.total - c._n;
-    h += '<tr><th class="name" data-cyrow="' + c.id + '"><span class="pc">' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + (c.th !== th.id ? ' <span class="chip grey">di ' + esc(thBy(c.th).name) + '</span>' : '') + '</span><span class="pm">' + fT(c.t) + ' · ' + wdsTxt(c.wds) + ' · ' + c.dur + '′' + (miss > 0 ? ' · <b style="color:var(--warn)">manca ' + miss + '</b>' : '') + (c.op ? ' · ' + opLabel(c.op) : '') + '</span></th>';
+    h += '<tr><th class="name" data-cyrow="' + c.id + '"><span class="pc">' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + (c.th !== th.id ? ' <span class="chip grey">titolare ' + esc(thBy(c.th).name) + '</span>' : '') + '</span><span class="pm">' + fT(c.t) + ' · ' + wdsTxt(c.wds) + ' · ' + c.dur + '′' + (miss > 0 ? ' · <b style="color:var(--warn)">manca ' + miss + '</b>' : '') + (c.op ? ' · ' + opLabel(c.op) : '') + '</span></th>';
     for (const d of days) {
       const x = byCell.get(c.id + '|' + d), we = !isWork(d), off = !we && (absence(th, d) || !blocks(th, d).some(b => b[0] === 'amb'));
       if (!x) { h += '<td class="' + (we ? 'we' : off ? 'off' : '') + '" data-cy="' + c.id + '" data-d="' + d + '"></td>'; continue; }
@@ -518,7 +518,7 @@ const OPS = { continua: 'Continua', finisce: 'Finisce', sicuro: 'Finisce (sicuro
 const opLabel = o => '<span class="chip ' + (o === 'continua' ? 'ok' : o === 'visita' ? '' : 'warn') + '">' + OPS[o] + '</span>';
 function patientCard(c, e) {
   const fut = cySess(c.id).filter(x => x.d >= TODAY && x.st !== 'A');
-  openPop('<h4>' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + '</h4><div class="small muted">' + esc(thBy(c.th).name) + ' · ' + esc(c.comp) + ' · ' + c.total + ' sedute · ne restano ' + fut.length + '</div>' +
+  openPop('<h4>' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + '</h4><div class="small muted">fisioterapista: ' + esc(thBy(c.th).name) + ' · ' + esc(c.comp) + ' · ' + c.total + ' sedute · ne restano ' + fut.length + '</div>' +
     '<label>Parere del fisioterapista</label><div class="seg2" id="pOp">' + Object.entries(OPS).map(([k, l]) => '<button data-op="' + k + '" class="' + (c.op === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>' +
     '<label for="pT">Nuovo orario (ora · giorni) dal giorno</label><div class="row"><input id="pT" value="' + fT(c.t) + '" style="width:70px"><input id="pW" value="' + wdsTxt(c.wds) + '" style="width:120px"><input id="pF" type="date" value="' + nextWork(addD(TODAY, 1)) + '" style="width:140px"></div>' +
     '<div class="row"><button class="btn pri sm" id="pApply">Cambia dal giorno</button><button class="btn sm" id="pInail">' + (c.inail ? 'Togli INAIL' : 'Segna INAIL') + '</button><button class="btn sm danger" id="pSusp">Sospende / finisce</button></div>', e, p => {
@@ -622,9 +622,9 @@ function exampleTSV() {
     }
   }
   const dup = S.cy.find(c => c._fut > 0 && c.th === 't5');
-  if (dup) out.push([dup.code, 'Greco', 'lun mer', '10:00', '10', '30', '', '']);
+  if (dup) out.push([dup.code, thBy('t5').name, 'lun mer', '10:00', '10', '30', '', '']);
   const occ = S.ss.find(x => x.th === 't5' && x.d > TODAY && x.st !== 'A');
-  if (occ) out.push(['2026/9599', 'Greco', WD[wdOf(occ.d)], fT(occ.t), '10', '30', occ.d.slice(8) + '/' + occ.d.slice(5, 7), '']);
+  if (occ) out.push(['2026/9599', thBy('t5').name, WD[wdOf(occ.d)], fT(occ.t), '10', '30', occ.d.slice(8) + '/' + occ.d.slice(5, 7), '']);
   return out.map(r => r.join('\t')).join('\n');
 }
 function viewIns(m) {
@@ -688,7 +688,7 @@ function viewOrari(m) {
     '<p class="hint">Sedute dei prossimi 35 giorni rimaste fuori orario o con il fisioterapista in ferie. <strong>I pazienti INAIL sono in cima.</strong> Per ognuna: passala al collega proposto (stessa competenza, in ambulatorio e libero: alla stessa ora o, se serve, all’ora più vicina), spostala all’ora libera più vicina con lo stesso fisioterapista, oppure lasciala così.</p>' +
     (fix.length ? '<div class="scroll" style="max-height:62vh"><table class="list"><thead><tr><th>Quando</th><th>Paziente</th><th>Perché</th><th></th></tr></thead><tbody>' + fix.slice(0, 80).map(x => {
       const c = cyBy(x.cy), th = thBy(x.th), sg = suggest(x), nf = absence(th, x.d) ? null : nearestFree(x);
-      return '<tr><td class="mono">' + fD(x.d) + ' ' + fT(x.t) + '</td><td><b class="mono">' + esc(c.code) + '</b> ' + (c.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">' + esc(th.name) + ' · ' + esc(c.comp) + '</div></td><td class="small">' + (absence(th, x.d) ? 'Ferie' : 'Fuori orario') + '</td><td style="white-space:nowrap">' +
+      return '<tr><td class="mono">' + fD(x.d) + ' ' + fT(x.t) + '</td><td><b class="mono">' + esc(c.code) + '</b> ' + (c.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">fisioterapista: ' + esc(th.name) + ' · ' + esc(c.comp) + '</div></td><td class="small">' + (absence(th, x.d) ? 'Ferie' : 'Fuori orario') + '</td><td style="white-space:nowrap">' +
         (sg ? '<button class="btn sm" data-to="' + x.id + '|' + sg.th.id + '|' + sg.t + '">→ ' + esc(sg.th.name) + (sg.t !== x.t ? ' alle ' + fT(sg.t) : '') + '</button> ' : '<span class="chip bad">nessun collega libero quel giorno</span> ') + (nf != null ? '<button class="btn sm" data-nf="' + x.id + '|' + nf + '">alle ' + fT(nf) + '</button> ' : '') + '<button class="btn sm" data-ign="' + x.id + '">Lascia</button></td></tr>';
     }).join('') + '</tbody></table></div>' + (fix.length > 80 ? '<p class="small muted">…e altre ' + (fix.length - 80) + '.</p>' : '') : '<p class="chip ok">Niente da sistemare</p>') + '</div></div>';
   m.innerHTML = h;
@@ -748,14 +748,14 @@ function viewFine(m) {
   let h = '<div class="cols2"><div class="panel"><div class="bar"><h2 style="font-size:18px">Cicli in chiusura <span class="chip">' + near.length + '</span></h2></div>' +
     '<p class="hint">Pazienti con 3 sedute o meno. Il <strong>fisioterapista</strong> dà il suo parere (è solo un’opinione); la <strong>segreteria</strong>, dopo la visita del fisiatra, segna se è riconfermato o concluso. Ogni scelta aggiorna subito i posti che si liberano.</p>' +
     '<div class="scroll" style="max-height:66vh"><table class="list"><thead><tr><th>Paziente</th><th>Restano</th><th>Parere del fisioterapista</th><th>Segreteria</th></tr></thead><tbody>' +
-    near.map(x => '<tr><td><b class="mono">' + esc(x.code) + '</b> ' + (x.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">' + esc(thBy(x.th).name) + ' · ' + esc(x.comp) + '</div></td><td class="mono">' + x._fut + '<div class="small muted">ultima ' + fD(x._last) + '</div></td>' +
+    near.map(x => '<tr><td><b class="mono">' + esc(x.code) + '</b> ' + (x.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">fisioterapista: ' + esc(thBy(x.th).name) + ' · ' + esc(x.comp) + '</div></td><td class="mono">' + x._fut + '<div class="small muted">ultima ' + fD(x._last) + '</div></td>' +
       '<td><div class="seg2">' + Object.entries(OPS).map(([k, l]) => '<button data-cy="' + x.id + '" data-op="' + k + '" class="' + (x.op === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div></td>' +
       '<td style="white-space:nowrap"><button class="btn sm" data-rc="' + x.id + '|5">+5</button> <button class="btn sm" data-rc="' + x.id + '|10">+10</button> <button class="btn sm" data-end="' + x.id + '">Concluso</button></td></tr>').join('') + '</tbody></table></div></div>';
   h += '<div class="panel"><div class="bar"><h2 style="font-size:18px">Posti che si liberano</h2><span class="grow"></span><select id="fComp" aria-label="Competenza"><option value="">Tutte le competenze</option>' + COMPS.map(x => '<option' + (x === UI.comp ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div>' +
     '<div class="bar">' + Object.entries(CL).map(([k, [l]]) => '<label class="small"><input type="checkbox" data-cert="' + k + '"' + (UI.certain[k] ? ' checked' : '') + '> ' + l + '</label>').join('') + '</div>' +
     '<p class="hint">Da qui la segreteria sceglie dalla lista d’attesa (che resta nel vostro Excel). Il posto è lo stesso giorno e la stessa ora del paziente che finisce.</p>' +
-    '<div class="scroll" style="max-height:30vh"><table class="list"><thead><tr><th>Libero dal</th><th>Quando</th><th>Fisioterapista · competenze</th><th>Quanto è sicuro</th></tr></thead><tbody>' +
-    (ending.length ? ending.slice(0, 60).map(({ c: x, k }) => '<tr><td class="mono">' + fD(nextWork(addD(x._last, 1))) + '</td><td class="mono small">' + wdsTxt(x.wds) + ' ' + fT(x.t) + ' · ' + x.dur + '′</td><td>' + esc(thBy(x.th).name) + '<div class="small muted">' + esc(thBy(x.th).comps.join(', ')) + '</div></td><td><span class="chip ' + CL[k][1] + '">' + CL[k][0] + '</span><div class="small muted">' + esc(x.code) + '</div></td></tr>').join('') : '<tr><td colspan="4" class="muted">Nessun posto con questi filtri.</td></tr>') + '</tbody></table></div>';
+    '<div class="scroll" style="max-height:30vh"><table class="list"><thead><tr><th>Libero dal</th><th>Quando</th><th>Fisioterapista · sue competenze</th><th>Quanto è sicuro</th></tr></thead><tbody>' +
+    (ending.length ? ending.slice(0, 60).map(({ c: x, k }) => '<tr><td class="mono">' + fD(nextWork(addD(x._last, 1))) + '</td><td class="mono small">' + wdsTxt(x.wds) + ' ' + fT(x.t) + ' · ' + x.dur + '′</td><td>' + esc(thBy(x.th).name) + '<div class="small muted">' + esc(thBy(x.th).comps.join(', ')) + '</div></td><td><span class="chip ' + CL[k][1] + '">' + CL[k][0] + '</span><div class="small muted">ora di ' + esc(x.code) + ' · ' + esc(x.comp) + '</div></td></tr>').join('') : '<tr><td colspan="4" class="muted">Nessun posto con questi filtri.</td></tr>') + '</tbody></table></div>';
   const slots = freeNow();
   h += '<h3 style="font-size:16px;margin:14px 0 6px">Posti liberi adesso <span class="muted small">(prossimi 10 giorni lavorativi)</span></h3><div class="bar"><label class="small" for="fDur">Durata</label><select id="fDur">' + [30, 45, 60].map(x => '<option' + (x === UI.dur ? ' selected' : '') + '>' + x + '</option>').join('') + '</select><span class="small muted">con la competenza scelta sopra</span></div>' +
     '<div class="scroll" style="max-height:26vh"><table class="list"><thead><tr><th>Fisioterapista</th><th>Primi posti liberi</th></tr></thead><tbody>' + (slots.length ? slots.map(([t, l]) => '<tr><td>' + esc(t.name) + '<div class="small muted">' + esc(t.comps.join(', ')) + '</div></td><td class="mono small">' + l.map(([d, tt]) => fD(d) + ' ' + fT(tt)).join(' · ') + '</td></tr>').join('') : '<tr><td colspan="2" class="muted">Nessun posto libero.</td></tr>') + '</tbody></table></div></div></div>';
