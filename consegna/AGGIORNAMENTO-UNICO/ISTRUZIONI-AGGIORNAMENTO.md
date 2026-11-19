@@ -1,35 +1,23 @@
-# FisioAgenda — aggiornamento unico
+# FisioAgenda — aggiornamento unico (anche dal telefono)
 
 Contiene **tutte le modifiche** fatte finora: tabulato mensile, spie e avvisi con la spunta di lettura, pazienti solo con il codice cartella, competenze Linfodrenaggio e Breast unit (e nuove competenze aggiunte dall'amministratore), app installabile su cellulare e PC. **Cancella tutti i pazienti presenti** (restano fisioterapisti, account, orari, ferie, competenze e festività).
 
-Due file, da usare **una volta sola**, in quest'ordine:
-
 | File | Dove va |
 |---|---|
-| `1-DATABASE-aggiornamento-unico.sql` | Supabase → SQL Editor (un solo copia-incolla) |
-| `2-SITO-netlify.zip` | Netlify → fisioagenda-pilota → Deploys (si trascina, senza aprirlo) |
+| `2-SITO-netlify.zip` | Netlify → fisioagenda-pilota → Deploys |
+| `1-DATABASE-comando-corto.sql` | Supabase → SQL Editor (poche righe da copiare) |
 
-## 0. Copia di sicurezza (consigliata, 1 minuto)
-Nell'app: **Impostazioni → Backup → Scarica backup (.json)**. Conserva il file.
+## 1. Prima il sito
+app.netlify.com → **fisioagenda-pilota** → **Deploys** → nel riquadro in fondo trascina **`2-SITO-netlify.zip`** (dal telefono: tocca **browse to upload** e scegli il file). Aspetta che compaia **Published**.
 
-## 1. Database (un solo copia-incolla)
-1. Sul **PC**, tasto destro su `1-DATABASE-aggiornamento-unico.sql` → **Apri con → Blocco note**.
-2. Premi **Ctrl+A** (seleziona tutto) e poi **Ctrl+C** (copia).
-3. Apri **supabase.com** → il tuo progetto → **SQL Editor** → **New query**.
-4. Clicca nel riquadro bianco e premi **Ctrl+V** (incolla). Il testo è lungo: va bene così, non serve leggerlo.
-5. Premi **Run**. Dopo qualche secondo deve comparire **Success**.
+## 2. Poi il database: un comando corto
+1. Apri `1-DATABASE-comando-corto.sql` (sono poche righe) → **Seleziona tutto** → **Copia**.
+2. supabase.com → il tuo progetto → **SQL Editor** → **New query** → **incolla** → **Run**.
+3. Deve comparire **FATTO: aggiornamento completato e pazienti tolti**. Se Supabase chiede conferma per un'operazione «distruttiva», conferma.
 
-> Se Supabase chiede conferma per un'operazione «distruttiva», conferma: è la cancellazione dei pazienti richiesta.
+Il comando scarica da solo l'aggiornamento completo dal tuo sito e lo controlla. Se compare **«Aggiornamento non trovato sul sito»**, lo zip non è ancora pubblicato (o l'indirizzo del sito è diverso da `fisioagenda-pilota.netlify.app`): **non è cambiato nulla**, rifai il punto 1 e riprova.
 
-## 2. Sito
-app.netlify.com → **fisioagenda-pilota** → **Deploys** → trascina **`2-SITO-netlify.zip`** nel riquadro in fondo, così com'è.
+## 3. Apri l'app e installala
+Chiudi e riapri la pagina (sul PC **Ctrl+F5**). Poi: **PC / Android** → **📲 Installa app**; **iPhone** → Safari → **Condividi → Aggiungi alla schermata Home**.
 
-## 3. Apri l'app
-Premi **Ctrl+F5** (sul telefono: chiudi la pagina e riaprila).
-
-## 4. Installa l'app su ogni dispositivo
-- **PC (Chrome o Edge):** premi **📲 Installa app** in alto (o l'icona *Installa* nella barra dell'indirizzo).
-- **Android (Chrome):** **📲 Installa app**, oppure menu **⋮ → Installa app**.
-- **iPhone / iPad (Safari):** **Condividi** (quadrato con la freccia) **→ Aggiungi alla schermata Home**.
-
-Da qui in poi, quando ti mando un aggiornamento del solo sito, l'app installata si aggiorna da sola dopo il caricamento su Netlify.
+> Usa il comando corto **una volta sola**: cancella i pazienti. In alternativa dal PC si può incollare il file completo `1-DATABASE-aggiornamento-unico.sql` (stesso risultato).

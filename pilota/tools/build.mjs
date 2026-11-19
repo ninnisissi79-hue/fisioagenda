@@ -26,10 +26,13 @@ fs.cpSync(path.join(root, 'web'), out, { recursive: true, filter: s => path.reso
 fs.writeFileSync(path.join(out, 'config.js'), `window.FA_CONFIG = { supabaseUrl: ${JSON.stringify(url)}, supabaseKey: ${JSON.stringify(key)} };\n`);
 // sw.js e manifest mai in cache: l'app installata riceve subito ogni aggiornamento
 fs.writeFileSync(path.join(out, '_headers'), '/*\n  X-Robots-Tag: noindex, nofollow\n  X-Frame-Options: DENY\n  Referrer-Policy: no-referrer\n' +
-  '/sw.js\n  Cache-Control: no-cache\n/manifest.webmanifest\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');
+  '/sw.js\n  Cache-Control: no-cache\n/aggiornamento-database.sql\n  Cache-Control: no-cache\n/manifest.webmanifest\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');
 for (const f of ['manifest.webmanifest', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png']) {
   if (!fs.existsSync(path.join(out, f))) { console.error('ERRORE: manca ' + f + ' (app installabile)'); process.exit(1); }
 }
+// aggiornamento del database scaricabile dal sito: così in Supabase basta incollare un comando di poche righe
+// (supabase/aggiorna-dal-sito.sql), comodo anche dal telefono. Nessun dato e nessuna chiave: solo la struttura.
+fs.copyFileSync(path.join(root, 'supabase/aggiornamento-database.sql'), path.join(out, 'aggiornamento-database.sql'));
 // controllo: ogni file richiesto da index.html deve essere nel pacchetto
 const html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
 const refs = [...html.matchAll(/(?:src|href)="([^"#:]+)"/g)].map(m => m[1]);
