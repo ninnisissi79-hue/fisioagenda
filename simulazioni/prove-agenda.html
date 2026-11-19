@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prove agenda FisioAgenda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Simulazione da tavolo di lavoro: carta a quadretti per il foglio, toni ospedalieri sobri, colori di stato separati dall'accento. */
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --ink:#15233a; --muted:#5b687c; --line:#d5dce6; --accent:#2a64b5; --accent-ink:#ffffff; --accent-soft:#e3ecf8;
+  --paper:#fbfaf3; --grid:#e2e4d8; --amb:#ffffff; --rep:#e4e8ee; --seg:#efe6f8; --ort:#e2f2ec; --pausa:#f3ede0;
+  --ok:#1d7343; --okbg:#e1f3e8; --warn:#7f5a00; --warnbg:#fff2c9; --bad:#a1261e; --badbg:#fde4e1; --done:#8a96a8;
+  --display:'IBM Plex Sans',system-ui,sans-serif; --body:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e1520; --panel:#162030; --ink:#e4eaf3; --muted:#9aa6b7; --line:#2b3749; --accent:#6ea6ec; --accent-ink:#0b1420; --accent-soft:#1d2d45;
+  --paper:#18212d; --grid:#28323f; --amb:#1b2533; --rep:#232d3c; --seg:#2a2440; --ort:#1b332e; --pausa:#2d281e;
+  --ok:#72d29d; --okbg:#163325; --warn:#f0c85c; --warnbg:#3a2f10; --bad:#ff8c82; --badbg:#3c1c19; --done:#6f7c8f; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0e1520; --panel:#162030; --ink:#e4eaf3; --muted:#9aa6b7; --line:#2b3749; --accent:#6ea6ec; --accent-ink:#0b1420; --accent-soft:#1d2d45;
+  --paper:#18212d; --grid:#28323f; --amb:#1b2533; --rep:#232d3c; --seg:#2a2440; --ort:#1b332e; --pausa:#2d281e;
+  --ok:#72d29d; --okbg:#163325; --warn:#f0c85c; --warnbg:#3a2f10; --bad:#ff8c82; --badbg:#3c1c19; --done:#6f7c8f; color-scheme:dark; }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--body)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+.wrap{max-width:1500px;margin:0 auto;padding:16px}
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;padding:6px 0 12px}
+header.top h1{font-size:24px;font-weight:700}
+header.top p{margin:2px 0 0;color:var(--muted);max-width:70ch}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--muted)}
+.stat b{display:block;color:var(--ink);font:600 18px var(--mono);font-variant-numeric:tabular-nums}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:2px solid var(--line);margin-bottom:14px}
+nav.tabs a{padding:9px 14px;border-radius:8px 8px 0 0;text-decoration:none;color:var(--muted);font-weight:600;border:1px solid transparent;border-bottom:0;margin-bottom:-2px}
+nav.tabs a.on{background:var(--panel);color:var(--ink);border-color:var(--line);border-bottom:2px solid var(--panel)}
+nav.tabs a .tag{font-size:11px;font-weight:700;background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:1px 7px;margin-left:6px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+@media (max-width:1100px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.grow{flex:1}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 11px;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.sm{padding:3px 8px;font-size:13px}
+.btn.big{padding:10px 14px;font-size:15px;font-weight:600;min-width:120px}
+.btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.btn.danger{color:var(--bad)}
+main{min-width:0} .cols2>*{min-width:0} select{max-width:100%}
+select,input[type=text],input[type=date],input[type=number]{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 8px}
+.muted{color:var(--muted)} .small{font-size:13px}
+.hint{font-size:13px;color:var(--muted);margin:0 0 10px;max-width:90ch}
+.chip{display:inline-block;font-size:12px;font-weight:600;border-radius:99px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.chip.ok{background:var(--okbg);color:var(--ok)} .chip.warn{background:var(--warnbg);color:var(--warn)} .chip.bad{background:var(--badbg);color:var(--bad)} .chip.grey{background:var(--rep);color:var(--muted)}
+.scroll{overflow:auto;max-width:100%}
+/* ---------- Prova A: il foglio ---------- */
+.tools{display:flex;gap:4px;padding:4px;background:var(--bg);border-radius:9px}
+.tools .btn{min-width:96px}
+table.sheet{border-collapse:collapse;background:var(--paper);font-variant-numeric:tabular-nums}
+table.sheet th,table.sheet td{border:1px solid var(--grid);padding:0}
+table.sheet thead th{font:600 11px var(--mono);color:var(--muted);height:34px;min-width:27px;position:sticky;top:0;background:var(--paper);z-index:2}
+table.sheet thead th.today{color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+table.sheet th.name{position:sticky;left:0;z-index:3;background:var(--paper);text-align:left;min-width:190px;max-width:190px;padding:3px 8px;font:inherit}
+table.sheet tbody th.name{cursor:pointer}
+table.sheet tbody th.name:hover{background:var(--accent-soft)}
+.pc{display:block;font:600 14px var(--mono)} .pm{display:block;font-size:11px;color:var(--muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.sheet td{width:27px;height:34px;text-align:center;cursor:crosshair;position:relative;font:600 14px var(--mono)}
+table.sheet td.we{background:repeating-linear-gradient(135deg,transparent 0 4px,var(--grid) 4px 5px);cursor:not-allowed}
+table.sheet td.off{background:var(--rep)}
+table.sheet td:hover{outline:2px solid var(--accent);outline-offset:-2px}
+td .n{color:var(--accent)} td .n.done{color:var(--done)} td .n.A{color:var(--bad)}
+td .tm{position:absolute;top:0;right:1px;font-size:8px;color:var(--muted);line-height:1}
+td.fuori{box-shadow:inset 0 0 0 2px var(--warn)}
+td.sub .n{text-decoration:underline dotted}
+tr.newrow th.name{background:var(--panel)}
+.newform{display:flex;gap:4px;align-items:center;padding:4px 6px;flex-wrap:wrap}
+.newform input{padding:3px 6px;font-size:13px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend span b{font:600 13px var(--mono)}
+/* ---------- Prova B: la settimana ---------- */
+.week{display:grid;grid-template-columns:52px repeat(5,minmax(120px,1fr));gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;min-width:700px}
+.whead{background:var(--panel);border-bottom:1px solid var(--line);padding:6px;font-weight:600;font-size:13px;text-align:center}
+.whead.today{color:var(--accent)}
+.ruler{position:relative;background:var(--panel);border-right:1px solid var(--line)}
+.ruler div{position:absolute;right:4px;font:500 10px var(--mono);color:var(--muted);transform:translateY(-6px)}
+.wcol{position:relative;background:var(--rep);border-right:1px solid var(--line);cursor:copy}
+.wcol.absent{background:repeating-linear-gradient(135deg,var(--badbg) 0 6px,var(--rep) 6px 12px)}
+.blk{position:absolute;left:0;right:0;font-size:10px;color:var(--muted);padding:2px 4px;border-top:1px dashed var(--line)}
+.blk.amb{background:var(--amb)} .blk.rep{background:var(--rep)} .blk.seg{background:var(--seg)} .blk.ort{background:var(--ort)} .blk.pausa{background:var(--pausa)}
+.hline{position:absolute;left:0;right:0;border-top:1px solid var(--line);opacity:.5;pointer-events:none}
+.card{position:absolute;left:4px;right:4px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent);padding:1px 6px;font-size:12px;overflow:hidden;cursor:pointer;line-height:1.25;z-index:2}
+.card b{font-family:var(--mono)} .card .num{float:right;font:700 13px var(--mono);color:var(--accent)}
+.card.past{background:var(--panel);border-color:var(--line);color:var(--done)} .card.past .num{color:var(--done)}
+.card.A{background:var(--badbg);border-color:var(--bad);text-decoration:line-through}
+.card.fuori{box-shadow:0 0 0 2px var(--warn)}
+.card.sel{box-shadow:0 0 0 3px var(--accent)}
+.movebar{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:8px 12px;font-weight:600;display:flex;gap:10px;align-items:center;margin-bottom:8px}
+/* ---------- tabelle comuni ---------- */
+table.list{border-collapse:collapse;width:100%;font-size:14px}
+table.list th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);padding:6px}
+table.list td{border-bottom:1px solid var(--line);padding:6px;vertical-align:middle}
+table.list td.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.ins td{padding:2px}
+table.ins input{width:100%;min-width:60px;padding:4px 6px;font-size:13px}
+table.ins tr.ok td{background:var(--okbg)} table.ins tr.err td{background:var(--badbg)} table.ins tr.warn td{background:var(--warnbg)}
+.res{font-size:12px;min-width:200px}
+.q td{padding:3px}
+.qchip{display:block;width:100%;text-align:left;border:1px solid var(--line);border-left:5px solid var(--c,#999);background:var(--panel);border-radius:6px;padding:4px 6px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.qchip.ov{border-style:dashed}
+.qchip.fer{background:var(--badbg);color:var(--bad);border-left-color:var(--bad)}
+.seg2{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg2 button{border:0;border-right:1px solid var(--line);background:var(--panel);padding:4px 8px;font-size:12.5px}
+.seg2 button:last-child{border-right:0}
+.seg2 button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:14px} .cols2.stack{grid-template-columns:1fr} @media (max-width:1250px){.cols2{grid-template-columns:1fr}}
+/* ---------- cronometro ---------- */
+aside .task{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13.5px}
+aside .task.run{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+aside .task .t{font:600 15px var(--mono);font-variant-numeric:tabular-nums}
+aside h3{font-size:16px;margin-bottom:6px}
+aside textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:7px;padding:6px;background:var(--panel)}
+.sum td,.sum th{font-size:12.5px;padding:4px}
+/* ---------- finestrella e avvisi ---------- */
+#pop{position:fixed;z-index:50;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px;width:330px;max-width:calc(100vw - 24px);display:none}
+#pop h4{margin:0 0 6px;font-size:15px}
+#pop .row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+#pop label{font-size:12.5px;color:var(--muted);display:block;margin-top:6px}
+#pop input,#pop select{width:100%}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:600;display:none;z-index:60;max-width:90vw}
+@media (prefers-reduced-motion:no-preference){.card,.btn{transition:box-shadow .12s,border-color .12s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Prove agenda FisioAgenda</h1>
+      <p>Simulazione con <strong>dati inventati</strong> (pazienti solo con codice cartella). Prova i due modi di lavorare sul calendario, poi le altre schermate. Il cronometro a destra misura quanto ci metti. Nulla viene salvato: «Ricomincia» rimette tutto com'era.</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="layout">
+    <main id="main"></main>
+    <aside class="panel" id="aside"></aside>
+  </div>
+</div>
+<div id="pop" role="dialog" aria-modal="false"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* =================== utilità =================== */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addD = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return iso(d); };
+const wdOf = s => { const g = parseD(s).getDay(); return g === 0 ? 7 : g; };
+const fT = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+const pT = str => { const m = String(str || '').trim().match(/^(\d{1,2})(?:[:.,h]?(\d{2}))?$/); if (!m) return null; const h = +m[1], mi = m[2] ? +m[2] : 0; return h > 23 || mi > 59 ? null : h * 60 + mi; };
+const WD = ['', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'];
+const WDL = ['', 'L', 'M', 'M', 'G', 'V', 'S', 'D'];
+const MESI = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+const fD = s => WD[wdOf(s)] + ' ' + s.slice(8) + '/' + s.slice(5, 7);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const TODAY = iso(new Date());
+const HOL = new Set(['2026-11-01','2026-12-08','2026-12-25','2026-12-26','2027-01-01','2027-01-06','2027-04-05','2027-04-25','2027-05-01','2027-06-02']);
+const isWork = s => wdOf(s) <= 5 && !HOL.has(s);
+const nextWork = s => { let d = s; while (!isWork(d)) d = addD(d, 1); return d; };
+const monday = s => addD(s, 1 - wdOf(s));
+const wdsTxt = w => w.map(x => WD[x]).join(' ');
+function parseDays(str) {
+  const s = String(str || '').toLowerCase().trim();
+  if (!s) return null;
+  if (s === 'tutti' || s === 'tutti i giorni') return [1, 2, 3, 4, 5];
+  const out = new Set();
+  const map = { lu: 1, lun: 1, ma: 2, mar: 2, me: 3, mer: 3, gi: 4, gio: 4, ve: 5, ven: 5 };
+  if (/^[1-5]+$/.test(s)) [...s].forEach(c => out.add(+c));
+  else for (const tok of s.split(/[^a-z0-9]+/).filter(Boolean)) {
+    if (/^[1-5]$/.test(tok)) out.add(+tok);
+    else if (map[tok.slice(0, 3)] || map[tok.slice(0, 2)]) out.add(map[tok.slice(0, 3)] || map[tok.slice(0, 2)]);
+    else return null;
+  }
+  return out.size ? [...out].sort() : null;
+}
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => { t.style.display = 'none'; }, 2600); }
+
+/* =================== giornate tipo e squadra (inventate) =================== */
+const TYPES = {
+  E: { n: 'Ambulatorio esterni', s: 'Amb. esterni', c: '#2a64b5', b: [['amb', 480, 690], ['pausa', 690, 710], ['amb', 710, 840]] },
+  M: { n: 'Amb → Reparto → Amb', s: 'Amb·Rep·Amb', c: '#14867a', b: [['amb', 480, 570], ['rep', 570, 720], ['pausa', 720, 740], ['amb', 740, 852]] },
+  S: { n: 'Segreteria + ambulatorio', s: 'Segr. + Amb', c: '#7b4bb3', b: [['seg', 480, 660], ['amb', 660, 840]] },
+  H: { n: 'Ambulatorio mano', s: 'Amb. mano', c: '#3a4fc4', b: [['amb', 480, 690], ['pausa', 690, 710], ['amb', 710, 840]] },
+  O: { n: 'Ortesi + ambulatorio', s: 'Ortesi + Amb', c: '#2f8a4c', b: [['ort', 480, 600], ['amb', 600, 840]] },
+  R: { n: 'Solo reparto', s: 'Reparto', c: '#7a8494', b: [['rep', 480, 840]] },
+  P: { n: 'Pomeriggio ambulatorio', s: 'Pomeriggio', c: '#c46a1d', b: [['amb', 780, 1080]] },
+};
+const KIND = { amb: 'Ambulatorio', rep: 'Reparto', seg: 'Segreteria', ort: 'Ortesi', pausa: 'Pausa' };
+const TEAM = [
+  ['Barbieri A.', 'EEEEE', ['Ortopedia', 'Spalla']], ['Colombo L.', 'ESESE', ['Mano', 'Ortopedia']], ['De Luca M.', 'SESEE', ['Rachide', 'Neuro']],
+  ['Ferri G.', 'MMMMM', ['Neuro', 'Ortopedia']], ['Galli S.', 'MRMRM', ['Linfodrenaggio', 'Breast unit']], ['Greco P.', 'HHHHH', ['Mano']],
+  ['Leone F.', 'HOHOH', ['Mano', 'Ortesi']], ['Longo R.', 'MMMMM', ['Ortopedia', 'Rachide']], ['Marchetti E.', 'OOOOO', ['Ortesi', 'Mano']],
+  ['Mariani C.', 'MMMMR', ['Pavimento pelvico', 'Rachide']], ['Martini D.', 'PPPPP', ['Ortopedia', 'Spalla']], ['Moretti V.', 'RMRMR', ['Neuro']],
+  ['Pellegrini I.', 'MMMMM', ['Breast unit', 'Linfodrenaggio']], ['Rinaldi T.', 'EEPPE', ['Spalla', 'Ortopedia']], ['Rizzo B.', 'MRMMM', ['Rachide', 'Ortopedia']],
+  ['Santoro N.', 'RRMMM', ['Neuro', 'Pavimento pelvico']], ['Testa O.', 'SSSSS', ['Ortopedia', 'Rachide']], ['Vitale U.', 'MMMRM', ['Linfodrenaggio', 'Ortopedia']],
+];
+const COMPS = [...new Set(TEAM.flatMap(t => t[2]))].sort();
+
+/* =================== stato =================== */
+let S, UNDO = [], seq = 1;
+const TIMES = {}; let RUN = null, NOTES = '';
+function snapshot() { UNDO.push(JSON.stringify({ th: S.th, cy: S.cy, ss: S.ss, ov: S.ov, ign: [...S.ign] })); if (UNDO.length > 40) UNDO.shift(); }
+function undo() {
+  if (!UNDO.length) { toast('Niente da annullare'); return; }
+  const o = JSON.parse(UNDO.pop()); Object.assign(S, { th: o.th, cy: o.cy, ss: o.ss, ov: o.ov, ign: new Set(o.ign) }); S.moving = null; closePop(); render(); toast('Annullato');
+}
+const thBy = id => S.th.find(t => t.id === id);
+const cyBy = id => S.cy.find(c => c.id === id);
+function typeKey(th, d) {
+  const ov = S.ov[th.id + '|' + d];
+  if (ov && ov.type) return ov.type;
+  if (ov && ov.blocks) return 'X';
+  let p = th.wk[0].p;
+  for (const w of th.wk) if (w.from <= d) p = w.p;
+  return p[wdOf(d)] || 'R';
+}
+function absence(th, d) { return th.abs.find(a => a.from <= d && d <= a.to) || null; }
+function blocks(th, d) {
+  if (!isWork(d) || absence(th, d)) return [];
+  const ov = S.ov[th.id + '|' + d];
+  if (ov && ov.blocks) return ov.blocks;
+  return TYPES[typeKey(th, d)].b;
+}
+function ambOK(th, d, t, dur) { return blocks(th, d).some(([k, s, e]) => k === 'amb' && s <= t && t + dur <= e); }
+function busy(thId, d, t, dur, except) { return S.ss.find(x => x.th === thId && x.d === d && x.st !== 'A' && x.id !== except && x.t < t + dur && t < x.t + x.dur); }
+function cySess(cyId) { return S.ss.filter(x => x.cy === cyId).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t); }
+let NUM = new Map();
+function recount() {
+  NUM = new Map(); const by = new Map();
+  for (const x of S.ss) { if (!by.has(x.cy)) by.set(x.cy, []); by.get(x.cy).push(x); }
+  for (const c of S.cy) {
+    const l = (by.get(c.id) || []).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t);
+    let i = 0; for (const x of l) { if (x.st === 'A') continue; NUM.set(x.id, c.total - i); i++; }
+    c._n = i; c._fut = l.filter(x => x.st !== 'A' && x.d >= TODAY).length; c._last = l.length ? l[l.length - 1].d : null;
+  }
+}
+const fuori = x => { const th = thBy(x.th); return x.st !== 'A' && x.d >= TODAY && !S.ign.has(x.id) && !ambOK(th, x.d, x.t, x.dur); };
+
+/* =================== dati inventati =================== */
+function generate(seed) {
+  const r = rng(seed); seq = 1; UNDO = [];
+  const pick = arr => arr[Math.floor(r() * arr.length)];
+  const wpick = pairs => { let x = r() * pairs.reduce((a, p) => a + p[1], 0); for (const p of pairs) { x -= p[1]; if (x <= 0) return p[0]; } return pairs[0][0]; };
+  S = { th: [], cy: [], ss: [], ov: {}, ign: new Set(), moving: null };
+  TEAM.forEach(([n, pat, comps], i) => S.th.push({ id: 't' + i, name: n, comps, abs: [], wk: [{ from: '0000-01-01', p: Object.fromEntries([1, 2, 3, 4, 5].map(w => [w, pat[w - 1]])) }] }));
+  let code = 101;
+  for (const th of S.th) {
+    const occ = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+    const free = (w, t, e) => !occ[w].some(([a, b]) => a < e && t < b);
+    const amb = (w, t, e) => TYPES[th.wk[0].p[w]].b.some(([k, s, en]) => k === 'amb' && s <= t && e <= en);
+    for (let w = 1; w <= 5; w++) for (const [k, s, e] of TYPES[th.wk[0].p[w]].b) {
+      if (k !== 'amb') continue;
+      for (let t = s; t + 30 <= e; t += 30) {
+        if (!free(w, t, t + 30) || r() > 0.8) continue;
+        let dur = wpick([[30, .7], [45, .2], [60, .1]]); if (t + dur > e || !free(w, t, t + dur)) dur = 30;
+        if (!free(w, t, t + dur)) continue;
+        let wds = wpick([[[1, 3, 5], .42], [[2, 4], .3], [[1, 2, 3, 4, 5], .08], [[w], .2]]).filter(d => amb(d, t, t + dur) && free(d, t, t + dur));
+        if (!wds.includes(w)) wds = [w];
+        wds.forEach(d => occ[d].push([t, t + dur]));
+        const total = wpick([[10, .6], [5, .25], [15, .08], [20, .07]]);
+        const c = { id: 'c' + seq++, code: '2026/' + pad(Math.floor(code / 100)) + pad(code % 100), th: th.id, comp: pick(th.comps), dur, total, wds, t, inail: r() < 0.12, op: null, conf: null };
+        code += 1 + Math.floor(r() * 3);
+        const k0 = Math.floor(r() * total);
+        let d = TODAY, back = 0;
+        while (back < k0) { d = addD(d, -1); if (isWork(d) && wds.includes(wdOf(d))) back++; }
+        if (k0 === 0) { d = TODAY; }
+        let n = 0, guard = 0;
+        while (n < total && guard++ < 400) {
+          if (isWork(d) && wds.includes(wdOf(d))) {
+            const A = d < TODAY && r() < 0.05;
+            S.ss.push({ id: 's' + seq++, cy: c.id, th: th.id, d, t, dur, st: A ? 'A' : 'P' });
+            if (!A) n++;
+          }
+          d = addD(d, 1);
+        }
+        S.cy.push(c);
+      }
+    }
+  }
+  recount();
+  for (const c of S.cy) if (c._fut > 0 && c._fut <= 3 && r() < 0.35) c.op = pick(['continua', 'finisce', 'visita']);
+  S.cy.filter(c => c.th === 't4').slice(0, 4).forEach(c => { c.inail = true; });
+  buildTasks();
+}
+
+/* =================== operazioni (uguali per tutte le schermate) =================== */
+function addSession(cy, thId, d, t, dur) {
+  if (!isWork(d)) return 'Giorno festivo o fine settimana.';
+  const b = busy(thId, d, t, dur);
+  if (b) return 'Alle ' + fT(t) + ' del ' + fD(d) + ' c’è già ' + cyBy(b.cy).code + '.';
+  S.ss.push({ id: 's' + seq++, cy: cy.id, th: thId, d, t, dur, st: 'P' }); return null;
+}
+function createCycle(o) {
+  const th = o.th, c = { id: 'c' + seq++, code: o.code, th: th.id, comp: o.comp || th.comps[0], dur: o.dur, total: o.total, wds: o.wds, t: o.t, inail: !!o.inail, op: null, conf: null };
+  const out = []; let d = o.from, guard = 0, warn = 0;
+  while (out.length < o.total && guard++ < 500) {
+    if (isWork(d) && o.wds.includes(wdOf(d)) && !absence(th, d)) {
+      const b = busy(th.id, d, o.t, o.dur);
+      if (b) return { err: 'Il ' + fD(d) + ' alle ' + fT(o.t) + ' ' + th.name + ' ha già ' + cyBy(b.cy).code + '.' };
+      if (!ambOK(th, d, o.t, o.dur)) warn++;
+      out.push({ id: 's' + seq++, cy: c.id, th: th.id, d, t: o.t, dur: o.dur, st: 'P' });
+    }
+    d = addD(d, 1);
+  }
+  S.cy.push(c); S.ss.push(...out);
+  return { ok: true, c, n: out.length, first: out[0] && out[0].d, warn };
+}
+function validCode(code) {
+  const v = String(code || '').trim().replace(/\s+/g, ' ');
+  if (!v) return 'Manca il codice cartella.';
+  if (!/^[a-z0-9 /._-]{1,20}$/i.test(v)) return 'Codice non valido (solo lettere, cifre e / . - _).';
+  if (!/\d/.test(v)) return '«' + v + '» non è un codice cartella: niente nomi.';
+  if (S.cy.some(c => c.code.replace(/\s/g, '').toUpperCase() === v.replace(/\s/g, '').toUpperCase() && c._fut > 0)) return 'Il codice ' + v + ' è già in trattamento.';
+  return null;
+}
+function extendCycle(c, n) {
+  const l = cySess(c.id).filter(x => x.st !== 'A'); const last = l[l.length - 1];
+  let d = last ? addD(last.d, 1) : TODAY; let added = 0, guard = 0;
+  const thId = last ? last.th : c.th, t = last ? last.t : c.t;
+  while (added < n && guard++ < 300) { if (isWork(d) && c.wds.includes(wdOf(d)) && !busy(thId, d, t, c.dur)) { S.ss.push({ id: 's' + seq++, cy: c.id, th: thId, d, t, dur: c.dur, st: 'P' }); added++; } d = addD(d, 1); }
+  c.total += n;
+}
+/** collega con la stessa competenza, in ambulatorio e libero: prima alla stessa ora, altrimenti all'ora più vicina dello stesso giorno */
+function suggest(x) {
+  const c = cyBy(x.cy); let best = null;
+  for (const t of S.th) {
+    if (t.id === x.th || !t.comps.includes(c.comp)) continue;
+    for (const [k, s, e] of blocks(t, x.d)) {
+      if (k !== 'amb') continue;
+      for (let tt = s; tt + x.dur <= e; tt += 5) {
+        if (busy(t.id, x.d, tt, x.dur)) continue;
+        const dist = Math.abs(tt - x.t), load = S.ss.filter(q => q.th === t.id && q.d === x.d).length;
+        if (!best || dist < best.dist || (dist === best.dist && load < best.load)) best = { th: t, t: tt, dist, load };
+      }
+    }
+  }
+  return best;
+}
+function nearestFree(x) {
+  const th = thBy(x.th); let best = null;
+  for (const [k, s, e] of blocks(th, x.d)) { if (k !== 'amb') continue; for (let t = s; t + x.dur <= e; t += 5) if (!busy(th.id, x.d, t, x.dur, x.id) && (best == null || Math.abs(t - x.t) < Math.abs(best - x.t))) best = t; }
+  return best;
+}
+
+/* =================== compiti per il cronometro =================== */
+let TASKS = {};
+function buildTasks() {
+  recount();
+  const mk = (thId, tag, newCode) => {
+    const th = thBy(thId); const d1 = (() => { let d = nextWork(TODAY), g = 0; while (g++ < 20 && !S.ss.some(x => x.th === thId && x.d === d)) d = nextWork(addD(d, 1)); return d; })();
+    const day1 = S.ss.filter(x => x.th === thId && x.d === d1 && x.st !== 'A').sort((a, b) => a.t - b.t);
+    const d2 = nextWork(addD(d1, 1)); const day2 = S.ss.filter(x => x.th === thId && x.d === d2 && x.st !== 'A').sort((a, b) => a.t - b.t);
+    const a = day1[0], m = day2[1] || day2[0];
+    let to = m ? nearestFreeAt(th, d2, m.dur, m.t) : null;
+    const nm = monday(addD(TODAY, 7));
+    const sus = S.cy.filter(c => c.th === thId && cySess(c.id).filter(x => x.d >= nm).length >= 2 && c !== (a && cyBy(a.cy)) && c !== (m && cyBy(m.cy)))[0];
+    let slot = null;
+    for (const wds of [[1, 3, 5], [2, 4], [1, 2, 3, 4, 5]]) { for (let t = 480; t < 1080 && !slot; t += 15) { let ok = true, d = nextWork(addD(TODAY, 1)), n = 0, g = 0; while (n < 10 && g++ < 80) { if (isWork(d) && wds.includes(wdOf(d))) { if (!ambOK(th, d, t, 30) || busy(th.id, d, t, 30)) { ok = false; break; } n++; } d = addD(d, 1); } if (ok) slot = { wds, t }; } if (slot) break; }
+    return [
+      { id: tag + '1', k: 'assente', txt: a ? 'Il paziente <b>' + cyBy(a.cy).code + '</b> di ' + th.name + ' (' + fD(d1) + ' ore ' + fT(a.t) + ') non è venuto: segnalo <b>assente</b>.' : 'Segna un paziente assente.' },
+      { id: tag + '2', k: 'sposta', txt: m ? 'Sposta <b>' + cyBy(m.cy).code + '</b> del ' + fD(d2) + ' (ore ' + fT(m.t) + ') alle <b>' + (to != null ? fT(to) : 'un’ora libera') + '</b>.' : 'Sposta una seduta.' },
+      { id: tag + '3', k: 'nuovo', txt: 'Paziente nuovo <b>' + newCode + '</b> per ' + th.name + ': <b>' + (slot ? wdsTxt(slot.wds) + ' alle ' + fT(slot.t) : 'lun mer ven') + '</b>, 10 sedute da 30 minuti, da domani.' },
+      { id: tag + '4', k: 'sospende', txt: sus ? '<b>' + sus.code + '</b> sospende: togli le sue sedute dal <b>' + fD(nm) + '</b> in poi.' : 'Togli le sedute future di un paziente che sospende.' },
+    ];
+  };
+  const nm = monday(addD(TODAY, 7));
+  const fer1 = nextWork(addD(TODAY, 3)), fer2 = addD(fer1, 4);
+  const near = S.cy.filter(c => c._fut > 0 && c._fut <= 3 && !c.op);
+  TASKS = {
+    foglio: mk('t1', 'A', '2026/9101'),
+    settimana: mk('t3', 'B', '2026/9102'),
+    inserisci: [{ id: 'I1', k: 'ins', txt: 'Inserisci gli 8 pazienti dell’esempio: «Copia l’esempio», incolla nella tabella (Ctrl+V), «Inserisci tutto», poi correggi le righe rosse.' }],
+    orari: [
+      { id: 'O1', k: 'orario', txt: 'Dal <b>' + fD(nm) + '</b> il giovedì di <b>Longo R.</b> diventa «Solo reparto»: cambialo e sistema i suoi pazienti del giovedì.' },
+      { id: 'O2', k: 'ferie', txt: '<b>Galli S.</b> è in ferie dal <b>' + fD(fer1) + '</b> al <b>' + fD(fer2) + '</b>: segnalo e trova un collega per i pazienti <b>INAIL</b>.' },
+    ],
+    'fine-ciclo': [
+      { id: 'F1', k: 'fine', txt: (near[0] ? 'Il fisioterapista è sicuro che <b>' + near[0].code + '</b> non continua: segnalo e trova il suo posto tra i «Posti che si liberano».' : 'Segna un fine ciclo sicuro.') },
+      { id: 'F2', k: 'riconf', txt: (near[1] ? 'Il fisiatra ha riconfermato <b>' + near[1].code + '</b> per altre 10 sedute: segnalo.' : 'Segna un ciclo riconfermato.') },
+    ],
+  };
+}
+function nearestFreeAt(th, d, dur, t0) { let best = null; for (const [k, s, e] of blocks(th, d)) { if (k !== 'amb') continue; for (let t = s; t + dur <= e; t += 15) if (!busy(th.id, d, t, dur) && Math.abs(t - t0) >= 30 && (best == null || Math.abs(t - t0) < Math.abs(best - t0))) best = t; } return best; }
+
+/* =================== finestrella =================== */
+let popAnchor = null;
+function openPop(html, ev, bind) {
+  const p = $('#pop'); p.innerHTML = html; p.style.display = 'block';
+  const x = ev ? ev.clientX : innerWidth / 2, y = ev ? ev.clientY : 120;
+  const w = p.offsetWidth, h = p.offsetHeight;
+  p.style.left = Math.max(12, Math.min(x + 8, innerWidth - w - 12)) + 'px';
+  p.style.top = Math.max(12, Math.min(y + 8, innerHeight - h - 12)) + 'px';
+  popAnchor = Date.now(); if (bind) bind(p);
+  const f = p.querySelector('input,select,button.pri'); if (f) f.focus();
+}
+function closePop() { $('#pop').style.display = 'none'; }
+document.addEventListener('mousedown', e => { if ($('#pop').style.display === 'block' && !$('#pop').contains(e.target) && Date.now() - popAnchor > 50) closePop(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closePop(); if (S.moving) { S.moving = null; render(); } }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); undo(); }
+});
+
+/* =================== intestazione e schede =================== */
+const VIEWS = [['foglio', 'Prova A · Il foglio', 'matita e gomma'], ['settimana', 'Prova B · La settimana', 'a blocchi'], ['inserisci', 'Inserimento rapido', ''], ['orari', 'Quadro orari', ''], ['fine-ciclo', 'Fine ciclo e posti liberi', '']];
+let VIEW = 'foglio';
+const UI = { th: 't1', mon: TODAY.slice(0, 7), tool: 'pen', thB: 't3', wk: monday(TODAY), qwk: monday(TODAY), comp: '', dur: 30, certain: { sicuro: true, probabile: true, visita: true, valutare: false }, ins: null };
+function render() {
+  recount();
+  const today = S.ss.filter(x => x.d === nextWork(TODAY) && x.st !== 'A').length;
+  const fix = toFix().length;
+  $('#stats').innerHTML = '<div class="stat"><b>18</b>fisioterapisti</div><div class="stat"><b>' + today + '</b>sedute ' + (isWork(TODAY) ? 'oggi' : fD(nextWork(TODAY))) + '</div><div class="stat"><b>' + S.cy.filter(c => c._fut > 0).length + '</b>cicli in corso</div>' +
+    '<button class="btn" id="undo">↶ Annulla <span class="muted small">(Ctrl+Z)</span></button><button class="btn" id="regen">Ricomincia</button>';
+  $('#undo').onclick = undo; $('#regen').onclick = () => { generate(Date.now() % 100000); UI.ins = null; render(); toast('Dati nuovi, tutto da capo'); };
+  $('#tabs').innerHTML = VIEWS.map(([k, l, sub]) => '<a href="#' + k + '" class="' + (VIEW === k ? 'on' : '') + '">' + esc(l) + (sub ? ' <span class="muted small">' + sub + '</span>' : '') + (k === 'orari' && fix ? '<span class="tag">' + fix + ' da sistemare</span>' : '') + '</a>').join('');
+  const m = $('#main'); m.innerHTML = '';
+  ({ foglio: viewSheet, settimana: viewWeek, inserisci: viewIns, orari: viewOrari, 'fine-ciclo': viewFine })[VIEW](m);
+  renderAside();
+}
+function thSelect(id, cur) { return '<select id="' + id + '" aria-label="Fisioterapista">' + S.th.map(t => '<option value="' + t.id + '"' + (t.id === cur ? ' selected' : '') + '>' + esc(t.name) + ' · ' + esc(t.comps.join(', ')) + '</option>').join('') + '</select>'; }
+
+/* =================== PROVA A: il foglio (matita e gomma) =================== */
+function viewSheet(m) {
+  const th = thBy(UI.th), [y, mo] = UI.mon.split('-').map(Number);
+  const nd = new Date(y, mo, 0).getDate(), days = Array.from({ length: nd }, (_, i) => UI.mon + '-' + pad(i + 1));
+  const inMon = S.ss.filter(x => x.th === th.id && x.d.startsWith(UI.mon));
+  const cyIds = [...new Set(inMon.map(x => x.cy))];
+  const rows = cyIds.map(cyBy).sort((a, b) => a.t - b.t || a.code.localeCompare(b.code));
+  const byCell = new Map(); inMon.forEach(x => byCell.set(x.cy + '|' + x.d, x));
+  const tools = [['pen', '✏️ Matita', 'Tocca una casella vuota: scrive una seduta all’ora del paziente. Tocca un numero: cambi l’ora.'], ['eraser', '🧽 Gomma', 'Tocca un numero: lo cancella. Tocca il codice: cancella le sedute future.'], ['absent', 'A  Assente', 'Tocca un numero: assente (non scala). Ritocca: torna presente.']];
+  const tool = tools.find(t => t[0] === UI.tool);
+  let h = '<div class="panel"><div class="bar">' + thSelect('selTh', th.id) +
+    '<button class="btn" id="mPrev" aria-label="Mese precedente">◀</button><strong style="min-width:130px;text-align:center">' + MESI[mo - 1] + ' ' + y + '</strong><button class="btn" id="mNext" aria-label="Mese successivo">▶</button><button class="btn sm" id="mToday">Oggi</button>' +
+    '<span class="grow"></span><div class="tools" role="group" aria-label="Strumento">' + tools.map(([k, l]) => '<button class="btn' + (UI.tool === k ? ' on' : '') + '" data-tool="' + k + '">' + l + '</button>').join('') + '</div></div>' +
+    '<p class="hint"><strong>' + tool[1] + ':</strong> ' + tool[2] + ' Il numero è il conto alla rovescia, come sulla carta. Il codice apre la scheda del paziente (orario dal…, durata, INAIL, fine ciclo).</p>' +
+    '<div class="scroll" style="max-height:70vh"><table class="sheet"><thead><tr><th class="name">' + rows.length + ' pazienti · ' + esc(th.name) + '</th>' +
+    days.map(d => '<th class="' + (d === TODAY ? 'today' : '') + '" title="' + fD(d) + '">' + WDL[wdOf(d)] + '<br>' + (+d.slice(8)) + '</th>').join('') + '</tr></thead><tbody>';
+  for (const c of rows) {
+    const miss = c.total - c._n;
+    h += '<tr><th class="name" data-cyrow="' + c.id + '"><span class="pc">' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + (c.th !== th.id ? ' <span class="chip grey">di ' + esc(thBy(c.th).name) + '</span>' : '') + '</span><span class="pm">' + fT(c.t) + ' · ' + wdsTxt(c.wds) + ' · ' + c.dur + '′' + (miss > 0 ? ' · <b style="color:var(--warn)">manca ' + miss + '</b>' : '') + (c.op ? ' · ' + opLabel(c.op) : '') + '</span></th>';
+    for (const d of days) {
+      const x = byCell.get(c.id + '|' + d), we = !isWork(d), off = !we && (absence(th, d) || !blocks(th, d).some(b => b[0] === 'amb'));
+      if (!x) { h += '<td class="' + (we ? 'we' : off ? 'off' : '') + '" data-cy="' + c.id + '" data-d="' + d + '"></td>'; continue; }
+      const n = NUM.get(x.id), done = x.d < TODAY && x.st !== 'A';
+      h += '<td class="' + (fuori(x) ? 'fuori ' : '') + (off ? 'off' : '') + '" data-sid="' + x.id + '" title="' + esc(c.code + ' · ' + fD(d) + ' ' + fT(x.t) + '–' + fT(x.t + x.dur)) + '">' + (x.t !== c.t ? '<span class="tm">' + fT(x.t) + '</span>' : '') + '<span class="n' + (x.st === 'A' ? ' A' : done ? ' done' : '') + '">' + (x.st === 'A' ? 'A' : n >= 1 ? n : '+') + '</span></td>';
+    }
+    h += '</tr>';
+  }
+  h += '<tr class="newrow"><th class="name" colspan="' + (nd + 1) + '" style="position:static"><form class="newform" id="newForm" autocomplete="off"><strong class="small">+ Paziente nuovo:</strong>' +
+    '<input id="nCode" placeholder="codice cartella" style="width:120px" aria-label="Codice cartella"><input id="nDays" placeholder="giorni: lun mer ven" style="width:130px" aria-label="Giorni"><input id="nTime" placeholder="ora 10:00" style="width:80px" aria-label="Ora">' +
+    '<input id="nTot" type="number" value="10" min="1" max="40" style="width:64px" aria-label="Sedute"> sedute <select id="nDur" aria-label="Durata"><option>30</option><option>45</option><option>60</option></select> min <input id="nFrom" type="date" value="' + nextWork(addD(TODAY, 1)) + '" aria-label="Dal"><button class="btn pri sm">Scrivi</button><span class="small muted">(Invio)</span></form></th></tr>';
+  h += '</tbody></table></div><div class="legend"><span><b style="color:var(--accent)">7</b> da fare</span><span><b style="color:var(--done)">7</b> fatta (conta da sola)</span><span><b style="color:var(--bad)">A</b> assente</span><span><b>⁰⁹·³⁰</b> ora diversa</span><span>bordo giallo = fuori orario</span><span>grigio = non in ambulatorio / ferie</span></div></div>';
+  m.innerHTML = h;
+  $('#selTh').onchange = e => { UI.th = e.target.value; render(); };
+  const mv = n => { const d = new Date(y, mo - 1 + n, 1); UI.mon = iso(d).slice(0, 7); render(); };
+  $('#mPrev').onclick = () => mv(-1); $('#mNext').onclick = () => mv(1); $('#mToday').onclick = () => { UI.mon = TODAY.slice(0, 7); render(); };
+  m.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { UI.tool = b.dataset.tool; render(); });
+  m.querySelector('tbody').addEventListener('click', e => {
+    const td = e.target.closest('td'), rh = e.target.closest('[data-cyrow]');
+    if (rh) { if (UI.tool === 'eraser') return eraseFuture(cyBy(rh.dataset.cyrow), e); return patientCard(cyBy(rh.dataset.cyrow), e); }
+    if (!td) return;
+    if (td.dataset.sid) {
+      const x = S.ss.find(s => s.id === td.dataset.sid);
+      if (UI.tool === 'eraser') { snapshot(); S.ss = S.ss.filter(s => s !== x); render(); return; }
+      if (UI.tool === 'absent') { snapshot(); x.st = x.st === 'A' ? 'P' : 'A'; render(); return; }
+      return timeEdit(x, e);
+    }
+    if (td.dataset.cy) {
+      const c = cyBy(td.dataset.cy), d = td.dataset.d;
+      if (!isWork(d)) return toast('Fine settimana o festivo');
+      if (UI.tool !== 'pen') return toast('Per scrivere scegli la ✏️ Matita');
+      snapshot(); const err = addSession(c, th.id, d, c.t, c.dur);
+      if (err) { UNDO.pop(); return toast(err); }
+      if (!ambOK(th, d, c.t, c.dur)) toast('Scritta, ma è fuori dall’orario di ambulatorio');
+      render();
+    }
+  });
+  $('#newForm').onsubmit = e => {
+    e.preventDefault();
+    const code = $('#nCode').value.trim(), wds = parseDays($('#nDays').value), t = pT($('#nTime').value);
+    const er = validCode(code) || (!wds && 'Giorni non capiti: scrivi per esempio «lun mer ven» o «1 3 5».') || (t == null && 'Ora non capita: scrivi per esempio 10:00.');
+    if (er) return toast(er);
+    snapshot(); const r = createCycle({ th, code, wds, t, total: +$('#nTot').value || 10, dur: +$('#nDur').value, from: $('#nFrom').value || TODAY });
+    if (r.err) { UNDO.pop(); return toast(r.err); }
+    toast('✓ ' + code + ': ' + r.n + ' sedute dal ' + fD(r.first) + (r.warn ? ' (' + r.warn + ' fuori orario)' : '')); render();
+  };
+}
+function timeEdit(x, e) {
+  const c = cyBy(x.cy);
+  openPop('<h4>' + esc(c.code) + ' · ' + fD(x.d) + '</h4><label for="pTime">Ora di questa seduta</label><input id="pTime" value="' + fT(x.t) + '"><label for="pDur">Durata (minuti)</label><input id="pDur" type="number" value="' + x.dur + '" step="5"><div class="row"><button class="btn pri" id="pOk">Salva</button><button class="btn" id="pNo">Chiudi</button></div>', e, p => {
+    const ok = () => { const t = pT(p.querySelector('#pTime').value), dur = +p.querySelector('#pDur').value; if (t == null || !(dur >= 10)) return toast('Ora o durata non valide'); const b = busy(x.th, x.d, t, dur, x.id); if (b) return toast('A quell’ora c’è già ' + cyBy(b.cy).code); snapshot(); x.t = t; x.dur = dur; closePop(); render(); };
+    p.querySelector('#pOk').onclick = ok; p.querySelector('#pNo').onclick = closePop; p.querySelectorAll('input').forEach(i => i.onkeydown = ev => { if (ev.key === 'Enter') ok(); });
+  });
+}
+function eraseFuture(c, e) {
+  openPop('<h4>' + esc(c.code) + '</h4><p class="small">Cancello le sedute future con la gomma?</p><label for="pFrom">Dal giorno</label><input id="pFrom" type="date" value="' + nextWork(TODAY) + '"><div class="row"><button class="btn pri" id="pOk">Cancella da quel giorno</button><button class="btn" id="pNo">No</button></div>', e, p => {
+    p.querySelector('#pOk').onclick = () => { const f = p.querySelector('#pFrom').value; snapshot(); const n0 = S.ss.length; S.ss = S.ss.filter(x => !(x.cy === c.id && x.d >= f)); closePop(); render(); toast((n0 - S.ss.length) + ' sedute cancellate dal ' + fD(f)); };
+    p.querySelector('#pNo').onclick = closePop;
+  });
+}
+const OPS = { continua: 'Continua', finisce: 'Finisce', sicuro: 'Finisce (sicuro)', visita: 'Serve visita' };
+const opLabel = o => '<span class="chip ' + (o === 'continua' ? 'ok' : o === 'visita' ? '' : 'warn') + '">' + OPS[o] + '</span>';
+function patientCard(c, e) {
+  const fut = cySess(c.id).filter(x => x.d >= TODAY && x.st !== 'A');
+  openPop('<h4>' + esc(c.code) + (c.inail ? ' <span class="chip warn">INAIL</span>' : '') + '</h4><div class="small muted">' + esc(thBy(c.th).name) + ' · ' + esc(c.comp) + ' · ' + c.total + ' sedute · ne restano ' + fut.length + '</div>' +
+    '<label>Parere del fisioterapista</label><div class="seg2" id="pOp">' + Object.entries(OPS).map(([k, l]) => '<button data-op="' + k + '" class="' + (c.op === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div>' +
+    '<label for="pT">Nuovo orario (ora · giorni) dal giorno</label><div class="row"><input id="pT" value="' + fT(c.t) + '" style="width:70px"><input id="pW" value="' + wdsTxt(c.wds) + '" style="width:120px"><input id="pF" type="date" value="' + nextWork(addD(TODAY, 1)) + '" style="width:140px"></div>' +
+    '<div class="row"><button class="btn pri sm" id="pApply">Cambia dal giorno</button><button class="btn sm" id="pInail">' + (c.inail ? 'Togli INAIL' : 'Segna INAIL') + '</button><button class="btn sm danger" id="pSusp">Sospende / finisce</button></div>', e, p => {
+    p.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { snapshot(); c.op = c.op === b.dataset.op ? null : b.dataset.op; closePop(); render(); toast('Parere segnato: lo vede la segreteria'); });
+    p.querySelector('#pInail').onclick = () => { snapshot(); c.inail = !c.inail; closePop(); render(); };
+    p.querySelector('#pSusp').onclick = ev => { closePop(); eraseFuture(c, ev); };
+    p.querySelector('#pApply').onclick = () => {
+      const t = pT(p.querySelector('#pT').value), wds = parseDays(p.querySelector('#pW').value), f = p.querySelector('#pF').value;
+      if (t == null || !wds) return toast('Ora o giorni non capiti');
+      snapshot(); const futS = cySess(c.id).filter(x => x.d >= f && x.st !== 'A'); const n = futS.length; const thId = futS[0] ? futS[0].th : c.th;
+      S.ss = S.ss.filter(x => !(x.cy === c.id && x.d >= f)); c.t = t; c.wds = wds;
+      let d = f, k = 0, g = 0, conf = 0; while (k < n && g++ < 300) { if (isWork(d) && wds.includes(wdOf(d))) { if (busy(thId, d, t, c.dur)) conf++; else { S.ss.push({ id: 's' + seq++, cy: c.id, th: thId, d, t, dur: c.dur, st: 'P' }); k++; } } d = addD(d, 1); }
+      closePop(); render(); toast(n + ' sedute rimesse dal ' + fD(f) + ' alle ' + fT(t) + (conf ? ' (saltati ' + conf + ' giorni occupati)' : ''));
+    };
+  });
+}
+
+/* =================== PROVA B: la settimana a blocchi =================== */
+const T0 = 450, T1 = 1140, PX = 1.15;
+function viewWeek(m) {
+  const th = thBy(UI.thB), days = [0, 1, 2, 3, 4].map(i => addD(UI.wk, i));
+  let h = '<div class="panel"><div class="bar">' + thSelect('selThB', th.id) + '<button class="btn" id="wPrev" aria-label="Settimana precedente">◀</button><strong style="min-width:170px;text-align:center">' + fD(days[0]) + ' – ' + fD(days[4]) + '</strong><button class="btn" id="wNext" aria-label="Settimana successiva">▶</button><button class="btn sm" id="wToday">Oggi</button></div>' +
+    '<p class="hint"><strong>Tocca un paziente</strong>: 4 pulsanti grandi (Assente, Sposta, Cancella, Altro). <strong>Tocca uno spazio vuoto</strong>: paziente nuovo a quell’ora. Gli sfondi sono l’orario del fisioterapista: bianco ambulatorio, grigio reparto, viola segreteria, verde ortesi.</p>' +
+    (S.moving ? '<div class="movebar">↔ Tocca il punto dove spostare ' + esc(cyBy(S.ss.find(x => x.id === S.moving).cy).code) + ' (anche un altro giorno di questa settimana)<span class="grow"></span><button class="btn sm" id="mvNo">Annulla spostamento</button></div>' : '') +
+    '<div class="scroll"><div class="week"><div class="whead"></div>' + days.map(d => '<div class="whead' + (d === TODAY ? ' today' : '') + '">' + fD(d) + '<br><span class="muted small">' + (absence(th, d) ? 'Ferie' : isWork(d) ? esc(TYPES[typeKey(th, d)] ? TYPES[typeKey(th, d)].s : 'a mano') : 'festivo') + '</span></div>').join('');
+  const H = (T1 - T0) * PX;
+  h += '<div class="ruler" style="height:' + H + 'px">' + Array.from({ length: (T1 - T0) / 30 + 1 }, (_, i) => T0 + i * 30).filter(t => t % 60 === 0).map(t => '<div style="top:' + (t - T0) * PX + 'px">' + fT(t) + '</div>').join('') + '</div>';
+  for (const d of days) {
+    const ab = absence(th, d);
+    h += '<div class="wcol' + (ab ? ' absent' : '') + '" data-d="' + d + '" style="height:' + H + 'px">';
+    for (let t = T0; t <= T1; t += 60) h += '<div class="hline" style="top:' + (t - T0) * PX + 'px"></div>';
+    for (const [k, s, e] of blocks(th, d)) h += '<div class="blk ' + k + '" style="top:' + (s - T0) * PX + 'px;height:' + (e - s) * PX + 'px">' + (k !== 'amb' ? KIND[k] : '') + '</div>';
+    for (const x of S.ss.filter(x => x.th === th.id && x.d === d)) {
+      const c = cyBy(x.cy), n = NUM.get(x.id);
+      h += '<div class="card' + (x.d < TODAY && x.st !== 'A' ? ' past' : '') + (x.st === 'A' ? ' A' : '') + (fuori(x) ? ' fuori' : '') + (S.moving === x.id ? ' sel' : '') + '" data-sid="' + x.id + '" style="top:' + (x.t - T0) * PX + 'px;height:' + Math.max(16, x.dur * PX - 2) + 'px"><span class="num">' + (x.st === 'A' ? 'A' : n >= 1 ? n : '+') + '</span><b>' + esc(c.code) + '</b>' + (c.inail ? ' ·I' : '') + '<br><span class="small">' + fT(x.t) + ' · ' + x.dur + '′</span></div>';
+    }
+    h += '</div>';
+  }
+  h += '</div></div></div>';
+  m.innerHTML = h;
+  $('#selThB').onchange = e => { UI.thB = e.target.value; S.moving = null; render(); };
+  $('#wPrev').onclick = () => { UI.wk = addD(UI.wk, -7); render(); }; $('#wNext').onclick = () => { UI.wk = addD(UI.wk, 7); render(); }; $('#wToday').onclick = () => { UI.wk = monday(TODAY); render(); };
+  if ($('#mvNo')) $('#mvNo').onclick = () => { S.moving = null; render(); };
+  m.querySelector('.week').addEventListener('click', e => {
+    const card = e.target.closest('.card'), col = e.target.closest('.wcol');
+    if (card && !S.moving) return weekCard(S.ss.find(x => x.id === card.dataset.sid), e);
+    if (!col) return;
+    const r = col.getBoundingClientRect(), t = Math.round(((e.clientY - r.top) / PX + T0) / 5) * 5, d = col.dataset.d;
+    if (S.moving) {
+      const x = S.ss.find(s => s.id === S.moving);
+      if (!isWork(d)) return toast('Giorno festivo');
+      const b = busy(th.id, d, t, x.dur, x.id); if (b) return toast('Alle ' + fT(t) + ' c’è già ' + cyBy(b.cy).code);
+      snapshot(); x.d = d; x.t = t; x.th = th.id; S.moving = null; render(); toast('Spostata al ' + fD(d) + ' alle ' + fT(t) + (ambOK(th, d, t, x.dur) ? '' : ' (fuori orario)')); return;
+    }
+    if (card) return;
+    if (!isWork(d)) return toast('Giorno festivo');
+    newHere(th, d, t, e);
+  });
+}
+function weekCard(x, e) {
+  const c = cyBy(x.cy), n = NUM.get(x.id);
+  openPop('<h4>' + esc(c.code) + ' · ' + fD(x.d) + ' ' + fT(x.t) + '</h4><div class="small muted">Seduta ' + (x.st === 'A' ? 'assente' : 'n. ' + (c.total - n + 1) + ' di ' + c.total + ' · ne restano ' + n) + (c.inail ? ' · INAIL' : '') + '</div>' +
+    '<div class="row"><button class="btn big" id="bA">' + (x.st === 'A' ? 'Togli assenza' : 'Assente') + '</button><button class="btn big" id="bS">↔ Sposta</button></div><div class="row"><button class="btn big danger" id="bC">Cancella</button><button class="btn big" id="bO">Altro…</button></div>', e, p => {
+    p.querySelector('#bA').onclick = () => { snapshot(); x.st = x.st === 'A' ? 'P' : 'A'; closePop(); render(); };
+    p.querySelector('#bS').onclick = () => { S.moving = x.id; closePop(); render(); };
+    p.querySelector('#bC').onclick = ev => {
+      closePop(); openPop('<h4>Cancella ' + esc(c.code) + '</h4><div class="row"><button class="btn big" id="c1">Solo questa</button><button class="btn big danger" id="c2">Questa e le successive</button></div>', ev, q => {
+        q.querySelector('#c1').onclick = () => { snapshot(); S.ss = S.ss.filter(s => s !== x); closePop(); render(); };
+        q.querySelector('#c2').onclick = () => { snapshot(); S.ss = S.ss.filter(s => !(s.cy === c.id && (s.d > x.d || (s.d === x.d && s.t >= x.t)))); closePop(); render(); toast('Sedute dal ' + fD(x.d) + ' cancellate'); };
+      });
+    };
+    p.querySelector('#bO').onclick = ev => { closePop(); patientCard(c, ev); };
+  });
+}
+function newHere(th, d, t, e) {
+  openPop('<h4>Paziente nuovo · ' + fD(d) + ' ' + fT(t) + '</h4><label for="qC">Codice cartella</label><input id="qC" placeholder="es. 2026/0153"><label for="qW">Giorni</label><input id="qW" value="' + WD[wdOf(d)] + '"><div class="row"><div style="flex:1"><label for="qN">Sedute</label><input id="qN" type="number" value="10"></div><div style="flex:1"><label for="qD">Minuti</label><select id="qD"><option>30</option><option>45</option><option>60</option></select></div><div style="flex:1"><label for="qT">Ora</label><input id="qT" value="' + fT(t) + '"></div></div><div class="row"><button class="btn pri" id="qOk">Crea</button><button class="btn" id="qNo">Chiudi</button></div>', e, p => {
+    const ok = () => {
+      const code = p.querySelector('#qC').value.trim(), wds = parseDays(p.querySelector('#qW').value), tt = pT(p.querySelector('#qT').value);
+      const er = validCode(code) || (!wds && 'Giorni non capiti') || (tt == null && 'Ora non capita'); if (er) return toast(er);
+      snapshot(); const r = createCycle({ th, code, wds, t: tt, total: +p.querySelector('#qN').value || 10, dur: +p.querySelector('#qD').value, from: d });
+      if (r.err) { UNDO.pop(); return toast(r.err); }
+      closePop(); render(); toast('✓ ' + code + ': ' + r.n + ' sedute dal ' + fD(r.first));
+    };
+    p.querySelector('#qOk').onclick = ok; p.querySelector('#qNo').onclick = closePop; p.querySelectorAll('input').forEach(i => i.onkeydown = ev => { if (ev.key === 'Enter') ok(); });
+  });
+}
+
+/* =================== inserimento rapido (tabella tipo Excel) =================== */
+const ICOLS = [['code', 'Codice cartella', 110], ['th', 'Fisioterapista', 120], ['days', 'Giorni', 110], ['time', 'Ora', 64], ['tot', 'Sedute', 56], ['dur', 'Minuti', 56], ['from', 'Dal', 92], ['inail', 'INAIL (sì)', 64]];
+const emptyRow = () => ({ code: '', th: '', days: '', time: '', tot: '10', dur: '30', from: '', inail: '', res: null, cls: '' });
+function exampleTSV() {
+  const out = [], used = new Set();
+  const cand = S.th.filter(t => !['t1', 't3', 't5'].includes(t.id));
+  let k = 0;
+  for (const th of cand) {
+    if (out.length >= 6) break;
+    for (const wds of [[1, 3, 5], [2, 4]]) {
+      let found = null;
+      for (let t = 480; t < 1080 && !found; t += 30) { let ok = true, d = nextWork(addD(TODAY, 1)), n = 0, g = 0; while (n < 10 && g++ < 80) { if (isWork(d) && wds.includes(wdOf(d))) { if (!ambOK(th, d, t, 30) || busy(th.id, d, t, 30)) { ok = false; break; } n++; } d = addD(d, 1); } if (ok && !used.has(th.id + t)) found = t; }
+      if (found != null) { used.add(th.id + found); out.push(['2026/95' + pad(10 + k++), th.name.split(' ')[0], wdsTxt(wds), fT(found), k % 3 ? '10' : '5', '30', '', k === 2 ? 'sì' : '']); break; }
+    }
+  }
+  out.push(['Rossi Mario', 'Greco', 'lun mer', '10:00', '10', '30', '', '']);
+  const occ = S.ss.find(x => x.th === 't5' && x.d > TODAY && x.st !== 'A');
+  if (occ) out.push(['2026/9599', 'Greco', WD[wdOf(occ.d)], fT(occ.t), '10', '30', occ.d.slice(8) + '/' + occ.d.slice(5, 7), '']);
+  return out.map(r => r.join('\t')).join('\n');
+}
+function viewIns(m) {
+  if (!UI.ins) UI.ins = Array.from({ length: 10 }, emptyRow);
+  let h = '<div class="panel"><div class="bar"><h2 style="font-size:18px">Inserimento rapido</h2><span class="grow"></span><button class="btn" id="iCopy">Copia l’esempio</button><button class="btn" id="iFill">Riempi con l’esempio</button><button class="btn" id="iAdd">+ 10 righe</button><button class="btn" id="iClear">Svuota</button><button class="btn pri" id="iGo">Inserisci tutto</button></div>' +
+    '<p class="hint">Una riga per paziente, come su un foglio Excel: <strong>Tab</strong> passa alla casella dopo, <strong>Invio</strong> alla riga sotto. Puoi <strong>incollare</strong> (Ctrl+V) righe copiate da Excel. Fisioterapista: basta il cognome. Giorni: «lun mer ven» o «1 3 5». «Dal» vuoto = da domani. Le righe giuste entrano, quelle con un problema restano rosse con il motivo.</p>' +
+    '<div class="scroll"><table class="list ins"><thead><tr><th>#</th>' + ICOLS.map(c => '<th>' + c[1] + '</th>').join('') + '<th>Esito</th></tr></thead><tbody>' +
+    UI.ins.map((r, i) => '<tr class="' + r.cls + '"><td class="muted small">' + (i + 1) + '</td>' + ICOLS.map(([k, , w]) => '<td><input data-r="' + i + '" data-k="' + k + '" value="' + esc(r[k]) + '" style="min-width:' + w + 'px" aria-label="' + k + ' riga ' + (i + 1) + '"' + (k === 'th' ? ' list="thList"' : '') + '></td>').join('') + '<td class="res">' + (r.res || '') + '</td></tr>').join('') +
+    '</tbody></table></div><datalist id="thList">' + S.th.map(t => '<option value="' + esc(t.name.split(' ')[0]) + '">').join('') + '</datalist></div>';
+  m.innerHTML = h;
+  const tb = m.querySelector('tbody');
+  tb.addEventListener('input', e => { const i = e.target.dataset; if (i.r != null) { UI.ins[+i.r][i.k] = e.target.value; } });
+  tb.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.r != null) { e.preventDefault(); const nx = tb.querySelector('[data-r="' + (+e.target.dataset.r + 1) + '"][data-k="' + e.target.dataset.k + '"]'); if (nx) nx.focus(); } });
+  tb.addEventListener('paste', e => {
+    const txt = (e.clipboardData || window.clipboardData).getData('text'); if (!txt || (!txt.includes('\t') && !txt.includes('\n'))) return;
+    e.preventDefault(); const r0 = +e.target.dataset.r || 0, c0 = ICOLS.findIndex(c => c[0] === e.target.dataset.k);
+    txt.replace(/\r/g, '').split('\n').filter(l => l.trim()).forEach((line, j) => { while (UI.ins.length <= r0 + j) UI.ins.push(emptyRow()); line.split('\t').forEach((v, q) => { const col = ICOLS[c0 + q]; if (col) UI.ins[r0 + j][col[0]] = v.trim(); }); UI.ins[r0 + j].res = null; UI.ins[r0 + j].cls = ''; });
+    render(); toast('Incollate le righe');
+  });
+  $('#iCopy').onclick = async () => { try { await navigator.clipboard.writeText(exampleTSV()); toast('Esempio copiato: clicca nella prima casella e premi Ctrl+V'); } catch (er) { toast('Copia non permessa qui: usa «Riempi con l’esempio»'); } };
+  $('#iFill').onclick = () => { UI.ins = exampleTSV().split('\n').map(l => { const r = emptyRow(); l.split('\t').forEach((v, q) => { r[ICOLS[q][0]] = v; }); return r; }); while (UI.ins.length < 10) UI.ins.push(emptyRow()); render(); };
+  $('#iAdd').onclick = () => { for (let i = 0; i < 10; i++) UI.ins.push(emptyRow()); render(); };
+  $('#iClear').onclick = () => { UI.ins = Array.from({ length: 10 }, emptyRow); render(); };
+  $('#iGo').onclick = () => {
+    let ok = 0, bad = 0; snapshot();
+    for (const r of UI.ins) {
+      if (r.cls === 'ok' || !Object.entries(r).some(([k, v]) => ['code', 'th', 'days', 'time'].includes(k) && String(v).trim())) continue;
+      const th = S.th.find(t => t.name.toLowerCase().startsWith(String(r.th).trim().toLowerCase()) && String(r.th).trim());
+      const wds = parseDays(r.days), t = pT(r.time), tot = +r.tot || 10, dur = +r.dur || 30;
+      let from = nextWork(addD(TODAY, 1)); const fm = String(r.from).trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+      if (fm) from = (fm[3] ? (fm[3].length === 2 ? '20' + fm[3] : fm[3]) : TODAY.slice(0, 4)) + '-' + pad(fm[2]) + '-' + pad(fm[1]); else if (/^\d{4}-\d{2}-\d{2}$/.test(String(r.from).trim())) from = r.from.trim();
+      const er = validCode(r.code) || (!th && 'Fisioterapista «' + r.th + '» non trovato.') || (!wds && 'Giorni non capiti.') || (t == null && 'Ora non capita.') || (!(dur >= 10 && dur <= 120) && 'Durata non valida.');
+      if (er) { r.res = '✗ ' + esc(er); r.cls = 'err'; bad++; continue; }
+      const res = createCycle({ th, code: r.code.trim(), wds, t, total: tot, dur, from, inail: /^s/i.test(r.inail) });
+      if (res.err) { r.res = '✗ ' + esc(res.err); r.cls = 'err'; bad++; continue; }
+      recount(); r.res = '✓ ' + res.n + ' sedute dal ' + fD(res.first) + (res.warn ? ' · ⚠ ' + res.warn + ' fuori orario' : ''); r.cls = res.warn ? 'warn' : 'ok'; ok++;
+    }
+    render(); toast(ok + ' pazienti inseriti' + (bad ? ', ' + bad + ' da correggere' : ''));
+  };
+}
+
+/* =================== quadro orari della squadra =================== */
+function toFix() {
+  const lim = addD(TODAY, 35);
+  return S.ss.filter(x => x.d >= TODAY && x.d <= lim && x.st !== 'A' && !S.ign.has(x.id) && !ambOK(thBy(x.th), x.d, x.t, x.dur))
+    .sort((a, b) => (cyBy(b.cy).inail - cyBy(a.cy).inail) || (a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t));
+}
+function viewOrari(m) {
+  const days = [0, 1, 2, 3, 4].map(i => addD(UI.qwk, i)), fix = toFix();
+  let h = '<div class="cols2 stack"><div class="panel"><div class="bar"><h2 style="font-size:18px">Quadro orari</h2><span class="grow"></span><button class="btn" id="qPrev" aria-label="Settimana precedente">◀</button><strong>' + fD(days[0]) + ' – ' + fD(days[4]) + '</strong><button class="btn" id="qNext" aria-label="Settimana successiva">▶</button></div>' +
+    '<p class="hint">Tutta la squadra su un foglio. <strong>Tocca una casella</strong> per scegliere un’altra giornata tipo o scrivere l’orario a mano; poi decidi se vale <strong>solo quel giorno, da lì in poi o fino a una data</strong>. «Ferie…» segna un’assenza. I pazienti non si cancellano mai: chi resta fuori orario finisce nell’elenco qui sotto.</p>' +
+    '<div class="scroll"><table class="list q"><thead><tr><th>Fisioterapista</th>' + days.map(d => '<th>' + fD(d) + '</th>').join('') + '<th></th></tr></thead><tbody>' +
+    S.th.map(t => '<tr><td><strong>' + esc(t.name) + '</strong><div class="small muted">' + esc(t.comps.join(', ')) + '</div></td>' + days.map(d => {
+      const ab = absence(t, d); if (ab) return '<td><button class="qchip fer" data-th="' + t.id + '" data-d="' + d + '">Ferie</button></td>';
+      if (!isWork(d)) return '<td class="muted small">festivo</td>';
+      const k = typeKey(t, d), ov = S.ov[t.id + '|' + d];
+      return '<td><button class="qchip' + (ov ? ' ov' : '') + '" style="--c:' + (TYPES[k] ? TYPES[k].c : '#999') + '" data-th="' + t.id + '" data-d="' + d + '">' + (TYPES[k] ? esc(TYPES[k].s) : 'A mano') + '</button></td>';
+    }).join('') + '<td><button class="btn sm" data-fer="' + t.id + '">Ferie…</button></td></tr>').join('') + '</tbody></table></div>' +
+    '<div class="legend">' + Object.entries(TYPES).map(([k, v]) => '<span><span class="qchip" style="--c:' + v.c + ';display:inline-block;width:auto">' + esc(v.s) + '</span> ' + esc(v.n) + '</span>').join('') + '<span>bordo tratteggiato = cambiato solo per quel giorno</span></div></div>';
+  h += '<div class="panel"><div class="bar"><h2 style="font-size:18px">Da sistemare <span class="chip ' + (fix.length ? 'warn' : 'ok') + '">' + fix.length + '</span></h2><span class="grow"></span>' + (fix.length ? '<button class="btn sm" id="fxAll">Passa tutti ai colleghi proposti</button>' : '') + '</div>' +
+    '<p class="hint">Sedute dei prossimi 35 giorni rimaste fuori orario o con il fisioterapista in ferie. <strong>I pazienti INAIL sono in cima.</strong> Per ognuna: passala al collega proposto (stessa competenza, in ambulatorio e libero: alla stessa ora o, se serve, all’ora più vicina), spostala all’ora libera più vicina con lo stesso fisioterapista, oppure lasciala così.</p>' +
+    (fix.length ? '<div class="scroll" style="max-height:62vh"><table class="list"><thead><tr><th>Quando</th><th>Paziente</th><th>Perché</th><th></th></tr></thead><tbody>' + fix.slice(0, 80).map(x => {
+      const c = cyBy(x.cy), th = thBy(x.th), sg = suggest(x), nf = absence(th, x.d) ? null : nearestFree(x);
+      return '<tr><td class="mono">' + fD(x.d) + ' ' + fT(x.t) + '</td><td><b class="mono">' + esc(c.code) + '</b> ' + (c.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">' + esc(th.name) + ' · ' + esc(c.comp) + '</div></td><td class="small">' + (absence(th, x.d) ? 'Ferie' : 'Fuori orario') + '</td><td style="white-space:nowrap">' +
+        (sg ? '<button class="btn sm" data-to="' + x.id + '|' + sg.th.id + '|' + sg.t + '">→ ' + esc(sg.th.name) + (sg.t !== x.t ? ' alle ' + fT(sg.t) : '') + '</button> ' : '<span class="chip bad">nessun collega libero quel giorno</span> ') + (nf != null ? '<button class="btn sm" data-nf="' + x.id + '|' + nf + '">alle ' + fT(nf) + '</button> ' : '') + '<button class="btn sm" data-ign="' + x.id + '">Lascia</button></td></tr>';
+    }).join('') + '</tbody></table></div>' + (fix.length > 80 ? '<p class="small muted">…e altre ' + (fix.length - 80) + '.</p>' : '') : '<p class="chip ok">Niente da sistemare</p>') + '</div></div>';
+  m.innerHTML = h;
+  $('#qPrev').onclick = () => { UI.qwk = addD(UI.qwk, -7); render(); }; $('#qNext').onclick = () => { UI.qwk = addD(UI.qwk, 7); render(); };
+  m.querySelectorAll('.qchip[data-th]').forEach(b => b.onclick = e => dayEdit(thBy(b.dataset.th), b.dataset.d, e));
+  m.querySelectorAll('[data-fer]').forEach(b => b.onclick = e => ferie(thBy(b.dataset.fer), e));
+  m.querySelectorAll('[data-to]').forEach(b => b.onclick = () => { const [sid, tid, tt] = b.dataset.to.split('|'); snapshot(); const x = S.ss.find(q => q.id === sid); x.th = tid; x.t = +tt; render(); toast('Passata a ' + thBy(tid).name + ' alle ' + fT(+tt)); });
+  m.querySelectorAll('[data-nf]').forEach(b => b.onclick = () => { const [sid, t] = b.dataset.nf.split('|'); snapshot(); S.ss.find(x => x.id === sid).t = +t; render(); });
+  m.querySelectorAll('[data-ign]').forEach(b => b.onclick = () => { snapshot(); S.ign.add(b.dataset.ign); render(); });
+  if ($('#fxAll')) $('#fxAll').onclick = () => { snapshot(); let n = 0; for (const x of toFix()) { const sg = suggest(x); if (sg) { x.th = sg.th.id; x.t = sg.t; n++; } } render(); toast(n + ' sedute passate ai colleghi'); };
+}
+function dayEdit(th, d, e) {
+  const cur = typeKey(th, d);
+  openPop('<h4>' + esc(th.name) + ' · ' + fD(d) + '</h4><label>Giornata tipo</label><div class="row">' + Object.entries(TYPES).map(([k, v]) => '<button class="btn sm' + (k === cur ? ' on' : '') + '" data-k="' + k + '">' + esc(v.s) + '</button>').join('') + '</div>' +
+    '<label for="dHand">Oppure a mano (es. 8-11 amb, 11-14 rep)</label><input id="dHand" placeholder="8-10:30 amb, 10:30-14 seg">' +
+    '<label>Vale</label><div class="seg2" id="dScope"><button data-s="day" class="on">Solo questo giorno</button><button data-s="from">Ogni ' + WD[wdOf(d)] + ' da qui</button><button data-s="until">Fino al…</button></div><input id="dUntil" type="date" value="' + addD(d, 28) + '" style="margin-top:6px;display:none">' +
+    '<div class="row"><button class="btn pri" id="dOk">Applica</button><button class="btn" id="dNo">Chiudi</button></div>', e, p => {
+    let k = cur, scope = 'day';
+    p.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { k = b.dataset.k; p.querySelectorAll('[data-k]').forEach(x => x.classList.toggle('on', x === b)); p.querySelector('#dHand').value = ''; });
+    p.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { scope = b.dataset.s; p.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); p.querySelector('#dUntil').style.display = scope === 'until' ? 'block' : 'none'; });
+    p.querySelector('#dNo').onclick = closePop;
+    p.querySelector('#dOk').onclick = () => {
+      const hand = p.querySelector('#dHand').value.trim(); let custom = null;
+      if (hand) {
+        custom = [];
+        for (const part of hand.split(',')) { const mm = part.trim().match(/^(\S+)\s*-\s*(\S+)\s+(amb|rep|seg|ort|pausa)/i); if (!mm) return toast('Non capito: «' + part.trim() + '». Scrivi per esempio 8-11 amb'); const s = pT(mm[1]), en = pT(mm[2]); if (s == null || en == null || en <= s) return toast('Orari non validi in «' + part.trim() + '»'); custom.push([mm[3].toLowerCase(), s, en]); }
+      }
+      snapshot();
+      const val = custom ? { blocks: custom } : { type: k };
+      if (scope === 'day') S.ov[th.id + '|' + d] = val;
+      else if (scope === 'until') { const u = p.querySelector('#dUntil').value; for (let x = d; x <= u; x = addD(x, 7)) S.ov[th.id + '|' + x] = val; }
+      else {
+        if (custom) { for (let x = d, i = 0; i < 26; x = addD(x, 7), i++) S.ov[th.id + '|' + x] = val; }
+        else { let p0 = th.wk[0].p; for (const w of th.wk) if (w.from <= d) p0 = w.p; th.wk = th.wk.filter(w => w.from < d); th.wk.push({ from: d, p: Object.assign({}, p0, { [wdOf(d)]: k }) }); Object.keys(S.ov).forEach(key => { if (key.startsWith(th.id + '|') && key.slice(th.id.length + 1) >= d && wdOf(key.slice(th.id.length + 1)) === wdOf(d)) delete S.ov[key]; }); }
+      }
+      closePop(); render(); const n = toFix().filter(x => x.th === th.id).length; toast('Orario cambiato' + (n ? ': ' + n + ' sedute di ' + th.name + ' da sistemare (qui sotto)' : ''));
+    };
+  });
+}
+function ferie(th, e) {
+  const f = nextWork(addD(TODAY, 1));
+  openPop('<h4>Assenza di ' + esc(th.name) + '</h4><div class="row"><div style="flex:1"><label for="aF">Dal</label><input id="aF" type="date" value="' + f + '"></div><div style="flex:1"><label for="aT">Al</label><input id="aT" type="date" value="' + addD(f, 4) + '"></div></div><label for="aK">Motivo</label><select id="aK"><option>Ferie</option><option>Malattia</option><option>Permesso</option><option>Formazione</option></select><div class="row"><button class="btn pri" id="aOk">Segna</button>' + (th.abs.length ? '<button class="btn" id="aDel">Togli le assenze</button>' : '') + '<button class="btn" id="aNo">Chiudi</button></div>', e, p => {
+    p.querySelector('#aNo').onclick = closePop;
+    if (p.querySelector('#aDel')) p.querySelector('#aDel').onclick = () => { snapshot(); th.abs = []; closePop(); render(); };
+    p.querySelector('#aOk').onclick = () => { const a = p.querySelector('#aF').value, b = p.querySelector('#aT').value; if (!a || !b || b < a) return toast('Date non valide'); snapshot(); th.abs.push({ from: a, to: b, kind: p.querySelector('#aK').value }); closePop(); render(); toast('Segnata. I suoi pazienti sono in «Da sistemare», INAIL in cima'); };
+  });
+}
+
+/* =================== fine ciclo e posti che si liberano =================== */
+function viewFine(m) {
+  const near = S.cy.filter(c => c._fut > 0 && c._fut <= 3 && c.conf !== 'concluso').sort((a, b) => a._last < b._last ? -1 : 1);
+  const certainty = c => c.conf === 'concluso' || c.op === 'sicuro' ? 'sicuro' : c.op === 'finisce' ? 'probabile' : c.op === 'visita' ? 'visita' : c.op === 'continua' ? null : (c._fut <= 3 ? 'valutare' : null);
+  const CL = { sicuro: ['Sicuro', 'ok'], probabile: ['Probabile', 'warn'], visita: ['Dopo la visita', ''], valutare: ['Da valutare', 'grey'] };
+  const ending = S.cy.filter(c => c._fut > 0 && c._last <= addD(TODAY, 42)).map(c => ({ c, k: certainty(c) })).filter(o => o.k && UI.certain[o.k] && (!UI.comp || thBy(c(o).th).comps.includes(UI.comp)) && c(o).dur >= 0)
+    .sort((a, b) => a.c._last < b.c._last ? -1 : 1);
+  function c(o) { return o.c; }
+  let h = '<div class="cols2"><div class="panel"><div class="bar"><h2 style="font-size:18px">Cicli in chiusura <span class="chip">' + near.length + '</span></h2></div>' +
+    '<p class="hint">Pazienti con 3 sedute o meno. Il <strong>fisioterapista</strong> dà il suo parere (è solo un’opinione); la <strong>segreteria</strong>, dopo la visita del fisiatra, segna se è riconfermato o concluso. Ogni scelta aggiorna subito i posti che si liberano.</p>' +
+    '<div class="scroll" style="max-height:66vh"><table class="list"><thead><tr><th>Paziente</th><th>Restano</th><th>Parere del fisioterapista</th><th>Segreteria</th></tr></thead><tbody>' +
+    near.map(x => '<tr><td><b class="mono">' + esc(x.code) + '</b> ' + (x.inail ? '<span class="chip warn">INAIL</span>' : '') + '<div class="small muted">' + esc(thBy(x.th).name) + ' · ' + esc(x.comp) + '</div></td><td class="mono">' + x._fut + '<div class="small muted">ultima ' + fD(x._last) + '</div></td>' +
+      '<td><div class="seg2">' + Object.entries(OPS).map(([k, l]) => '<button data-cy="' + x.id + '" data-op="' + k + '" class="' + (x.op === k ? 'on' : '') + '">' + l + '</button>').join('') + '</div></td>' +
+      '<td style="white-space:nowrap"><button class="btn sm" data-rc="' + x.id + '|5">+5</button> <button class="btn sm" data-rc="' + x.id + '|10">+10</button> <button class="btn sm" data-end="' + x.id + '">Concluso</button></td></tr>').join('') + '</tbody></table></div></div>';
+  h += '<div class="panel"><div class="bar"><h2 style="font-size:18px">Posti che si liberano</h2><span class="grow"></span><select id="fComp" aria-label="Competenza"><option value="">Tutte le competenze</option>' + COMPS.map(x => '<option' + (x === UI.comp ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div>' +
+    '<div class="bar">' + Object.entries(CL).map(([k, [l]]) => '<label class="small"><input type="checkbox" data-cert="' + k + '"' + (UI.certain[k] ? ' checked' : '') + '> ' + l + '</label>').join('') + '</div>' +
+    '<p class="hint">Da qui la segreteria sceglie dalla lista d’attesa (che resta nel vostro Excel). Il posto è lo stesso giorno e la stessa ora del paziente che finisce.</p>' +
+    '<div class="scroll" style="max-height:30vh"><table class="list"><thead><tr><th>Libero dal</th><th>Quando</th><th>Fisioterapista · competenze</th><th>Quanto è sicuro</th></tr></thead><tbody>' +
+    (ending.length ? ending.slice(0, 60).map(({ c: x, k }) => '<tr><td class="mono">' + fD(nextWork(addD(x._last, 1))) + '</td><td class="mono small">' + wdsTxt(x.wds) + ' ' + fT(x.t) + ' · ' + x.dur + '′</td><td>' + esc(thBy(x.th).name) + '<div class="small muted">' + esc(thBy(x.th).comps.join(', ')) + '</div></td><td><span class="chip ' + CL[k][1] + '">' + CL[k][0] + '</span><div class="small muted">' + esc(x.code) + '</div></td></tr>').join('') : '<tr><td colspan="4" class="muted">Nessun posto con questi filtri.</td></tr>') + '</tbody></table></div>';
+  const slots = freeNow();
+  h += '<h3 style="font-size:16px;margin:14px 0 6px">Posti liberi adesso <span class="muted small">(prossimi 10 giorni lavorativi)</span></h3><div class="bar"><label class="small" for="fDur">Durata</label><select id="fDur">' + [30, 45, 60].map(x => '<option' + (x === UI.dur ? ' selected' : '') + '>' + x + '</option>').join('') + '</select><span class="small muted">con la competenza scelta sopra</span></div>' +
+    '<div class="scroll" style="max-height:26vh"><table class="list"><thead><tr><th>Fisioterapista</th><th>Primi posti liberi</th></tr></thead><tbody>' + (slots.length ? slots.map(([t, l]) => '<tr><td>' + esc(t.name) + '<div class="small muted">' + esc(t.comps.join(', ')) + '</div></td><td class="mono small">' + l.map(([d, tt]) => fD(d) + ' ' + fT(tt)).join(' · ') + '</td></tr>').join('') : '<tr><td colspan="2" class="muted">Nessun posto libero.</td></tr>') + '</tbody></table></div></div></div>';
+  m.innerHTML = h;
+  m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { const x = cyBy(b.dataset.cy); snapshot(); x.op = x.op === b.dataset.op ? null : b.dataset.op; render(); });
+  m.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => { const [id, n] = b.dataset.rc.split('|'); const x = cyBy(id); snapshot(); extendCycle(x, +n); x.op = null; x.conf = null; render(); toast(x.code + ': riconfermato, ' + n + ' sedute in più'); });
+  m.querySelectorAll('[data-end]').forEach(b => b.onclick = () => { const x = cyBy(b.dataset.end); snapshot(); x.conf = 'concluso'; render(); toast(x.code + ' concluso: il suo posto è tra quelli «Sicuri»'); });
+  $('#fComp').onchange = e => { UI.comp = e.target.value; render(); };
+  $('#fDur').onchange = e => { UI.dur = +e.target.value; render(); };
+  m.querySelectorAll('[data-cert]').forEach(b => b.onchange = () => { UI.certain[b.dataset.cert] = b.checked; render(); });
+}
+function freeNow() {
+  const out = [];
+  for (const t of S.th.filter(t => !UI.comp || t.comps.includes(UI.comp))) {
+    const l = []; let d = nextWork(addD(TODAY, 1)), g = 0;
+    while (g++ < 14 && l.length < 4) { if (isWork(d)) for (const [k, s, e] of blocks(t, d)) { if (k !== 'amb') continue; for (let tt = s; tt + UI.dur <= e && l.length < 4; tt += 15) if (!busy(t.id, d, tt, UI.dur)) { l.push([d, tt]); tt += UI.dur - 15; } } d = addD(d, 1); }
+    if (l.length) out.push([t, l]);
+  }
+  return out;
+}
+
+/* =================== cronometro e note =================== */
+function renderAside() {
+  const a = $('#aside'), list = TASKS[VIEW] || [];
+  const fmt = ms => ms == null ? '–' : (ms / 1000 < 60 ? (ms / 1000).toFixed(0) + ' s' : Math.floor(ms / 60000) + ' min ' + pad(Math.round(ms / 1000) % 60) + ' s');
+  let h = '<h3>⏱ Cronometro</h3><p class="small muted" style="margin:0 0 8px">Premi «Via», fai il compito, poi «Fatto». In Prova A e Prova B i compiti sono gli stessi: alla fine si vede quale modo è più veloce.</p>';
+  h += list.map(t => '<div class="task' + (RUN && RUN.id === t.id ? ' run' : '') + '"><div>' + t.txt + '</div><div class="bar" style="margin:6px 0 0"><span class="t" id="tm-' + t.id + '">' + (RUN && RUN.id === t.id ? '…' : fmt(TIMES[t.id])) + '</span><span class="grow"></span>' +
+    (RUN && RUN.id === t.id ? '<button class="btn pri sm" data-stop="' + t.id + '">Fatto</button>' : '<button class="btn sm" data-go="' + t.id + '">' + (TIMES[t.id] != null ? 'Rifai' : 'Via') + '</button>') + '</div></div>').join('');
+  const K = [['assente', 'Segna un assente'], ['sposta', 'Sposta una seduta'], ['nuovo', 'Paziente nuovo'], ['sospende', 'Sospensione']];
+  const tA = k => TIMES[(TASKS.foglio.find(x => x.k === k) || {}).id], tB = k => TIMES[(TASKS.settimana.find(x => x.k === k) || {}).id];
+  h += '<h3 style="margin-top:14px">Confronto A / B</h3><table class="list sum"><thead><tr><th>Compito</th><th>A · foglio</th><th>B · settimana</th></tr></thead><tbody>' + K.map(([k, l]) => { const x = tA(k), y = tB(k); return '<tr><td>' + l + '</td><td class="mono" style="' + (x != null && y != null && x < y ? 'color:var(--ok);font-weight:700' : '') + '">' + fmt(x) + '</td><td class="mono" style="' + (x != null && y != null && y < x ? 'color:var(--ok);font-weight:700' : '') + '">' + fmt(y) + '</td></tr>'; }).join('') + '</tbody></table>';
+  h += '<h3 style="margin-top:14px">Le tue note</h3><label class="small muted" for="notes">Cosa è comodo, cosa no, cosa manca</label><textarea id="notes">' + esc(NOTES) + '</textarea><button class="btn sm" id="cpNotes" style="margin-top:6px">Copia note e tempi</button><p class="small muted">Poi incollale nella chat con Claude.</p>';
+  a.innerHTML = h;
+  a.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { RUN = { id: b.dataset.go, t0: performance.now() }; renderAside(); });
+  a.querySelectorAll('[data-stop]').forEach(b => b.onclick = () => { TIMES[RUN.id] = performance.now() - RUN.t0; RUN = null; renderAside(); toast('Tempo registrato'); });
+  $('#notes').oninput = e => { NOTES = e.target.value; };
+  $('#cpNotes').onclick = async () => {
+    const all = Object.values(TASKS).flat().filter(t => TIMES[t.id] != null).map(t => '- ' + t.txt.replace(/<[^>]+>/g, '') + ': ' + fmt(TIMES[t.id])).join('\n');
+    const txt = 'Prove agenda FisioAgenda\nTempi:\n' + (all || '(nessuno)') + '\n\nNote:\n' + NOTES;
+    try { await navigator.clipboard.writeText(txt); toast('Copiato: incollalo nella chat'); } catch (er) { toast('Copia non permessa: seleziona il testo delle note e copialo a mano'); }
+  };
+}
+setInterval(() => { if (RUN) { const el = document.getElementById('tm-' + RUN.id); if (el) { const s = (performance.now() - RUN.t0) / 1000; el.textContent = s < 60 ? s.toFixed(0) + ' s' : Math.floor(s / 60) + ' min ' + pad(Math.floor(s) % 60) + ' s'; } } }, 250);
+
+/* =================== avvio =================== */
+function route() { const h = location.hash.slice(1); VIEW = VIEWS.some(v => v[0] === h) ? h : 'foglio'; closePop(); S.moving = null; render(); }
+window.addEventListener('hashchange', route);
+generate(20261119);
+route();
+</script>
+</body>
+</html>
