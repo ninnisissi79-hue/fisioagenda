@@ -621,7 +621,8 @@ function exampleTSV() {
       if (found != null) { used.add(th.id + found); out.push(['2026/95' + pad(10 + k++), th.name.split(' ')[0], wdsTxt(wds), fT(found), k % 3 ? '10' : '5', '30', '', k === 2 ? 'sì' : '']); break; }
     }
   }
-  out.push(['Rossi Mario', 'Greco', 'lun mer', '10:00', '10', '30', '', '']);
+  const dup = S.cy.find(c => c._fut > 0 && c.th === 't5');
+  if (dup) out.push([dup.code, 'Greco', 'lun mer', '10:00', '10', '30', '', '']);
   const occ = S.ss.find(x => x.th === 't5' && x.d > TODAY && x.st !== 'A');
   if (occ) out.push(['2026/9599', 'Greco', WD[wdOf(occ.d)], fT(occ.t), '10', '30', occ.d.slice(8) + '/' + occ.d.slice(5, 7), '']);
   return out.map(r => r.join('\t')).join('\n');
