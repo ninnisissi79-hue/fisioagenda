@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Installare FisioAgenda</title>
+<style>
+/* Guida stampabile A4: blu FisioAgenda, un colore d'attenzione arancio solo per il punto da toccare. */
+:root{ --ink:#13283f; --muted:#5a677a; --line:#d7dee8; --accent:#2a64b5; --soft:#eaf1fb; --tap:#e8590c; --tapsoft:#fff1e8; --paper:#ffffff; --bg:#f4f6f9; }
+@page{ size:A4; margin:0 }
+*{ box-sizing:border-box }
+html,body{ margin:0; background:#fff; color:var(--ink); font:10.5pt/1.45 Inter, 'DejaVu Sans', sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+.page{ width:210mm; height:297mm; padding:14mm 15mm 12mm; position:relative; overflow:hidden; page-break-after:always; display:flex; flex-direction:column; gap:6mm }
+.page:last-child{ page-break-after:auto }
+.foot{ position:absolute; left:15mm; right:15mm; bottom:7mm; display:flex; justify-content:space-between; font-size:8pt; color:var(--muted) }
+h1{ font:800 25pt/1.1 'Inter Display', Inter, sans-serif; margin:0; letter-spacing:-.01em }
+h2{ font:700 15pt/1.2 'Inter Display', Inter, sans-serif; margin:0; display:flex; align-items:center; gap:3mm }
+h2 .dev{ font-size:9pt; font-weight:600; color:var(--accent); background:var(--soft); border-radius:99px; padding:1mm 3mm }
+p{ margin:0 }
+.lead{ font-size:11.5pt; color:var(--muted); max-width:150mm }
+.hero{ display:flex; gap:7mm; align-items:center; background:linear-gradient(135deg,#13283f,#1e4a86); color:#fff; border-radius:5mm; padding:9mm 9mm }
+.hero img{ width:30mm; height:30mm; border-radius:7mm; box-shadow:0 2mm 6mm rgba(0,0,0,.25) }
+.hero h1{ color:#fff } .hero p{ color:#cfdcf0; font-size:11.5pt; margin-top:2mm }
+.grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:5mm }
+.card{ border:1px solid var(--line); border-radius:4mm; padding:5mm; background:var(--paper) }
+.card h3{ margin:0 0 1.5mm; font:700 11.5pt Inter, sans-serif }
+.card p{ color:var(--muted); font-size:9.5pt }
+.benefit .ic{ width:9mm; height:9mm; border-radius:2.5mm; background:var(--soft); color:var(--accent); display:grid; place-items:center; margin-bottom:2.5mm }
+.qrbox{ display:grid; grid-template-columns:44mm 1fr; gap:7mm; align-items:center; border:1.5px dashed var(--accent); border-radius:5mm; padding:6mm; background:var(--soft) }
+.qrbox svg{ width:44mm; height:44mm; background:#fff; border-radius:2mm; padding:1.5mm }
+.url{ font:700 13pt 'JetBrains Mono', monospace; color:var(--accent); word-break:break-all }
+.choose{ display:grid; grid-template-columns:repeat(3,1fr); gap:5mm }
+.choose .card{ display:flex; gap:4mm; align-items:center }
+.choose b{ font-size:12pt } .choose .card > div span{ display:block; color:var(--muted); font-size:9pt }
+.badge{ display:inline-grid; place-items:center; width:7mm; height:7mm; border-radius:50%; background:var(--ink); color:#fff; font:700 10pt Inter; flex:none }
+/* ---------- figure ---------- */
+.steps{ display:grid; grid-template-columns:repeat(3,1fr); gap:5mm; align-items:start }
+.step{ display:flex; flex-direction:column; gap:2.5mm }
+.step .cap{ display:flex; gap:2.5mm; align-items:flex-start; font-size:9.6pt }
+.step .cap b{ color:var(--ink) }
+.fig{ position:relative; display:flex; justify-content:center }
+.phone{ width:42mm; height:80mm; border-radius:7mm; background:#0f1722; padding:2mm; box-shadow:0 1.5mm 4mm rgba(19,40,63,.25); position:relative }
+.screen{ width:100%; height:100%; border-radius:5.2mm; overflow:hidden; background:#f4f6f9; position:relative; display:flex; flex-direction:column }
+.notch{ position:absolute; top:3.2mm; left:50%; transform:translateX(-50%); width:12mm; height:3mm; border-radius:2mm; background:#0f1722; z-index:5 }
+.status{ height:6mm; flex:none; background:#fff }
+.shot{ flex:1; background-size:cover; background-position:top center }
+.sbar{ height:9mm; flex:none; background:#f7f7f8; border-top:1px solid #dcdfe4; display:flex; justify-content:space-around; align-items:center; color:#2f7bf6 }
+.urlbar{ height:7mm; flex:none; background:#f7f7f8; border-bottom:1px solid #dcdfe4; display:flex; align-items:center; gap:1.5mm; padding:0 2mm; font-size:6pt; color:#444 }
+.urlbar .u{ flex:1; background:#e9ebee; border-radius:3mm; padding:1mm 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.ring{ outline:2.2px solid var(--tap); outline-offset:1px; border-radius:2mm; background:var(--tapsoft); box-shadow:0 0 0 2mm rgba(232,89,12,.18) }
+.dim{ opacity:.35 }
+.sheet{ position:absolute; left:0; right:0; bottom:0; background:#f2f2f6; border-radius:4mm 4mm 0 0; padding:2.5mm 2mm 3mm; box-shadow:0 -1mm 4mm rgba(0,0,0,.18); font-size:6.6pt }
+.sheet .row{ display:flex; align-items:center; justify-content:space-between; background:#fff; padding:2mm 2.5mm; border-bottom:1px solid #e6e6ea }
+.sheet .row:first-child{ border-radius:2mm 2mm 0 0 } .sheet .row:last-child{ border-radius:0 0 2mm 2mm; border-bottom:0 }
+.sheet .apps{ display:flex; gap:2mm; margin-bottom:2.5mm; padding:0 1mm } .sheet .apps i{ width:8mm; height:8mm; border-radius:2mm; background:#cfd5de; display:block }
+.home{ background:linear-gradient(160deg,#3a6db5,#7aa7dd 60%,#b9d3f0); flex:1; display:grid; grid-template-columns:repeat(4,1fr); align-content:start; gap:3.4mm 0; padding:9mm 2.5mm 0; justify-items:center }
+.home i{ width:7.5mm; height:7.5mm; border-radius:2mm; background:rgba(255,255,255,.55); display:block }
+.home .app{ display:flex; flex-direction:column; align-items:center; gap:.8mm; font-size:5pt; color:#fff; font-weight:600 }
+.home .app img{ width:7.5mm; height:7.5mm; border-radius:2mm; display:block }
+.menu{ position:absolute; right:1.5mm; top:13mm; width:27mm; background:#fff; border-radius:2mm; box-shadow:0 1mm 4mm rgba(0,0,0,.25); font-size:6.4pt; padding:1mm 0 }
+.menu div{ padding:1.6mm 2.5mm }
+.dialog{ position:absolute; left:3mm; right:3mm; top:30%; background:#fff; border-radius:3mm; box-shadow:0 1mm 6mm rgba(0,0,0,.3); padding:3mm; font-size:6.8pt }
+.dialog .t{ font-weight:700; font-size:8pt; margin-bottom:2mm }
+.dialog .app{ display:flex; gap:2mm; align-items:center; margin-bottom:3mm } .dialog .app img{ width:7mm; height:7mm; border-radius:1.6mm }
+.dialog .btns{ display:flex; justify-content:flex-end; gap:3mm; font-weight:700; color:#1a73e8 } .dialog .btns span{ padding:1mm 2mm }
+.scrim{ position:absolute; inset:0; background:rgba(0,0,0,.35) }
+.tapdot{ position:absolute; width:7mm; height:7mm; border-radius:50%; border:2px solid var(--tap); background:rgba(232,89,12,.15); z-index:6 }
+/* PC */
+.win{ width:100%; height:62mm; border-radius:2.5mm; background:#fff; border:1px solid #c9d1dc; box-shadow:0 1.5mm 4mm rgba(19,40,63,.18); overflow:hidden; position:relative; display:flex; flex-direction:column }
+.tabs{ height:6mm; background:#dfe3e9; display:flex; align-items:flex-end; padding-left:3mm; gap:1mm; flex:none }
+.tabs span{ background:#fff; border-radius:1.5mm 1.5mm 0 0; padding:.8mm 3mm; font-size:6pt; display:flex; gap:1.2mm; align-items:center } .tabs img{ width:3mm; height:3mm; border-radius:.6mm }
+.addr{ height:7.5mm; flex:none; display:flex; align-items:center; gap:2mm; padding:0 2.5mm; border-bottom:1px solid #e3e6ea; font-size:6.5pt; color:#555 }
+.addr .u{ flex:1; min-width:0; background:#eef1f4; border-radius:3mm; padding:1.2mm 2.5mm; display:flex; align-items:center; justify-content:space-between; gap:1mm; white-space:nowrap; font-size:5.8pt } .addr .u > span:first-child{ overflow:hidden; text-overflow:ellipsis }
+.pcshot{ flex:1; background-size:cover; background-position:top center }
+.taskbar{ position:absolute; left:0; right:0; bottom:0; height:9mm; background:#1d2633; display:flex; justify-content:center; align-items:center; gap:2.5mm }
+.taskbar i{ width:5.5mm; height:5.5mm; border-radius:1.2mm; background:#3b4656; display:block } .taskbar img{ width:5.5mm; height:5.5mm; border-radius:1.2mm; display:block }
+.startmenu{ position:absolute; left:3mm; bottom:12mm; width:48%; background:#f3f4f6; border-radius:2.5mm; box-shadow:0 1mm 5mm rgba(0,0,0,.3); padding:3mm; font-size:6.3pt }
+.startmenu .apps{ display:grid; grid-template-columns:repeat(3,1fr); gap:2.5mm; margin-top:2mm; justify-items:center } .startmenu .apps i{ width:6.5mm; height:6.5mm; border-radius:1.5mm; background:#d4d9e1; display:block }
+.startmenu .apps div{ display:flex; flex-direction:column; align-items:center; gap:.6mm; font-size:5pt } .startmenu .apps img{ width:6.5mm; height:6.5mm; border-radius:1.5mm }
+.ctx{ position:absolute; bottom:12mm; right:3mm; background:#fff; border-radius:1.5mm; box-shadow:0 1mm 4mm rgba(0,0,0,.3); font-size:5.8pt; padding:1mm 0; width:44% }
+.ctx div{ padding:1.3mm 2.5mm }
+.note{ border-left:3px solid var(--accent); background:var(--soft); padding:3mm 4mm; border-radius:0 3mm 3mm 0; font-size:9.6pt }
+.note.warn{ border-color:var(--tap); background:var(--tapsoft) }
+.list{ margin:0; padding-left:5mm } .list li{ margin:1.2mm 0 }
+table.trouble{ width:100%; border-collapse:collapse; font-size:9.3pt } table.trouble td{ border-top:1px solid var(--line); padding:2.2mm 2mm; vertical-align:top } table.trouble td:first-child{ font-weight:600; width:42% }
+.sep{ border:0; border-top:1px solid var(--line); margin:0 }
+</style>
+</head>
+<body>
+
+<!-- ===================== PAGINA 1 ===================== -->
+<section class="page">
+  <div class="hero">
+    <img src="{{ICON}}" alt="Icona di FisioAgenda">
+    <div>
+      <h1>Installare FisioAgenda<br>sul cellulare e sul PC</h1>
+      <p>In due minuti, senza store e senza password nuove. Basta farlo una volta per ogni dispositivo.</p>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card benefit"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><h3>La sua icona</h3><p>FisioAgenda compare tra le app del telefono o nel menu Start del PC, come un programma vero.</p></div>
+    <div class="card benefit"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></div><h3>A schermo intero</h3><p>Si apre in una finestra sua, senza la barra del browser: più spazio per il tabulato.</p></div>
+    <div class="card benefit"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><h3>Si aggiorna da sola</h3><p>Ogni novità arriva da sé: non bisogna reinstallare niente.</p></div>
+  </div>
+
+  <div class="qrbox">
+    {{QR}}
+    <div>
+      <h2 style="margin-bottom:2mm">Dal telefono: inquadra il codice</h2>
+      <p style="margin-bottom:3mm">Apri la <b>Fotocamera</b> e inquadra il quadrato: tocca il link che compare. Si apre FisioAgenda.</p>
+      <p class="small" style="color:var(--muted);font-size:9pt;margin-bottom:1mm">Oppure scrivi l’indirizzo nel browser:</p>
+      <div class="url">fisioagenda-pilota.netlify.app</div>
+    </div>
+  </div>
+
+  <div>
+    <h2 style="margin-bottom:3mm">Scegli il tuo dispositivo</h2>
+    <div class="choose">
+      <div class="card"><span class="badge">A</span><div><b>iPhone o iPad</b><span>con Safari · pagina 2</span></div></div>
+      <div class="card"><span class="badge">B</span><div><b>Android</b><span>con Chrome · pagina 2</span></div></div>
+      <div class="card"><span class="badge">C</span><div><b>PC Windows</b><span>con Chrome o Edge · pagina 3</span></div></div>
+    </div>
+  </div>
+
+  <div class="note"><b>Prima di cominciare:</b> tieni a portata di mano l’email e la password che usi per FisioAgenda. Il punto da toccare, nelle figure, è sempre cerchiato in <b style="color:var(--tap)">arancione</b>.</div>
+  <div class="foot"><span>FisioAgenda · guida all’installazione</span><span>1 / 3</span></div>
+</section>
+
+<!-- ===================== PAGINA 2 ===================== -->
+<section class="page">
+  <h2><span class="badge">A</span> iPhone o iPad <span class="dev">Safari</span></h2>
+  <div class="steps">
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="notch"></div><div class="screen">
+        <div class="status"></div>
+        <div class="shot" style="background-image:url('{{PHONE}}')"></div>
+        <div class="urlbar" style="border-top:1px solid #dcdfe4;border-bottom:0"><span class="u" style="text-align:center">fisioagenda-pilota.netlify.app</span></div>
+        <div class="sbar"><span class="dim">‹</span><span class="dim">›</span>
+          <span class="ring" style="padding:.5mm 1mm;display:grid;place-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2f7bf6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg></span>
+          <span class="dim">▢</span><span class="dim">⧉</span></div>
+      </div></div></div>
+      <div class="cap"><span class="badge">1</span><span>Apri FisioAgenda con <b>Safari</b> (la bussola) e tocca <b>Condividi</b>: il quadrato con la freccia in su.</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="notch"></div><div class="screen">
+        <div class="status"></div><div class="shot" style="background-image:url('{{PHONE}}')"></div><div class="scrim"></div>
+        <div class="sheet">
+          <div class="apps"><i></i><i></i><i></i><i></i></div>
+          <div class="row"><span>Copia</span><span>⧉</span></div>
+          <div class="row"><span>Aggiungi ai Preferiti</span><span>☆</span></div>
+          <div class="row ring" style="border-radius:1.5mm"><b>Aggiungi alla schermata Home</b><span>⊞</span></div>
+          <div class="row"><span>Trova nella pagina</span><span>⌕</span></div>
+        </div>
+      </div></div></div>
+      <div class="cap"><span class="badge">2</span><span>Scorri verso il basso e scegli <b>Aggiungi alla schermata Home</b>, poi tocca <b>Aggiungi</b> in alto a destra.</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="notch"></div><div class="screen">
+        <div class="home"><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <div class="app ring" style="padding:.8mm;background:rgba(232,89,12,.25)"><img src="{{ICON}}" alt=""><span>FisioAgenda</span></div>
+          <i></i><i></i><i></i><i></i></div>
+      </div></div></div>
+      <div class="cap"><span class="badge">3</span><span>Sulla schermata Home c’è l’icona <b>FisioAgenda</b>. Aprila da qui e <b>accedi una volta</b> con email e password.</span></div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <h2><span class="badge">B</span> Android <span class="dev">Chrome</span></h2>
+  <div class="steps">
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="screen">
+        <div class="status" style="height:4mm"></div>
+        <div class="urlbar"><span class="u">fisioagenda-pilota.netlify.app</span><span class="ring" style="padding:.3mm 1.2mm;font-weight:800;font-size:9pt;line-height:1">⋮</span></div>
+        <div class="shot" style="background-image:url('{{ANDROID}}')"></div>
+      </div></div></div>
+      <div class="cap"><span class="badge">1</span><span>Apri FisioAgenda con <b>Chrome</b> e tocca i <b>tre puntini ⋮</b> in alto a destra. (Se in basso compare «Installa app», puoi toccare direttamente quello.)</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="screen">
+        <div class="status" style="height:4mm"></div>
+        <div class="urlbar"><span class="u">fisioagenda-pilota.netlify.app</span><span style="font-weight:800;font-size:9pt">⋮</span></div>
+        <div class="shot" style="background-image:url('{{ANDROID}}')"></div>
+        <div class="menu"><div>Nuova scheda</div><div>Cronologia</div><div>Download</div><div class="ring" style="margin:0 1mm"><b>Installa app</b></div><div>Impostazioni</div></div>
+      </div></div></div>
+      <div class="cap"><span class="badge">2</span><span>Scegli <b>Installa app</b> (su alcuni telefoni si chiama <b>Aggiungi a schermata Home</b>).</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="phone"><div class="screen">
+        <div class="status" style="height:4mm"></div><div class="shot" style="background-image:url('{{ANDROID}}')"></div><div class="scrim"></div>
+        <div class="dialog"><div class="t">Installa app</div><div class="app"><img src="{{ICON}}" alt=""><div><b>FisioAgenda</b><br><span style="color:#777">fisioagenda-pilota.netlify.app</span></div></div>
+          <div class="btns"><span>Annulla</span><span class="ring">Installa</span></div></div>
+      </div></div></div>
+      <div class="cap"><span class="badge">3</span><span>Conferma con <b>Installa</b>. L’icona compare tra le app: aprila e <b>accedi una volta</b>.</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>FisioAgenda · guida all’installazione</span><span>2 / 3</span></div>
+</section>
+
+<!-- ===================== PAGINA 3 ===================== -->
+<section class="page">
+  <h2><span class="badge">C</span> PC Windows <span class="dev">Chrome o Edge</span></h2>
+  <div class="steps">
+    <div class="step">
+      <div class="fig"><div class="win">
+        <div class="tabs"><span><img src="{{ICON}}" alt="">FisioAgenda</span></div>
+        <div class="addr"><span>←</span><span>→</span><span>↻</span><span class="u"><span>fisioagenda-pilota.netlify.app</span><span class="ring" style="padding:.2mm .8mm;display:grid;place-items:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 7v6M9.5 10.5 12 13l2.5-2.5"/></svg></span></span><span>⋮</span></div>
+        <div class="pcshot" style="background-image:url('{{PC}}')"></div>
+      </div></div>
+      <div class="cap"><span class="badge">1</span><span>Apri FisioAgenda e clicca l’icona <b>Installa</b> a destra nella barra dell’indirizzo (un monitor con la freccia). Puoi usare anche il pulsante <b>📲 Installa app</b> in alto nella pagina, dopo l’accesso.</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="win">
+        <div class="tabs"><span><img src="{{ICON}}" alt="">FisioAgenda</span></div>
+        <div class="addr"><span>←</span><span>→</span><span>↻</span><span class="u"><span>fisioagenda-pilota.netlify.app</span><span></span></span><span>⋮</span></div>
+        <div class="pcshot" style="background-image:url('{{PC}}')"></div>
+        <div class="dialog" style="left:auto;right:3mm;top:13mm;width:55%"><div class="t">Installare l’app?</div><div class="app"><img src="{{ICON}}" alt=""><div><b>FisioAgenda</b><br><span style="color:#777">fisioagenda-pilota.netlify.app</span></div></div>
+          <div class="btns"><span class="ring" style="background:#1a73e8;color:#fff">Installa</span><span>Annulla</span></div></div>
+      </div></div>
+      <div class="cap"><span class="badge">2</span><span>Clicca <b>Installa</b>. In <b>Edge</b>, se non vedi l’icona: menu <b>…</b> → <b>App</b> → <b>Installa questo sito come app</b>.</span></div>
+    </div>
+    <div class="step">
+      <div class="fig"><div class="win" style="background:linear-gradient(160deg,#2b5fa4,#7aa7dd)">
+        <div class="startmenu"><b>Aggiunte di recente</b><div class="apps"><div class="ring" style="padding:.6mm"><img src="{{ICON}}" alt=""><span>FisioAgenda</span></div><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="ctx"><div>Apri</div><div class="ring" style="margin:0 1mm"><b>Aggiungi alla barra delle applicazioni</b></div><div>Disinstalla</div></div>
+        <div class="taskbar"><i></i><i></i><i></i><img src="{{ICON}}" alt="" class="ring"><i></i></div>
+      </div></div>
+      <div class="cap"><span class="badge">3</span><span>FisioAgenda si apre nella sua finestra e la trovi nel menu <b>Start</b>. Tasto destro sull’icona → <b>Aggiungi alla barra delle applicazioni</b>.</span></div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  <div class="grid3" style="grid-template-columns:1fr 1fr;gap:6mm">
+    <div>
+      <h2 style="font-size:13pt;margin-bottom:2.5mm">Dopo l’installazione</h2>
+      <ul class="list">
+        <li><b>Accedi una volta</b> con email e password: l’app installata te le chiede la prima volta, anche se le avevi già messe nel browser.</li>
+        <li><b>Aggiornamenti automatici:</b> le novità arrivano da sole, non serve reinstallare.</li>
+        <li><b>Serve internet</b> per vedere e salvare i dati. Senza rete l’app si apre, ma avvisa e non salva.</li>
+        <li>I dati dei pazienti <b>non restano sul dispositivo</b>: sono solo sul server del servizio.</li>
+      </ul>
+      <div class="note warn" style="margin-top:3mm"><b>PC condiviso:</b> alla fine premi sempre <b>Esci</b> in alto a destra.</div>
+    </div>
+    <div>
+      <h2 style="font-size:13pt;margin-bottom:2.5mm">Se qualcosa non va</h2>
+      <table class="trouble">
+        <tr><td>Su iPhone non trovo «Aggiungi alla schermata Home»</td><td>Controlla di usare <b>Safari</b>, non un’altra app. Nel menu Condividi scorri tutto in basso.</td></tr>
+        <tr><td>Sul PC non vedo l’icona «Installa»</td><td>Usa <b>Chrome</b> o <b>Edge</b> (non Firefox) e ricarica la pagina con <b>Ctrl+F5</b>.</td></tr>
+        <tr><td>L’app chiede di nuovo la password</td><td>È normale la prima volta che apri l’app installata.</td></tr>
+        <tr><td>«Pagina non trovata»</td><td>Controlla l’indirizzo: <b>fisioagenda-pilota.netlify.app</b></td></tr>
+        <tr><td>Voglio toglierla</td><td>Come una qualsiasi app: tieni premuta l’icona (telefono) o tasto destro → <b>Disinstalla</b> (PC).</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>FisioAgenda · guida all’installazione</span><span>3 / 3</span></div>
+</section>
+</body>
+</html>
