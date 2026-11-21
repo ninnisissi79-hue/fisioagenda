@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><title>Proposte icona FisioAgenda</title>
+<style>
+body{margin:0;background:#f4f6f9;font:15px/1.4 Inter,sans-serif;color:#13283f}
+.sheet{width:1400px;padding:36px 40px;box-sizing:border-box}
+h1{font:800 30px 'Inter Display',Inter,sans-serif;margin:0 0 4px} .sub{color:#5a677a;margin:0 0 26px}
+.row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}
+.card{box-sizing:border-box;min-width:0;background:#fff;border:1px solid #d7dee8;border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:16px;align-items:center;position:relative}
+.card.rec{border:2px solid #2a64b5;box-shadow:0 0 0 5px #eaf1fb}
+.tag{position:absolute;top:-13px;background:#2a64b5;color:#fff;font-weight:700;font-size:12px;border-radius:99px;padding:3px 12px}
+.big svg{width:200px;height:200px;filter:drop-shadow(0 6px 14px rgba(19,40,63,.25))}
+.name{font:700 19px Inter} .desc{color:#5a677a;font-size:13.5px;text-align:center;min-height:38px}
+.home{width:100%;box-sizing:border-box;border-radius:14px;background:linear-gradient(160deg,#3a6db5,#7aa7dd 60%,#b9d3f0);padding:16px 10px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;justify-items:center}
+.home i{width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,.5);display:block}
+.home .app{display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;font-size:11px;font-weight:600}
+.home .app svg{width:52px;height:52px}
+.tab{width:100%;box-sizing:border-box;display:flex;align-items:center;gap:8px;background:#dfe3e9;border-radius:10px;padding:8px 10px;font-size:12.5px}
+.tab span{background:#fff;border-radius:7px 7px 0 0;padding:5px 10px;display:flex;gap:6px;align-items:center}
+.tab svg{width:16px;height:16px}
+.num{position:absolute;top:14px;left:16px;width:30px;height:30px;border-radius:50%;background:#13283f;color:#fff;font-weight:800;display:grid;place-items:center}
+</style></head><body><div class="sheet">
+<h1>Proposte di icona per FisioAgenda</h1>
+<p class="sub">Ogni icona è mostrata in grande, sulla schermata del telefono e nella scheda del browser (piccolissima). Scegli il numero.</p>
+<div class="row" id="row"></div>
+</div>
+<template id="i1"><!-- 1 · Calendario -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b8ce2"/><stop offset="1" stop-color="#1a4d99"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#g1)"/>
+<rect x="100" y="128" width="312" height="290" rx="44" fill="#fff"/>
+<path d="M100 172a44 44 0 0 1 44-44h224a44 44 0 0 1 44 44v38H100z" fill="#cfe2fa"/>
+<rect x="168" y="92" width="30" height="74" rx="15" fill="#13283f"/><rect x="314" y="92" width="30" height="74" rx="15" fill="#13283f"/>
+<g fill="#cfe2fa"><rect x="140" y="246" width="56" height="48" rx="12"/><rect x="228" y="246" width="56" height="48" rx="12"/><rect x="316" y="246" width="56" height="48" rx="12"/><rect x="140" y="326" width="56" height="48" rx="12"/><rect x="316" y="326" width="56" height="48" rx="12"/></g>
+<rect x="228" y="326" width="56" height="48" rx="12" fill="#ff7a3d"/><path d="M241 351l11 11 20-22" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></template>
+<template id="i2"><!-- 2 · Persona in movimento -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22a59a"/><stop offset="1" stop-color="#14608f"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#g2)"/>
+<circle cx="256" cy="140" r="44" fill="#fff"/>
+<path d="M132 176 Q256 300 380 176" fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round"/>
+<path d="M256 236 L256 318" stroke="#fff" stroke-width="44" stroke-linecap="round"/>
+<path d="M256 318 L190 412 M256 318 L322 412" stroke="#fff" stroke-width="40" stroke-linecap="round" fill="none"/>
+<circle cx="392" cy="122" r="22" fill="#ffb347"/>
+</svg></template>
+<template id="i3"><!-- 3 · Calendario con persona -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b8ce2"/><stop offset="1" stop-color="#173f82"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#g3)"/>
+<rect x="96" y="120" width="320" height="304" rx="46" fill="#fff"/>
+<path d="M96 166a46 46 0 0 1 46-46h228a46 46 0 0 1 46 46v34H96z" fill="#ff7a3d"/>
+<rect x="166" y="84" width="30" height="76" rx="15" fill="#13283f"/><rect x="316" y="84" width="30" height="76" rx="15" fill="#13283f"/>
+<circle cx="256" cy="250" r="27" fill="#1f5fb8"/>
+<path d="M176 268 Q256 340 336 268" fill="none" stroke="#1f5fb8" stroke-width="26" stroke-linecap="round"/>
+<path d="M256 300 L256 342" stroke="#1f5fb8" stroke-width="28" stroke-linecap="round"/>
+<path d="M256 342 L216 392 M256 342 L296 392" stroke="#1f5fb8" stroke-width="26" stroke-linecap="round" fill="none"/>
+</svg></template>
+<template id="i4"><!-- 4 · Monogramma FA -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e3a64"/><stop offset="1" stop-color="#0f1f38"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#g4)"/>
+<text x="250" y="312" text-anchor="middle" font-family="Inter Display, Inter, sans-serif" font-weight="800" font-size="168" fill="#fff" letter-spacing="2">FA</text>
+<path d="M120 362 Q256 430 392 362" fill="none" stroke="#3b8ce2" stroke-width="20" stroke-linecap="round"/>
+<circle cx="392" cy="362" r="22" fill="#ff7a3d"/>
+</svg></template>
+<script>
+const D = [
+  ['1', 'Calendario', 'Un’agenda con il giorno segnato: si capisce subito a cosa serve.', false],
+  ['2', 'Persona in movimento', 'Una figura con le braccia alzate: richiama la fisioterapia.', false],
+  ['3', 'Calendario con persona', 'Agenda + fisioterapia insieme. Chiara anche piccolissima.', true],
+  ['4', 'Monogramma FA', 'Iniziali eleganti con un arco di movimento. Più «marchio».', false],
+];
+document.getElementById('row').innerHTML = D.map(([n, t, d, rec]) => {
+  const svg = document.getElementById('i' + n).innerHTML;
+  return '<div class="card' + (rec ? ' rec' : '') + '">' + (rec ? '<span class="tag">Consigliata</span>' : '') + '<span class="num">' + n + '</span><div class="big">' + svg + '</div><div class="name">' + t + '</div><div class="desc">' + d + '</div>' +
+    '<div class="home"><i></i><i></i><div class="app">' + svg + '<span>FisioAgenda</span></div><i></i></div>' +
+    '<div class="tab"><span>' + svg + 'FisioAgenda</span></div></div>';
+}).join('');
+</script></body></html>
