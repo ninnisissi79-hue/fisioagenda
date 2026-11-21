@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><title>Icona FisioAgenda B con F grande</title>
+<style>
+body{margin:0;background:#f4f6f9;font:15px/1.4 Inter,sans-serif;color:#13283f}
+.sheet{width:1100px;padding:36px 40px;box-sizing:border-box}
+h1{font:800 28px 'Inter Display',Inter,sans-serif;margin:0 0 4px} .sub{color:#5a677a;margin:0 0 26px}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px}
+.card{box-sizing:border-box;min-width:0;background:#fff;border:1px solid #d7dee8;border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:16px;align-items:center;position:relative}
+.num{position:absolute;top:14px;left:16px;min-width:32px;height:32px;padding:0 8px;box-sizing:border-box;border-radius:99px;background:#13283f;color:#fff;font-weight:800;display:grid;place-items:center}
+.big svg{width:220px;height:220px;filter:drop-shadow(0 6px 14px rgba(19,40,63,.25))}
+.name{font:700 19px Inter} .desc{color:#5a677a;font-size:13.5px;text-align:center}
+.home{width:100%;box-sizing:border-box;border-radius:14px;background:linear-gradient(160deg,#3a6db5,#7aa7dd 60%,#b9d3f0);padding:16px 10px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;justify-items:center}
+.home i{width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.5);display:block}
+.home .app{display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;font-size:11px;font-weight:600}
+.home .app svg{width:56px;height:56px}
+.tab{width:100%;box-sizing:border-box;display:flex;align-items:center;gap:8px;background:#dfe3e9;border-radius:10px;padding:8px 10px;font-size:12.5px}
+.tab span{background:#fff;border-radius:7px 7px 0 0;padding:5px 10px;display:flex;gap:6px;align-items:center} .tab svg{width:16px;height:16px}
+</style></head><body><div class="sheet">
+<h1>Versione B con la F più grande e colorata</h1>
+<p class="sub">Due colori per la F. Scegli B1 oppure B2.</p>
+<div class="row" id="row"></div></div>
+<template id="B1"><!-- B1 · F verde acqua (bordo bianco) su fascia arancione -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gB1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2cc4b4"/><stop offset="1" stop-color="#0b7d84"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#gB1)"/>
+<rect x="96" y="120" width="320" height="304" rx="46" fill="#fff"/>
+<path d="M96 166a46 46 0 0 1 46-46h228a46 46 0 0 1 46 46v66H96z" fill="#ff7a3d"/>
+<rect x="128" y="84" width="30" height="76" rx="15" fill="#0f3d44"/><rect x="354" y="84" width="30" height="76" rx="15" fill="#0f3d44"/>
+<path d="M232 214v-76h52M232 176h40" fill="none" stroke="#fff" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M232 214v-76h52M232 176h40" fill="none" stroke="#0e8a8f" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="256" cy="272" r="25" fill="#0e8a8f"/>
+<path d="M180 288 Q256 352 332 288" fill="none" stroke="#0e8a8f" stroke-width="24" stroke-linecap="round"/>
+<path d="M256 318 L256 354" stroke="#0e8a8f" stroke-width="26" stroke-linecap="round"/>
+<path d="M256 354 L220 398 M256 354 L292 398" stroke="#0e8a8f" stroke-width="24" stroke-linecap="round" fill="none"/>
+</svg></template>
+<template id="B2"><!-- B2 · F arancione su fascia verde scuro -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="gB2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2cc4b4"/><stop offset="1" stop-color="#0b7d84"/></linearGradient></defs>
+<rect width="512" height="512" rx="114" fill="url(#gB2)"/>
+<rect x="96" y="120" width="320" height="304" rx="46" fill="#fff"/>
+<path d="M96 166a46 46 0 0 1 46-46h228a46 46 0 0 1 46 46v66H96z" fill="#0f5f66"/>
+<rect x="128" y="84" width="30" height="76" rx="15" fill="#0f3d44"/><rect x="354" y="84" width="30" height="76" rx="15" fill="#0f3d44"/>
+<path d="M232 214v-76h52M232 176h40" fill="none" stroke="#ff8a4c" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="256" cy="272" r="25" fill="#0e8a8f"/>
+<path d="M180 288 Q256 352 332 288" fill="none" stroke="#0e8a8f" stroke-width="24" stroke-linecap="round"/>
+<path d="M256 318 L256 354" stroke="#0e8a8f" stroke-width="26" stroke-linecap="round"/>
+<path d="M256 354 L220 398 M256 354 L292 398" stroke="#0e8a8f" stroke-width="24" stroke-linecap="round" fill="none"/>
+</svg></template>
+<script>
+const D = [['B1', 'F verde acqua', 'F grande verde acqua con il bordo bianco, sulla fascia arancione.'],
+           ['B2', 'F arancione', 'F grande arancione sulla fascia verde scuro.']];
+document.getElementById('row').innerHTML = D.map(([n, t, d]) => { const svg = document.getElementById(n).innerHTML;
+  return '<div class="card"><span class="num">' + n + '</span><div class="big">' + svg + '</div><div class="name">' + t + '</div><div class="desc">' + d + '</div>' +
+    '<div class="home"><i></i><i></i><div class="app">' + svg + '<span>FisioAgenda</span></div><i></i></div><div class="tab"><span>' + svg + 'FisioAgenda</span></div></div>'; }).join('');
+</script></body></html>
