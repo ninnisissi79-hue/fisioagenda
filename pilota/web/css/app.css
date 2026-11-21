@@ -52,6 +52,7 @@ p { margin: 0 0 .6em; }
 .top-inner { display: flex; align-items: center; gap: 14px; padding: 8px 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; margin-right: 6px; }
 .brand-logo { width: 34px; height: 34px; border-radius: 8px; background: #2f7fd1; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 18px; }
+img.brand-logo { background: none; display: block; object-fit: cover; }
 .brand-name { font-weight: 700; font-size: 1.05rem; color: #fff; line-height: 1.1; }
 .brand-sub { font-size: .75rem; color: #a9bdd2; }
 .conn { font-size: .85rem; padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,.1); white-space: nowrap; }

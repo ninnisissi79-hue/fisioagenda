@@ -252,13 +252,13 @@
     const L = A.ui.login || (A.ui.login = {});
     const cfgOk = window.FA_CONFIG && window.FA_CONFIG.supabaseUrl && window.FA_CONFIG.supabaseKey;
     if (A.recovery) {
-      return '<div class="login panel"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso</div></div></div>' +
+      return '<div class="login panel"><div class="brand"><img class="brand-logo" src="icons/icon-192.png" alt=""><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso</div></div></div>' +
         '<h3>Imposta la tua password</h3><p class="muted small">Scegli una password personale di almeno 10 caratteri. Non condividerla con i colleghi.</p>' +
         '<form data-submit="set-password"><div class="field"><label for="np1">Nuova password</label><input id="np1" type="password" autocomplete="new-password" data-bind="login.p1" required minlength="10"></div>' +
         '<div class="field"><label for="np2">Ripeti la password</label><input id="np2" type="password" autocomplete="new-password" data-bind="login.p2" required minlength="10"></div>' +
         FA.errBox(L.error) + '<button class="btn primary" type="submit"' + (L.busy ? ' disabled' : '') + '>Salva la password</button></form></div>';
     }
-    return '<div class="login panel"><div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso · pazienti solo con codice cartella</div></div></div>' +
+    return '<div class="login panel"><div class="brand"><img class="brand-logo" src="icons/icon-192.png" alt=""><div><div class="brand-name">FisioAgenda</div><div class="muted small">Pilota condiviso · pazienti solo con codice cartella</div></div></div>' +
       (cfgOk ? '' : '<div class="form-error">Configurazione mancante: copia <code>config.example.js</code> in <code>config.js</code> e inserisci l’indirizzo e la chiave pubblica del progetto Supabase.</div>') +
       '<form data-submit="login"><div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="username" data-bind="login.email" value="' + esc(L.email || '') + '" required></div>' +
       '<div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" data-bind="login.password" required></div>' +
@@ -547,7 +547,7 @@
   function header() {
     const n = FA.todoBadge();
     return '<header class="top"><div class="top-inner">' +
-      '<div class="brand"><div class="brand-logo">F</div><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Pilota condiviso</div></div></div>' +
+      '<div class="brand"><img class="brand-logo" src="icons/icon-192.png" alt=""><div><div class="brand-name">FisioAgenda</div><div class="brand-sub">Pilota condiviso</div></div></div>' +
       '<span id="conn">' + connLabel() + '</span>' +
       alertPill() + (FA.isOffice() ? spie() : (n ? '<button class="todo-pill" data-act="go" data-view="dasistemare">⚠ Da sistemare: ' + n + '</button>' : '')) +
       '<div class="user"><span class="who">' + esc(A.me.full_name || A.me.email) + '</span><span class="role">' + esc(FA.roleLabel(A.me.role)) + '</span>' +

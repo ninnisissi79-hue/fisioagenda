@@ -327,7 +327,9 @@ test('chiusura anticipata: posti futuri liberati, storico e sedute effettuate co
   const ids = await team('chi', { A: [['mano', 'specifica']], B: [['mano', 'specifica']] });
   const [d] = workdays(T0, 1);
   const p = await book(op1, { name: 'Chiusura', cat: 'mano', th: ids.A, start: '09:30', dates: weekly(d, 5) });
-  const a = apptOf(p.cycle_id, d);
+  let a = apptOf(p.cycle_id, d);
+  // se oggi è sabato o festivo la prima seduta sarebbe nel futuro: la portiamo a oggi, così risulta già svolta
+  if (d > T0) { psql(`update appointments set day='${T0}' where id='${a.id}'`); a = JSON.parse(psql(`select row_to_json(x) from appointments x where id='${a.id}'`)); }
   await S.rpc(op1, 'register_outcome', { p_id: a.id, p_version: a.version, p_status: 'effettuata' });
   const from = E.addDays(d, 1);
   const r = await S.rpc(op1, 'close_cycle', { p_cycle: p.cycle_id, p_version: Number(psql(`select version from cycles where id='${p.cycle_id}'`)), p_reason: 'obiettivi raggiunti', p_from: from });

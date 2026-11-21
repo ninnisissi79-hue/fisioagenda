@@ -2,7 +2,7 @@
 // Strategia «prima la rete»: se c'è connessione si usa sempre la versione più recente del sito
 // (così ogni aggiornamento caricato su Netlify arriva subito); senza rete si apre l'ultima copia salvata.
 // I dati (Supabase) non passano mai di qui: non vengono salvati sul dispositivo.
-const CACHE = 'fisioagenda-v1';
+const CACHE = 'fisioagenda-v2';
 const SHELL = ['./', 'index.html', 'config.js', 'css/app.css', 'manifest.webmanifest', 'icons/icon-192.png',
   'js/vendor/supabase.js', 'js/engine.js', 'js/sheet.js', 'js/store.js', 'js/app-core.js', 'js/app-absence.js', 'js/app-cal.js',
   'js/app-config.js', 'js/app-planner.js', 'js/app-subs.js', 'js/app-tab.js', 'js/app.js'];

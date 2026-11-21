@@ -212,6 +212,7 @@ try {
   assert.ok(!(await fp.$('.tg tr.tg-new')) && !(await fp.$('.tg button[data-act="tg-add"]')), 'agenda del collega in consultazione');
   await goCal(fp, A, F[1], 'mese');
   const nx = q(`select min(a.day) from appointments a join patients p on p.id=a.patient_id where p.name='Nuovo ${RUN}' and a.day > '${ferie}'`);
+  await goCal(fp, A, nx, 'mese'); // il mese della seduta (anche a fine mese)
   const n1 = ap('Nuovo', nx);
   await fp.waitForSelector(cell('Nuovo', nx));
   await S.rpc(seg, 'edit_appointment', { p_id: n1.id, p_version: n1.version, p: { start: '13:15' } });
@@ -258,7 +259,11 @@ try {
   await goCal(fp, A, F[2], 'mese');
   await fp.waitForSelector('.tg');
   await fp.waitForFunction(() => !document.querySelector('.alert1-panel'), null, { timeout: 15000 });
-  const G2 = work(E.addDays(F[2], 1), 1)[0];
+  // il primo giorno lavorativo dopo F[2] in cui alle 9:00 Agenda è libera
+  let G2 = work(E.addDays(F[2], 1), 1)[0];
+  const g2busy = d => q(`select count(*) from appointments where therapist_id='${A}' and day='${d}' and start_time < '09:30' and end_time > '09:00' and status in ('programmata','effettuata','trattenuta')`) !== '0'
+    || q(`select count(*) from absences where therapist_id='${A}' and not cancelled and start_date <= '${d}' and coalesce(end_date, '${d}') >= '${d}'`) !== '0';
+  while (g2busy(G2)) G2 = work(E.addDays(G2, 1), 1)[0];
   const ra = await imp(A, [{ ref: 'av', target: 'nuovo', patient_name: 'Avviso Nuovo ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '09:00', cells: [{ day: F[2], start: '09:00' }, { day: G2, start: '09:00' }] }], F[2]);
   assert.ok(ra.results[0].ok, JSON.stringify(ra.results));
   const rb = await imp(B, [{ ref: 'bv', target: 'nuovo', patient_name: 'Di Collega ' + RUN, category_id: 'mano', planned: 10, prior: 0, duration: 30, weekdays: [], start: '09:30', cells: [{ day: F[2], start: '09:30' }] }], F[2]);

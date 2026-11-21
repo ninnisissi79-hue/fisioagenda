@@ -61,13 +61,16 @@ try {
 
   // ---------------------------------------------------------------- assenza oggi, distribuzione su più sostituti
   const today = psql('select app.today()');
+  // giorno dell'assenza: oggi se ci sono sedute (giorno feriale), altrimenti il primo giorno lavorativo con sedute
+  const day0 = psql(`select min(a.day) from appointments a join therapists t on t.id=a.therapist_id where a.day>='${today}' and a.status='programmata' and t.name not like 'Test %'`);
   // il collega (non di prova) con più pazienti oggi
-  const conti = psql(`select a.therapist_id from appointments a join therapists t on t.id=a.therapist_id where a.day='${today}' and a.status='programmata' and t.name not like 'Test %' group by 1 order by count(*) desc, 1 limit 1`);
+  const conti = psql(`select a.therapist_id from appointments a join therapists t on t.id=a.therapist_id where a.day='${day0}' and a.status='programmata' and t.name not like 'Test %' group by 1 order by count(*) desc, 1 limit 1`);
   const contiName = psql(`select name from therapists where id='${conti}'`);
-  const nToday = Number(psql(`select count(*) from appointments where therapist_id='${conti}' and day='${today}' and status='programmata'`));
+  const nToday = Number(psql(`select count(*) from appointments where therapist_id='${conti}' and day='${day0}' and status='programmata'`));
   assert.ok(nToday >= 2, contiName + ' ha pazienti oggi nei dati demo');
   await p1.click('text=Gestisci assenza fisioterapista');
   await p1.selectOption('#abs-th', { label: contiName });
+  if (day0 !== today) { await p1.click('button[data-path="abs.when"][data-val="giorno"]'); await p1.fill('#abs-day', day0); }
   await p1.click('button:has-text("Registra l’assenza e cerca i sostituti")');
   await p1.waitForSelector('.subst', { timeout: 20000 });
   const rows = await p1.$$('.subst');
@@ -97,7 +100,7 @@ try {
   assert.ok(!(await p1.isDisabled('button:has-text("Rivedi e conferma")')));
   // la seconda collega vede l'agenda del sostituto prima della conferma
   const firstSub = chosen.find(t => !/riprogrammare/.test(t)).replace(/^⚠ /, '').split(' (')[0].split(' alle ')[0];
-  await go(p2, '#/agenda');
+  await go(p2, '#/agenda/' + day0);
   await p2.selectOption('select[data-bind="ag.th"]', { label: firstSub });
   await p2.waitForTimeout(300);
   const before = await text(p2, '.agenda-grid');
@@ -109,9 +112,9 @@ try {
   await p1.click('.modal button:has-text("Conferma e salva")');
   await p1.waitForSelector('text=Esito del salvataggio', { timeout: 20000 });
   assert.match(await text(p1, 'main'), /✓ \d+ salvat/);
-  assert.equal(Number(psql(`select count(*) from appointments where original_therapist_id='${conti}' and day='${today}' and substitute_kind='singola'`)) +
-    Number(psql(`select count(*) from appointments where therapist_id='${conti}' and day='${today}' and status='da_riprogrammare'`)), nToday);
-  assert.equal(psql(`select count(*) from appointments where therapist_id='${conti}' and day > '${today}' and status='programmata'`) !== '0', true, 'il resto dei cicli resta al titolare');
+  assert.equal(Number(psql(`select count(*) from appointments where original_therapist_id='${conti}' and day='${day0}' and substitute_kind='singola'`)) +
+    Number(psql(`select count(*) from appointments where therapist_id='${conti}' and day='${day0}' and status='da_riprogrammare'`)), nToday);
+  assert.equal(psql(`select count(*) from appointments where therapist_id='${conti}' and day > '${day0}' and status='programmata'`) !== '0', true, 'il resto dei cicli resta al titolare');
   ok('Riepilogo, conferma e salvataggio: sostituzioni per singola seduta, cicli invariati');
   // aggiornamento visibile all'altra collega senza ricaricare
   await p2.waitForFunction(n => document.querySelector('.agenda-grid').textContent.includes('sostituisce ' + n), contiName, { timeout: 15000 });
